@@ -1,0 +1,24 @@
+{
+  "name": "repo33",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flavioGH/repo33.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/flavioGH/repo33/issues"
+  },
+  "homepage": "https://github.com/flavioGH/repo33#readme",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
