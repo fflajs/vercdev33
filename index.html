@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cognitive Space Visualization V42</title>
+    <title>Cognitive Space Visualization V43</title>
 
     <!-- Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -17,54 +17,14 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            color: #111827;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background-color: #ffffff;
-            border-radius: 1rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-        .slider-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-        }
-        .slider-item {
-            display: flex;
-            flex-direction: column;
-            border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            background-color: #fafafa;
-        }
-        .chart-container {
-            width: 100%;
-            height: 300px; /* Set a fixed height for the canvas */
-            margin-bottom: 2rem;
-            display: flex;
-            justify-content: center;
-        }
-        .voxel-container {
-            width: 100%;
-            height: 600px;
-            border-radius: 1rem;
-            overflow: hidden;
-            background-color: #e5e7eb;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .voxel-canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 2rem; background-color: #ffffff; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .slider-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+        .slider-item { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; background-color: #fafafa; }
+        .chart-container { width: 100%; height: 300px; margin-bottom: 2rem; display: flex; justify-content: center; }
+        .voxel-container { width: 100%; height: 600px; border-radius: 1rem; overflow: hidden; background-color: #e5e7eb; display: flex; justify-content: center; align-items: center; }
+        .voxel-canvas { width: 100%; height: 100%; display: block; }
+        select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
     </style>
 </head>
 <body>
@@ -72,7 +32,7 @@
 <div class="container">
     <div class="flex items-center justify-center mb-2">
         <h1 class="text-3xl font-bold text-center">Cognition Space Visualizer</h1>
-        <span class="text-lg text-gray-500 ml-2">V42</span>
+        <span class="text-lg text-gray-500 ml-2">V43</span>
     </div>
     <p class="text-gray-600 text-center mb-8">
         Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.
@@ -89,48 +49,38 @@
         </div>
     </div>
 
-    <!-- Section: Computed JSON Output -->
+    <!-- Section: Computed JSON Output & Controls -->
     <div class="p-6 bg-gray-50 rounded-lg border border-gray-200">
-        <h2 class="text-2xl font-semibold mb-4 text-center">Computed JSON Data</h2>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-semibold">Computed JSON Data</h2>
+            <div class="flex items-center space-x-2">
+                <select id="saved-files-dropdown" class="p-2 border rounded-lg bg-white"></select>
+                <button id="load-selected-button" class="p-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">Load Selected</button>
+            </div>
+        </div>
         <textarea id="json-output" class="w-full h-96 p-4 border rounded-lg resize-none font-mono text-sm bg-gray-100" readonly></textarea>
         <div class="flex justify-between mt-4 space-x-4">
-            <button id="reset-button" class="flex-1 p-3 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors duration-200">Reset</button>
-            <button id="copy-button" class="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200">Copy JSON</button>
-            <button id="load-button" class="flex-1 p-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors duration-200">Load JSON</button>
-            <input type="file" id="file-input" class="hidden" accept=".json">
-            <button id="save-button" class="flex-1 p-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200">Save JSON</button>
+            <button id="reset-button" class="flex-1 p-3 bg-gray-400 text-white rounded-lg hover:bg-gray-500">Reset</button>
+            <button id="copy-button" class="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Copy JSON</button>
+            <button id="save-button" class="flex-1 p-3 bg-green-500 text-white rounded-lg hover:bg-green-600">Save to Server</button>
         </div>
         <span id="copy-message" class="text-xs text-green-600 mt-2 block text-center"></span>
     </div>
 
-    <!-- Section: Gaussian Graphs -->
+    <!-- Visualizations (Unchanged) -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Gaussian Distributions</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div class="chart-container">
-                <canvas id="knowledge-density-chart"></canvas>
-            </div>
-            <div class="chart-container">
-                <canvas id="familiarity-chart"></canvas>
-            </div>
-            <div class="chart-container">
-                <canvas id="cognitive-load-chart"></canvas>
-            </div>
+            <div class="chart-container"><canvas id="knowledge-density-chart"></canvas></div>
+            <div class="chart-container"><canvas id="familiarity-chart"></canvas></div>
+            <div class="chart-container"><canvas id="cognitive-load-chart"></canvas></div>
         </div>
     </div>
-
-    <!-- Section: Voxel Scene -->
     <div class="p-6 mb-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">3D Voxel Scene</h2>
-        <p class="text-gray-500 text-sm mb-4 text-center">
-           Red voxel shows the rounded group means, which corresponds to the analysis below.
-        </p>
-        <div class="voxel-container">
-            <canvas id="voxel-canvas" class="voxel-canvas"></canvas>
-        </div>
+        <p class="text-gray-500 text-sm mb-4 text-center">Red voxel shows the rounded group means.</p>
+        <div class="voxel-container"><canvas id="voxel-canvas" class="voxel-canvas"></canvas></div>
     </div>
-
-    <!-- Section: Analysis & Coaching -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Analysis & Coaching</h2>
         <div id="analysis-content" class="text-center">
@@ -138,75 +88,63 @@
             <p class="mt-2 text-md text-gray-600" id="analysis-tip"></p>
         </div>
     </div>
-
 </div>
 
 <script>
-    // This function will be called once the window is fully loaded
     window.onload = async function() {
+        const baseUrl = window.location.origin;
 
-        // --- DATA FETCHING ---
-        // Asynchronously fetch data from the server API endpoints
-        async function loadData() {
+        // --- DATA FETCHING & INITIALIZATION ---
+        async function loadInitialData() {
             try {
-                // Construct the full URL dynamically to ensure it works in all environments
-                const baseUrl = window.location.origin;
                 const [voxelResponse, questionsResponse] = await Promise.all([
                     fetch(`${baseUrl}/api/voxel-data`),
                     fetch(`${baseUrl}/api/questions`)
                 ]);
-
-                // Check if the server responded correctly
-                if (!voxelResponse.ok || !questionsResponse.ok) {
-                    throw new Error('Server returned an error.');
-                }
-
-                const voxelCsvData = await voxelResponse.text();
-                const questionStrings = await questionsResponse.json();
-                return { voxelCsvData, questionStrings };
+                if (!voxelResponse.ok || !questionsResponse.ok) throw new Error('Server returned an error.');
+                return {
+                    voxelCsvData: await voxelResponse.text(),
+                    questionStrings: await questionsResponse.json()
+                };
             } catch (error) {
                 console.error("Failed to load initial data:", error);
-                // Display a user-friendly error message
-                document.body.innerHTML = '<div class="text-red-500 text-center p-8">Error: Could not load application data from the server. Please check the server is running and refresh the page.</div>';
+                document.body.innerHTML = `<div class="text-red-500 text-center p-8">Error: Could not load application data. Please check the server is running and refresh.</div>`;
                 return null;
             }
         }
 
-        const appData = await loadData();
-        // If data loading fails, stop script execution
+        const appData = await loadInitialData();
         if (!appData) return;
-
         const { voxelCsvData, questionStrings } = appData;
 
-        // --- APPLICATION LOGIC (UNCHANGED FROM HERE) ---
-
-        const NUM_QUESTIONS = 120;
+        // --- DOM ELEMENTS ---
         const surveyQuestionsDiv = document.getElementById('survey-questions');
         const jsonOutput = document.getElementById('json-output');
-        const loadButton = document.getElementById('load-button');
-        const fileInput = document.getElementById('file-input');
         const copyButton = document.getElementById('copy-button');
         const resetButton = document.getElementById('reset-button');
         const saveButton = document.getElementById('save-button');
         const copyMessage = document.getElementById('copy-message');
-
+        const savedFilesDropdown = document.getElementById('saved-files-dropdown');
+        const loadSelectedButton = document.getElementById('load-selected-button');
         const knowledgeDensityCanvas = document.getElementById('knowledge-density-chart');
         const familiarityCanvas = document.getElementById('familiarity-chart');
         const cognitiveLoadCanvas = document.getElementById('cognitive-load-chart');
         const voxelCanvas = document.getElementById('voxel-canvas');
-        
         const analysisDesc = document.getElementById('analysis-desc');
         const analysisTip = document.getElementById('analysis-tip');
 
-        let scene, camera, renderer, controls;
+        // --- STATE & 3D SCENE VARIABLES ---
+        const NUM_QUESTIONS = 120;
+        const surveyValues = Array(NUM_QUESTIONS).fill(4);
+        const voxelMap = new Map();
+        let scene, camera, renderer, controls, knowledgeDensityChart, familiarityChart, cognitiveLoadChart;
         const voxelGrid = [];
         let lastHighlightedVoxel = null;
         let highlightOutline = null;
         const redMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, opacity: 0.5, transparent: true });
         const grayMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true, opacity: 0.2, transparent: true });
-        
-        const voxelMap = new Map();
 
+        // --- CORE FUNCTIONS (UNCHANGED) ---
         function parseVoxelData(csvString) {
             const lines = csvString.trim().split('\n').slice(1);
             for (const line of lines) {
@@ -220,7 +158,6 @@
                 }
             }
         }
-        
         function updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ) {
             const lookupKey = `[${roundedMeanX},${roundedMeanY},${roundedMeanZ}]`;
             const analysisData = voxelMap.get(lookupKey);
@@ -232,128 +169,56 @@
                 analysisTip.textContent = '';
             }
         }
-
         const getMode = (arr) => {
             const counts = {};
-            let maxCount = 0;
-            let mode = null;
+            let maxCount = 0, mode = null;
             for (const value of arr) {
                 counts[value] = (counts[value] || 0) + 1;
-                if (counts[value] > maxCount) {
-                    maxCount = counts[value];
-                    mode = value;
-                }
+                if (counts[value] > maxCount) { maxCount = counts[value]; mode = value; }
             }
             return mode;
         };
-
         const getGaussianData = (mean, stdDev) => {
-            const gaussian = (x, mean, stdDev) => Math.exp(-0.5 * Math.pow((x - mean) / stdDev, 2)) / (stdDev * Math.sqrt(2 * Math.PI));
+            const gaussian = (x, m, s) => Math.exp(-0.5 * Math.pow((x - m) / s, 2)) / (s * Math.sqrt(2 * Math.PI));
             const data = [];
-            for (let i = 1; i <= 8; i += 0.1) {
-                data.push(gaussian(i, mean, stdDev));
-            }
+            for (let i = 1; i <= 8; i += 0.1) data.push(gaussian(i, mean, stdDev));
             return data.map(v => parseFloat(v.toFixed(4)));
         };
-
-        const chartLabels = [];
-        for (let i = 1; i <= 8; i += 0.1) {
-            chartLabels.push(i.toFixed(1));
-        }
-
-        let knowledgeDensityChart, familiarityChart, cognitiveLoadChart;
-
         function renderCharts(data) {
-            const chartOptions = {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false }, title: { display: true, text: '' } },
-                scales: {
-                    x: { grid: { display: false }, title: { display: true, text: 'Value' } },
-                    y: { grid: { display: false }, title: { display: true, text: 'Probability Density' } }
-                }
-            };
-
-            const createChartData = (label, data, color) => ({
-                labels: chartLabels,
-                datasets: [{
-                    label: label,
-                    data: data,
-                    borderColor: `rgb(${color})`,
-                    backgroundColor: `rgba(${color}, 0.2)`,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }]
-            });
-
+            const chartLabels = Array.from({ length: 71 }, (_, i) => (1 + i * 0.1).toFixed(1));
+            const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: '' } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Value' } }, y: { grid: { display: false }, title: { display: true, text: 'Probability Density' } } } };
+            const createChartData = (label, data, color) => ({ labels: chartLabels, datasets: [{ label, data, borderColor: `rgb(${color})`, backgroundColor: `rgba(${color}, 0.2)`, borderWidth: 2, fill: true, tension: 0.4 }] });
             if (knowledgeDensityChart) knowledgeDensityChart.destroy();
-            const knowledgeOptions = { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Knowledge Density' } } };
-            knowledgeDensityChart = new Chart(knowledgeDensityCanvas, { type: 'line', data: createChartData('Knowledge Density', data.knowledge_density.distribution_data, '75, 192, 192'), options: knowledgeOptions });
-            
+            knowledgeDensityChart = new Chart(knowledgeDensityCanvas, { type: 'line', data: createChartData('Knowledge Density', data.knowledge_density.distribution_data, '75, 192, 192'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Knowledge Density' } } } });
             if (familiarityChart) familiarityChart.destroy();
-            const familiarityOptions = { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Familiarity' } } };
-            familiarityChart = new Chart(familiarityCanvas, { type: 'line', data: createChartData('Familiarity', data.familiarity.distribution_data, '54, 162, 235'), options: familiarityOptions });
-
+            familiarityChart = new Chart(familiarityCanvas, { type: 'line', data: createChartData('Familiarity', data.familiarity.distribution_data, '54, 162, 235'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Familiarity' } } } });
             if (cognitiveLoadChart) cognitiveLoadChart.destroy();
-            const cognitiveLoadOptions = { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Cognitive Load' } } };
-            cognitiveLoadChart = new Chart(cognitiveLoadCanvas, { type: 'line', data: createChartData('Cognitive Load', data.cognitive_load.distribution_data, '255, 159, 64'), options: cognitiveLoadOptions });
+            cognitiveLoadChart = new Chart(cognitiveLoadCanvas, { type: 'line', data: createChartData('Cognitive Load', data.cognitive_load.distribution_data, '255, 159, 64'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Cognitive Load' } } } });
         }
-
         function initVoxelScene() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xf3f4f6);
-            camera = new THREE.PerspectiveCamera(50, voxelCanvas.clientWidth / voxelCanvas.clientHeight, 0.1, 1000);
-            camera.position.set(1.2, 1.2, 1.2);
-            renderer = new THREE.WebGLRenderer({ antialias: true, canvas: voxelCanvas });
-            renderer.setSize(voxelCanvas.clientWidth, voxelCanvas.clientHeight);
-            
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0xf3f4f6);
+            camera = new THREE.PerspectiveCamera(50, voxelCanvas.clientWidth / voxelCanvas.clientHeight, 0.1, 1000); camera.position.set(1.2, 1.2, 1.2);
+            renderer = new THREE.WebGLRenderer({ antialias: true, canvas: voxelCanvas }); renderer.setSize(voxelCanvas.clientWidth, voxelCanvas.clientHeight);
             scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(5, 10, 7.5);
-            scene.add(directionalLight);
-
-            const voxelSize = 1 / 8;
-            const voxelGeometry = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
-            for (let z = 1; z <= 8; z++) {
-                for (let y = 1; y <= 8; y++) {
-                    for (let x = 1; x <= 8; x++) {
-                        const voxel = new THREE.Mesh(voxelGeometry, grayMaterial);
-                        voxel.position.set((x - 1) * voxelSize + voxelSize / 2 - 0.5, (y - 1) * voxelSize + voxelSize / 2 - 0.5, (z - 1) * voxelSize + voxelSize / 2 - 0.5);
-                        scene.add(voxel);
-                        voxelGrid.push(voxel);
-                    }
-                }
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(5, 10, 7.5); scene.add(dirLight);
+            const voxelSize = 1 / 8; const voxelGeom = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+            for (let z = 1; z <= 8; z++) for (let y = 1; y <= 8; y++) for (let x = 1; x <= 8; x++) {
+                const voxel = new THREE.Mesh(voxelGeom, grayMaterial);
+                voxel.position.set((x - 1) * voxelSize + voxelSize / 2 - 0.5, (y - 1) * voxelSize + voxelSize / 2 - 0.5, (z - 1) * voxelSize + voxelSize / 2 - 0.5);
+                scene.add(voxel); voxelGrid.push(voxel);
             }
-
-            const outlineEdges = new THREE.EdgesGeometry(voxelGeometry);
-            highlightOutline = new THREE.LineSegments(outlineEdges, new THREE.LineBasicMaterial({ color: 0x992222 }));
-            scene.add(highlightOutline);
-
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.rotateSpeed = 0.5;
-            controls.enablePan = false;
-
+            highlightOutline = new THREE.LineSegments(new THREE.EdgesGeometry(voxelGeom), new THREE.LineBasicMaterial({ color: 0x992222 })); scene.add(highlightOutline);
+            controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05;
             window.addEventListener('resize', () => {
                 const container = document.querySelector('.voxel-container');
-                camera.aspect = container.clientWidth / container.clientHeight;
-                camera.updateProjectionMatrix();
+                camera.aspect = container.clientWidth / container.clientHeight; camera.updateProjectionMatrix();
                 renderer.setSize(container.clientWidth, container.clientHeight);
             });
-
-            (function animate() {
-                requestAnimationFrame(animate);
-                controls.update();
-                renderer.render(scene, camera);
-            })();
+            (function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); })();
         }
-        
         function updateVoxelScene(voxelData) {
             if (lastHighlightedVoxel) lastHighlightedVoxel.material = grayMaterial;
             highlightOutline.visible = false;
-
             const { x, y, z } = voxelData.roundedMean;
             const index = (x - 1) + (y - 1) * 8 + (z - 1) * 64;
             if (voxelGrid[index]) {
@@ -364,99 +229,79 @@
                 lastHighlightedVoxel = newVoxel;
             }
         }
-
         function updateAllVisuals() {
-            const knowledgeDensity = surveyValues.slice(0, 40);
-            const familiarity = surveyValues.slice(40, 80);
-            const cognitiveLoad = surveyValues.slice(80, 120);
-
+            const knowledgeDensity = surveyValues.slice(0, 40); const familiarity = surveyValues.slice(40, 80); const cognitiveLoad = surveyValues.slice(80, 120);
             const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
-            const meanX = mean(knowledgeDensity);
-            const meanY = mean(familiarity);
-            const meanZ = mean(cognitiveLoad);
-
-            const roundedMeanX = Math.round(Math.min(Math.max(meanX, 1), 8));
-            const roundedMeanY = Math.round(Math.min(Math.max(meanY, 1), 8));
-            const roundedMeanZ = Math.round(Math.min(Math.max(meanZ, 1), 8));
-
+            const meanX = mean(knowledgeDensity), meanY = mean(familiarity), meanZ = mean(cognitiveLoad);
+            const roundedMeanX = Math.round(Math.min(Math.max(meanX, 1), 8)), roundedMeanY = Math.round(Math.min(Math.max(meanY, 1), 8)), roundedMeanZ = Math.round(Math.min(Math.max(meanZ, 1), 8));
             const stdDev = 1;
-            const data = {
-                timestamp: new Date().toISOString(),
-                survey_results: surveyValues,
-                analysis: {
-                    voxel: {
-                        mean: { x: parseFloat(meanX.toFixed(2)), y: parseFloat(meanY.toFixed(2)), z: parseFloat(meanZ.toFixed(2)) },
-                        mode: { x: getMode(knowledgeDensity), y: getMode(familiarity), z: getMode(cognitiveLoad) },
-                        roundedMean: { x: roundedMeanX, y: roundedMeanY, z: roundedMeanZ }
-                    },
-                    graphs: {
-                        knowledge_density: { mean: parseFloat(meanX.toFixed(2)), distribution_data: getGaussianData(meanX, stdDev) },
-                        familiarity: { mean: parseFloat(meanY.toFixed(2)), distribution_data: getGaussianData(meanY, stdDev) },
-                        cognitive_load: { mean: parseFloat(meanZ.toFixed(2)), distribution_data: getGaussianData(meanZ, stdDev) }
-                    }
-                }
-            };
+            const data = { timestamp: new Date().toISOString(), survey_results: surveyValues, analysis: { voxel: { mean: { x: +meanX.toFixed(2), y: +meanY.toFixed(2), z: +meanZ.toFixed(2) }, mode: { x: getMode(knowledgeDensity), y: getMode(familiarity), z: getMode(cognitiveLoad) }, roundedMean: { x: roundedMeanX, y: roundedMeanY, z: roundedMeanZ } }, graphs: { knowledge_density: { mean: +meanX.toFixed(2), distribution_data: getGaussianData(meanX, stdDev) }, familiarity: { mean: +meanY.toFixed(2), distribution_data: getGaussianData(meanY, stdDev) }, cognitive_load: { mean: +meanZ.toFixed(2), distribution_data: getGaussianData(meanZ, stdDev) } } } };
             jsonOutput.value = JSON.stringify(data, null, 2);
             renderCharts(data.analysis.graphs);
             updateVoxelScene(data.analysis.voxel);
             updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ);
         }
 
-        const surveyValues = Array(NUM_QUESTIONS).fill(4);
+        // --- NEW SERVER INTERACTION FUNCTIONS ---
+        async function loadSavedFilesList() {
+            try {
+                const response = await fetch(`${baseUrl}/api/saved-files`);
+                if (!response.ok) throw new Error('Failed to fetch file list.');
+                const files = await response.json();
+                savedFilesDropdown.innerHTML = '<option value="">Select a file to load...</option>'; // Clear existing
+                files.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file;
+                    option.textContent = file;
+                    savedFilesDropdown.appendChild(option);
+                });
+            } catch (error) {
+                console.error(error);
+                showMessage('Could not load file list.', 'red');
+            }
+        }
+
+        function showMessage(msg, color = 'green') {
+            copyMessage.textContent = msg;
+            copyMessage.className = `text-xs text-${color}-600 mt-2 block text-center`;
+            setTimeout(() => { copyMessage.textContent = '' }, 3000);
+        }
+
+        function updateUIWithLoadedData(data) {
+            if (data.survey_results && Array.isArray(data.survey_results) && data.survey_results.length === NUM_QUESTIONS) {
+                data.survey_results.forEach((value, i) => {
+                    const clampedValue = Math.min(Math.max(value, 1), 8);
+                    surveyValues[i] = clampedValue;
+                    document.getElementById(`slider-${i + 1}`).value = clampedValue;
+                    document.getElementById(`value-${i + 1}`).textContent = clampedValue;
+                });
+                updateAllVisuals();
+                showMessage('Data loaded successfully!');
+            } else {
+                showMessage('Invalid JSON file format.', 'red');
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        // Generate survey sliders
         questionStrings.forEach((qText, i) => {
             const item = document.createElement('div');
             item.className = 'slider-item';
-            item.innerHTML = `
-                <label class="block text-sm font-medium text-gray-700">${qText} - Value: <span id="value-${i + 1}">4</span></label>
-                <input type="range" class="mt-2 w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" id="slider-${i + 1}" min="1" max="8" value="4">
-            `;
+            item.innerHTML = `<label class="block text-sm font-medium text-gray-700">${qText} - Value: <span id="value-${i + 1}">4</span></label>
+                              <input type="range" class="mt-2 w-full" id="slider-${i + 1}" min="1" max="8" value="4">`;
             surveyQuestionsDiv.appendChild(item);
         });
 
+        // Attach listeners to sliders
         document.querySelectorAll('input[type="range"]').forEach((slider, index) => {
-            const valueSpan = document.getElementById(`value-${index + 1}`);
             slider.addEventListener('input', () => {
                 surveyValues[index] = parseInt(slider.value);
-                valueSpan.textContent = slider.value;
+                document.getElementById(`value-${index + 1}`).textContent = slider.value;
                 updateAllVisuals();
             });
         });
 
-        loadButton.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const loadedData = JSON.parse(e.target.result);
-                    if (loadedData.survey_results && Array.isArray(loadedData.survey_results) && loadedData.survey_results.length === NUM_QUESTIONS) {
-                        loadedData.survey_results.forEach((value, i) => {
-                            const clampedValue = Math.min(Math.max(value, 1), 8);
-                            surveyValues[i] = clampedValue;
-                            document.getElementById(`slider-${i + 1}`).value = clampedValue;
-                            document.getElementById(`value-${i + 1}`).textContent = clampedValue;
-                        });
-                        updateAllVisuals();
-                        copyMessage.textContent = 'Data loaded successfully!';
-                    } else {
-                        copyMessage.textContent = 'Invalid JSON file format.';
-                    }
-                } catch (error) {
-                    copyMessage.textContent = 'Error reading or parsing the file.';
-                }
-                setTimeout(() => { copyMessage.textContent = '' }, 2000);
-            };
-            reader.readAsText(file);
-        });
-
-        copyButton.addEventListener('click', () => {
-            jsonOutput.select();
-            document.execCommand('copy');
-            copyMessage.textContent = 'Copied!';
-            setTimeout(() => { copyMessage.textContent = '' }, 2000);
-        });
-
+        // Button listeners
         resetButton.addEventListener('click', () => {
             surveyValues.fill(4);
             document.querySelectorAll('input[type="range"]').forEach((slider, i) => {
@@ -464,28 +309,55 @@
                 document.getElementById(`value-${i + 1}`).textContent = 4;
             });
             updateAllVisuals();
-            copyMessage.textContent = 'Sliders reset!';
-            setTimeout(() => { copyMessage.textContent = '' }, 2000);
+            showMessage('Sliders reset!');
         });
 
-        saveButton.addEventListener('click', () => {
-            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
-            const blob = new Blob([jsonOutput.value], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `cognitive_data_${timestamp}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(a.href);
-            copyMessage.textContent = 'File saved!';
-            setTimeout(() => { copyMessage.textContent = '' }, 2000);
+        copyButton.addEventListener('click', () => {
+            jsonOutput.select();
+            document.execCommand('copy');
+            showMessage('Copied to clipboard!');
         });
-        
-        // --- INITIALIZATION ---
+
+        saveButton.addEventListener('click', async () => {
+            try {
+                const dataToSave = JSON.parse(jsonOutput.value);
+                const response = await fetch(`${baseUrl}/api/saved-files`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dataToSave)
+                });
+                if (!response.ok) throw new Error('Server failed to save file.');
+                const result = await response.json();
+                showMessage(`File saved as ${result.filename}`);
+                await loadSavedFilesList(); // Refresh the file list
+            } catch (error) {
+                console.error(error);
+                showMessage('Error saving file.', 'red');
+            }
+        });
+
+        loadSelectedButton.addEventListener('click', async () => {
+            const filename = savedFilesDropdown.value;
+            if (!filename) {
+                showMessage('Please select a file first.', 'red');
+                return;
+            }
+            try {
+                const response = await fetch(`${baseUrl}/api/saved-files/${filename}`);
+                if (!response.ok) throw new Error('Could not load the selected file.');
+                const data = await response.json();
+                updateUIWithLoadedData(data);
+            } catch (error) {
+                console.error(error);
+                showMessage('Error loading file.', 'red');
+            }
+        });
+
+        // --- INITIALIZATION CALLS ---
         parseVoxelData(voxelCsvData);
         initVoxelScene();
         updateAllVisuals();
+        loadSavedFilesList(); // Load the list of saved files on startup
     };
 </script>
 
