@@ -3,17 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cognitive Space Visualization V43</title>
+    <title>Cognitive Space Visualization V44</title>
 
-    <!-- Tailwind CSS CDN for styling -->
+    <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Chart.js CDN for drawing graphs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Three.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- OrbitControls CDN -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <style>
@@ -24,7 +19,7 @@
         .chart-container { width: 100%; height: 300px; margin-bottom: 2rem; display: flex; justify-content: center; }
         .voxel-container { width: 100%; height: 600px; border-radius: 1rem; overflow: hidden; background-color: #e5e7eb; display: flex; justify-content: center; align-items: center; }
         .voxel-canvas { width: 100%; height: 100%; display: block; }
-        select { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+        select:not([multiple]) { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
     </style>
 </head>
 <body>
@@ -32,24 +27,19 @@
 <div class="container">
     <div class="flex items-center justify-center mb-2">
         <h1 class="text-3xl font-bold text-center">Cognition Space Visualizer</h1>
-        <span class="text-lg text-gray-500 ml-2">V43</span>
+        <span class="text-lg text-gray-500 ml-2">V44</span>
     </div>
     <p class="text-gray-600 text-center mb-8">
         Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.
     </p>
 
-    <!-- Section: Survey Questions -->
+    <!-- Survey Questions Section -->
     <div class="p-6 mb-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Survey Questions</h2>
-        <p class="text-gray-500 text-sm mb-4 text-center">
-            Adjust the sliders below to provide data for the analysis.
-        </p>
-        <div id="survey-questions" class="slider-container">
-            <!-- Questions will be generated here by JavaScript -->
-        </div>
+        <div id="survey-questions" class="slider-container"></div>
     </div>
 
-    <!-- Section: Computed JSON Output & Controls -->
+    <!-- JSON Output & File Controls Section -->
     <div class="p-6 bg-gray-50 rounded-lg border border-gray-200">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-2xl font-semibold">Computed JSON Data</h2>
@@ -67,7 +57,7 @@
         <span id="copy-message" class="text-xs text-green-600 mt-2 block text-center"></span>
     </div>
 
-    <!-- Visualizations (Unchanged) -->
+    <!-- Visualizations Sections (Unchanged) -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Gaussian Distributions</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -78,7 +68,6 @@
     </div>
     <div class="p-6 mb-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">3D Voxel Scene</h2>
-        <p class="text-gray-500 text-sm mb-4 text-center">Red voxel shows the rounded group means.</p>
         <div class="voxel-container"><canvas id="voxel-canvas" class="voxel-canvas"></canvas></div>
     </div>
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
@@ -88,6 +77,20 @@
             <p class="mt-2 text-md text-gray-600" id="analysis-tip"></p>
         </div>
     </div>
+
+    <!-- NEW: Calculation Section -->
+    <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
+        <h2 class="text-2xl font-semibold mb-4 text-center">Calculation</h2>
+        <div class="flex flex-col items-center">
+            <label for="calculation-files-select" class="mb-2">Select files for calculation (use Ctrl/Cmd to select multiple):</label>
+            <select id="calculation-files-select" multiple class="w-full h-40 p-2 border rounded-lg bg-white mb-4"></select>
+            <div class="flex space-x-4">
+                <button id="delete-selected-button" class="p-3 bg-red-500 text-white rounded-lg hover:bg-red-600">Delete Selected</button>
+                <button id="calculate-selected-button" class="p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600">Calculate Average</button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -108,7 +111,7 @@
                 };
             } catch (error) {
                 console.error("Failed to load initial data:", error);
-                document.body.innerHTML = `<div class="text-red-500 text-center p-8">Error: Could not load application data. Please check the server is running and refresh.</div>`;
+                document.body.innerHTML = `<div class="text-red-500 text-center p-8">Error: Could not load application data. Please refresh.</div>`;
                 return null;
             }
         }
@@ -132,6 +135,10 @@
         const voxelCanvas = document.getElementById('voxel-canvas');
         const analysisDesc = document.getElementById('analysis-desc');
         const analysisTip = document.getElementById('analysis-tip');
+        // New calculation elements
+        const calculationFilesSelect = document.getElementById('calculation-files-select');
+        const deleteSelectedButton = document.getElementById('delete-selected-button');
+        const calculateSelectedButton = document.getElementById('calculate-selected-button');
 
         // --- STATE & 3D SCENE VARIABLES ---
         const NUM_QUESTIONS = 120;
@@ -144,7 +151,7 @@
         const redMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, opacity: 0.5, transparent: true });
         const grayMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true, opacity: 0.2, transparent: true });
 
-        // --- CORE FUNCTIONS (UNCHANGED) ---
+        // --- CORE LOGIC & VISUALIZATION FUNCTIONS (UNCHANGED) ---
         function parseVoxelData(csvString) {
             const lines = csvString.trim().split('\n').slice(1);
             for (const line of lines) {
@@ -161,17 +168,11 @@
         function updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ) {
             const lookupKey = `[${roundedMeanX},${roundedMeanY},${roundedMeanZ}]`;
             const analysisData = voxelMap.get(lookupKey);
-            if (analysisData) {
-                analysisDesc.textContent = analysisData.short_desc;
-                analysisTip.textContent = `Coaching Tip: ${analysisData.coach_tip}`;
-            } else {
-                analysisDesc.textContent = 'No specific analysis for this combination.';
-                analysisTip.textContent = '';
-            }
+            analysisDesc.textContent = analysisData ? analysisData.short_desc : 'No specific analysis for this combination.';
+            analysisTip.textContent = analysisData ? `Coaching Tip: ${analysisData.coach_tip}` : '';
         }
         const getMode = (arr) => {
-            const counts = {};
-            let maxCount = 0, mode = null;
+            const counts = {}; let maxCount = 0, mode = null;
             for (const value of arr) {
                 counts[value] = (counts[value] || 0) + 1;
                 if (counts[value] > maxCount) { maxCount = counts[value]; mode = value; }
@@ -180,9 +181,7 @@
         };
         const getGaussianData = (mean, stdDev) => {
             const gaussian = (x, m, s) => Math.exp(-0.5 * Math.pow((x - m) / s, 2)) / (s * Math.sqrt(2 * Math.PI));
-            const data = [];
-            for (let i = 1; i <= 8; i += 0.1) data.push(gaussian(i, mean, stdDev));
-            return data.map(v => parseFloat(v.toFixed(4)));
+            return Array.from({length: 71}, (_, i) => parseFloat(gaussian(1 + i * 0.1, mean, stdDev).toFixed(4)));
         };
         function renderCharts(data) {
             const chartLabels = Array.from({ length: 71 }, (_, i) => (1 + i * 0.1).toFixed(1));
@@ -204,7 +203,7 @@
             const voxelSize = 1 / 8; const voxelGeom = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
             for (let z = 1; z <= 8; z++) for (let y = 1; y <= 8; y++) for (let x = 1; x <= 8; x++) {
                 const voxel = new THREE.Mesh(voxelGeom, grayMaterial);
-                voxel.position.set((x - 1) * voxelSize + voxelSize / 2 - 0.5, (y - 1) * voxelSize + voxelSize / 2 - 0.5, (z - 1) * voxelSize + voxelSize / 2 - 0.5);
+                voxel.position.set((x - 0.5) / 8 - 0.5, (y - 0.5) / 8 - 0.5, (z - 0.5) / 8 - 0.5);
                 scene.add(voxel); voxelGrid.push(voxel);
             }
             highlightOutline = new THREE.LineSegments(new THREE.EdgesGeometry(voxelGeom), new THREE.LineBasicMaterial({ color: 0x992222 })); scene.add(highlightOutline);
@@ -222,77 +221,57 @@
             const { x, y, z } = voxelData.roundedMean;
             const index = (x - 1) + (y - 1) * 8 + (z - 1) * 64;
             if (voxelGrid[index]) {
-                const newVoxel = voxelGrid[index];
-                newVoxel.material = redMaterial;
+                const newVoxel = voxelGrid[index]; newVoxel.material = redMaterial;
                 highlightOutline.position.copy(newVoxel.position);
-                highlightOutline.visible = true;
-                lastHighlightedVoxel = newVoxel;
+                highlightOutline.visible = true; lastHighlightedVoxel = newVoxel;
             }
         }
         function updateAllVisuals() {
-            const knowledgeDensity = surveyValues.slice(0, 40); const familiarity = surveyValues.slice(40, 80); const cognitiveLoad = surveyValues.slice(80, 120);
+            const knowledgeDensity = surveyValues.slice(0, 40), familiarity = surveyValues.slice(40, 80), cognitiveLoad = surveyValues.slice(80, 120);
             const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
             const meanX = mean(knowledgeDensity), meanY = mean(familiarity), meanZ = mean(cognitiveLoad);
             const roundedMeanX = Math.round(Math.min(Math.max(meanX, 1), 8)), roundedMeanY = Math.round(Math.min(Math.max(meanY, 1), 8)), roundedMeanZ = Math.round(Math.min(Math.max(meanZ, 1), 8));
-            const stdDev = 1;
-            const data = { timestamp: new Date().toISOString(), survey_results: surveyValues, analysis: { voxel: { mean: { x: +meanX.toFixed(2), y: +meanY.toFixed(2), z: +meanZ.toFixed(2) }, mode: { x: getMode(knowledgeDensity), y: getMode(familiarity), z: getMode(cognitiveLoad) }, roundedMean: { x: roundedMeanX, y: roundedMeanY, z: roundedMeanZ } }, graphs: { knowledge_density: { mean: +meanX.toFixed(2), distribution_data: getGaussianData(meanX, stdDev) }, familiarity: { mean: +meanY.toFixed(2), distribution_data: getGaussianData(meanY, stdDev) }, cognitive_load: { mean: +meanZ.toFixed(2), distribution_data: getGaussianData(meanZ, stdDev) } } } };
+            const data = { timestamp: new Date().toISOString(), survey_results: surveyValues, analysis: { voxel: { mean: { x: +meanX.toFixed(2), y: +meanY.toFixed(2), z: +meanZ.toFixed(2) }, mode: { x: getMode(knowledgeDensity), y: getMode(familiarity), z: getMode(cognitiveLoad) }, roundedMean: { x: roundedMeanX, y: roundedMeanY, z: roundedMeanZ } }, graphs: { knowledge_density: { mean: +meanX.toFixed(2), distribution_data: getGaussianData(meanX, 1) }, familiarity: { mean: +meanY.toFixed(2), distribution_data: getGaussianData(meanY, 1) }, cognitive_load: { mean: +meanZ.toFixed(2), distribution_data: getGaussianData(meanZ, 1) } } } };
             jsonOutput.value = JSON.stringify(data, null, 2);
-            renderCharts(data.analysis.graphs);
-            updateVoxelScene(data.analysis.voxel);
-            updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ);
+            renderCharts(data.analysis.graphs); updateVoxelScene(data.analysis.voxel); updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ);
         }
 
-        // --- NEW SERVER INTERACTION FUNCTIONS ---
+        // --- SERVER INTERACTION FUNCTIONS ---
         async function loadSavedFilesList() {
             try {
                 const response = await fetch(`${baseUrl}/api/saved-files`);
                 if (!response.ok) throw new Error('Failed to fetch file list.');
                 const files = await response.json();
-                savedFilesDropdown.innerHTML = '<option value="">Select a file to load...</option>'; // Clear existing
+                savedFilesDropdown.innerHTML = '<option value="">Select a file to load...</option>';
+                calculationFilesSelect.innerHTML = ''; // Clear fully
                 files.forEach(file => {
-                    const option = document.createElement('option');
-                    option.value = file;
-                    option.textContent = file;
-                    savedFilesDropdown.appendChild(option);
+                    savedFilesDropdown.add(new Option(file, file));
+                    calculationFilesSelect.add(new Option(file, file));
                 });
-            } catch (error) {
-                console.error(error);
-                showMessage('Could not load file list.', 'red');
-            }
+            } catch (error) { showMessage('Could not load file list.', 'red'); }
         }
-
         function showMessage(msg, color = 'green') {
-            copyMessage.textContent = msg;
-            copyMessage.className = `text-xs text-${color}-600 mt-2 block text-center`;
-            setTimeout(() => { copyMessage.textContent = '' }, 3000);
+             copyMessage.textContent = msg; copyMessage.className = `text-xs text-${color}-600 mt-2 block text-center`;
+             setTimeout(() => { copyMessage.textContent = '' }, 3000);
         }
-
         function updateUIWithLoadedData(data) {
             if (data.survey_results && Array.isArray(data.survey_results) && data.survey_results.length === NUM_QUESTIONS) {
-                data.survey_results.forEach((value, i) => {
-                    const clampedValue = Math.min(Math.max(value, 1), 8);
-                    surveyValues[i] = clampedValue;
-                    document.getElementById(`slider-${i + 1}`).value = clampedValue;
-                    document.getElementById(`value-${i + 1}`).textContent = clampedValue;
+                data.survey_results.forEach((v, i) => {
+                    const val = Math.min(Math.max(v, 1), 8);
+                    surveyValues[i] = val;
+                    document.getElementById(`slider-${i + 1}`).value = val;
+                    document.getElementById(`value-${i + 1}`).textContent = val;
                 });
-                updateAllVisuals();
-                showMessage('Data loaded successfully!');
-            } else {
-                showMessage('Invalid JSON file format.', 'red');
-            }
+                updateAllVisuals(); showMessage('Data loaded successfully!');
+            } else { showMessage('Invalid JSON file format.', 'red'); }
         }
 
         // --- EVENT LISTENERS ---
-        // Generate survey sliders
         questionStrings.forEach((qText, i) => {
-            const item = document.createElement('div');
-            item.className = 'slider-item';
-            item.innerHTML = `<label class="block text-sm font-medium text-gray-700">${qText} - Value: <span id="value-${i + 1}">4</span></label>
-                              <input type="range" class="mt-2 w-full" id="slider-${i + 1}" min="1" max="8" value="4">`;
+            const item = document.createElement('div'); item.className = 'slider-item';
+            item.innerHTML = `<label class="block text-sm font-medium text-gray-700">${qText} - Value: <span id="value-${i + 1}">4</span></label><input type="range" class="mt-2 w-full" id="slider-${i + 1}" min="1" max="8" value="4">`;
             surveyQuestionsDiv.appendChild(item);
         });
-
-        // Attach listeners to sliders
         document.querySelectorAll('input[type="range"]').forEach((slider, index) => {
             slider.addEventListener('input', () => {
                 surveyValues[index] = parseInt(slider.value);
@@ -300,68 +279,64 @@
                 updateAllVisuals();
             });
         });
-
-        // Button listeners
         resetButton.addEventListener('click', () => {
             surveyValues.fill(4);
-            document.querySelectorAll('input[type="range"]').forEach((slider, i) => {
-                slider.value = 4;
-                document.getElementById(`value-${i + 1}`).textContent = 4;
-            });
-            updateAllVisuals();
-            showMessage('Sliders reset!');
+            document.querySelectorAll('input[type="range"]').forEach((slider, i) => { slider.value = 4; document.getElementById(`value-${i + 1}`).textContent = 4; });
+            updateAllVisuals(); showMessage('Sliders reset!');
         });
-
         copyButton.addEventListener('click', () => {
-            jsonOutput.select();
-            document.execCommand('copy');
-            showMessage('Copied to clipboard!');
+            jsonOutput.select(); document.execCommand('copy'); showMessage('Copied to clipboard!');
         });
-
         saveButton.addEventListener('click', async () => {
             try {
-                const dataToSave = JSON.parse(jsonOutput.value);
-                const response = await fetch(`${baseUrl}/api/saved-files`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataToSave)
-                });
+                const response = await fetch(`${baseUrl}/api/saved-files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: jsonOutput.value });
                 if (!response.ok) throw new Error('Server failed to save file.');
                 const result = await response.json();
-                showMessage(`File saved as ${result.filename}`);
-                await loadSavedFilesList(); // Refresh the file list
-            } catch (error) {
-                console.error(error);
-                showMessage('Error saving file.', 'red');
-            }
+                showMessage(`File saved as ${result.filename}`); await loadSavedFilesList();
+            } catch (error) { showMessage('Error saving file.', 'red'); }
         });
-
         loadSelectedButton.addEventListener('click', async () => {
-            const filename = savedFilesDropdown.value;
-            if (!filename) {
-                showMessage('Please select a file first.', 'red');
-                return;
-            }
+            const filename = savedFilesDropdown.value; if (!filename) return showMessage('Please select a file first.', 'red');
             try {
                 const response = await fetch(`${baseUrl}/api/saved-files/${filename}`);
                 if (!response.ok) throw new Error('Could not load the selected file.');
-                const data = await response.json();
-                updateUIWithLoadedData(data);
-            } catch (error) {
-                console.error(error);
-                showMessage('Error loading file.', 'red');
+                updateUIWithLoadedData(await response.json());
+            } catch (error) { showMessage('Error loading file.', 'red'); }
+        });
+
+        // NEW: Calculation event listeners
+        deleteSelectedButton.addEventListener('click', async () => {
+            const selectedFiles = Array.from(calculationFilesSelect.selectedOptions).map(opt => opt.value);
+            if (selectedFiles.length === 0) return showMessage('No files selected to delete.', 'red');
+            if (confirm(`Are you sure you want to delete ${selectedFiles.length} file(s)?`)) {
+                try {
+                    const response = await fetch(`${baseUrl}/api/saved-files`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: selectedFiles }) });
+                    if (!response.ok) throw new Error('Server failed to delete files.');
+                    showMessage(`${selectedFiles.length} file(s) deleted successfully.`);
+                    await loadSavedFilesList();
+                } catch (error) { showMessage('Error deleting files.', 'red'); }
             }
+        });
+        
+        calculateSelectedButton.addEventListener('click', async () => {
+            const selectedFiles = Array.from(calculationFilesSelect.selectedOptions).map(opt => opt.value);
+            if (selectedFiles.length === 0) return showMessage('No files selected to calculate.', 'red');
+            try {
+                const response = await fetch(`${baseUrl}/api/calculate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: selectedFiles }) });
+                if (!response.ok) throw new Error('Server failed to calculate average.');
+                const result = await response.json();
+                showMessage(`Calculation saved as ${result.filename}. Load it from the dropdown to see the results.`);
+                await loadSavedFilesList();
+            } catch (error) { showMessage('Error calculating average.', 'red'); }
         });
 
         // --- INITIALIZATION CALLS ---
         parseVoxelData(voxelCsvData);
         initVoxelScene();
         updateAllVisuals();
-        loadSavedFilesList(); // Load the list of saved files on startup
+        loadSavedFilesList();
     };
 </script>
 
 </body>
 </html>
-
-
