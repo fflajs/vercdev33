@@ -4,175 +4,210 @@ const fs = require('fs').promises;
 
 const app = express();
 const port = 3000;
+const DATA_DIR = path.join(__dirname, 'data');
+const DATA_OUT_DIR = path.join(__dirname, 'dataout');
 
-const dataOutDir = path.join(__dirname, 'dataout');
-const dataDir = path.join(__dirname, 'data');
-
-// Middleware to parse JSON bodies
-app.use(express.json());
-// Middleware to serve static files (like CSS or client-side JS, if any)
+// Middleware
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- HELPER FUNCTIONS ---
+const getMode = (arr) => {
+    if (arr.length === 0) return null;
+    const counts = {};
+    let maxCount = 0;
+    let mode = null;
+    for (const value of arr) {
+        counts[value] = (counts[value] || 0) + 1;
+        if (counts[value] > maxCount) {
+            maxCount = counts[value];
+            mode = value;
+        }
+    }
+    return mode;
+};
+
+const getGaussianData = (mean, stdDev = 1) => {
+    const gaussian = (x, m, s) => Math.exp(-0.5 * Math.pow((x - m) / s, 2)) / (s * Math.sqrt(2 * Math.PI));
+    return Array.from({ length: 71 }, (_, i) => parseFloat(gaussian(1 + i * 0.1, mean, stdDev).toFixed(4)));
+};
 
 
 // --- API ROUTES ---
 
-// API to serve the initial static data (voxel data and questions)
 app.get('/api/voxel-data', async (req, res) => {
-    const filePath = path.join(dataDir, 'voxel_data.csv');
     try {
-        await fs.access(filePath); // Check if file exists
-        res.sendFile(filePath);
+        const filePath = path.join(DATA_DIR, 'voxel_data.csv');
+        const data = await fs.readFile(filePath, 'utf8');
+        res.type('text/csv').send(data);
     } catch (error) {
-        res.status(404).send('Voxel data file not found.');
+        res.status(500).send('Error reading voxel data file.');
     }
 });
 
 app.get('/api/questions', async (req, res) => {
-    const filePath = path.join(dataDir, 'questions.json');
     try {
-        await fs.access(filePath);
-        res.sendFile(filePath);
+        const filePath = path.join(DATA_DIR, 'questions.json');
+        const data = await fs.readFile(filePath, 'utf8');
+        res.json(JSON.parse(data));
     } catch (error) {
-        res.status(404).send('Questions data file not found.');
+        res.status(500).send('Error reading questions file.');
     }
 });
 
-// API to list all saved JSON files in the dataout directory
 app.get('/api/saved-files', async (req, res) => {
     try {
-        // Ensure the dataout directory exists
-        await fs.mkdir(dataOutDir, { recursive: true });
-        const files = await fs.readdir(dataOutDir);
-        // Filter for .json files just in case
-        const jsonFiles = files.filter(file => file.endsWith('.json'));
+        const files = await fs.readdir(DATA_OUT_DIR);
+        const jsonFiles = files
+            .filter(file => file.endsWith('.json'))
+            .sort((a, b) => {
+                const timeA = a.split('_').pop().replace('.json', '');
+                const timeB = b.split('_').pop().replace('.json', '');
+                return timeB.localeCompare(timeA);
+            });
         res.json(jsonFiles);
     } catch (error) {
-        console.error('Error listing saved files:', error);
-        res.status(500).send('Error listing files.');
+        res.status(500).json({ message: 'Could not list saved files.' });
     }
 });
 
-// API to get the content of a specific saved file
 app.get('/api/saved-files/:filename', async (req, res) => {
-    const { filename } = req.params;
-    // Basic security: prevent directory traversal attacks
-    const safeFilename = path.basename(filename);
-    const filePath = path.join(dataOutDir, safeFilename);
-
     try {
+        const filePath = path.join(DATA_OUT_DIR, req.params.filename);
         const data = await fs.readFile(filePath, 'utf8');
-        res.setHeader('Content-Type', 'application/json');
-        res.send(data);
+        res.json(JSON.parse(data));
     } catch (error) {
-        console.error(`Error reading file ${safeFilename}:`, error);
-        res.status(404).send('File not found.');
+        res.status(404).json({ message: 'File not found.' });
     }
 });
 
-// API to save the current survey data
 app.post('/api/saved-files', async (req, res) => {
     try {
         const jsonData = req.body;
-        // Generate a unique filename with a timestamp
-        const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+        const now = new Date();
+        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
         const filename = `cognitive_data_${timestamp}.json`;
-        const filePath = path.join(dataOutDir, filename);
+        const filePath = path.join(DATA_OUT_DIR, filename);
 
         await fs.writeFile(filePath, JSON.stringify(jsonData, null, 2));
-        res.json({ success: true, filename: filename });
+        res.status(201).json({ success: true, filename });
     } catch (error) {
-        console.error('Error saving file:', error);
-        res.status(500).send('Error saving file.');
+        res.status(500).json({ message: 'Error saving file.' });
     }
 });
 
-// API to delete multiple selected files
 app.delete('/api/saved-files', async (req, res) => {
-    const { filenames } = req.body;
-    if (!filenames || !Array.isArray(filenames)) {
-        return res.status(400).send('Invalid request body. Expecting an array of filenames.');
-    }
-
     try {
-        const deletePromises = filenames.map(filename => {
-            const safeFilename = path.basename(filename);
-            const filePath = path.join(dataOutDir, safeFilename);
-            return fs.unlink(filePath);
-        });
-        await Promise.all(deletePromises);
-        res.json({ success: true, message: `${filenames.length} files deleted successfully.` });
+        const { filenames } = req.body;
+        if (!filenames || !Array.isArray(filenames)) {
+            return res.status(400).json({ message: 'Invalid request body.' });
+        }
+        for (const filename of filenames) {
+            await fs.unlink(path.join(DATA_OUT_DIR, filename));
+        }
+        res.json({ success: true, message: `${filenames.length} file(s) deleted.` });
     } catch (error) {
-        console.error('Error deleting files:', error);
-        res.status(500).send('Error deleting files.');
+        res.status(500).json({ message: 'Error deleting files.' });
     }
 });
 
-
-// API to calculate the average of selected files
 app.post('/api/calculate', async (req, res) => {
-    const { filenames } = req.body;
-    if (!filenames || !Array.isArray(filenames) || filenames.length === 0) {
-        return res.status(400).send('No files selected for calculation.');
-    }
-
     try {
-        const sumOfResults = Array(120).fill(0);
-        let validFileCount = 0;
+        const { filenames } = req.body;
+        if (!filenames || !Array.isArray(filenames) || filenames.length === 0) {
+            return res.status(400).json({ message: 'Invalid request body.' });
+        }
+
+        let totalFiles = 0;
+        const surveySums = Array(120).fill(0);
+        const meanSums = { x: 0, y: 0, z: 0 };
+        const sourceFileData = [];
 
         for (const filename of filenames) {
-            const safeFilename = path.basename(filename);
-            const filePath = path.join(dataOutDir, safeFilename);
-            try {
-                const content = await fs.readFile(filePath, 'utf8');
-                const data = JSON.parse(content);
-                if (data.survey_results && data.survey_results.length === 120) {
-                    data.survey_results.forEach((value, index) => {
-                        sumOfResults[index] += value;
-                    });
-                    validFileCount++;
+            const filePath = path.join(DATA_OUT_DIR, filename);
+            const content = await fs.readFile(filePath, 'utf8');
+            const data = JSON.parse(content);
+            sourceFileData.push({ filename, data }); 
+
+            if (data.survey_results && data.survey_results.length === 120) {
+                totalFiles++;
+                for (let i = 0; i < 120; i++) {
+                    surveySums[i] += data.survey_results[i];
                 }
-            } catch (readError) {
-                console.error(`Could not read or parse file ${safeFilename} during calculation:`, readError);
+                meanSums.x += data.analysis.voxel.mean.x;
+                meanSums.y += data.analysis.voxel.mean.y;
+                meanSums.z += data.analysis.voxel.mean.z;
             }
         }
 
-        if (validFileCount === 0) {
-            return res.status(400).send('None of the selected files could be processed.');
+        if (totalFiles === 0) {
+            return res.status(400).json({ message: 'No valid files found for calculation.' });
         }
 
-        // Calculate the average for each survey result, rounding up
-        const averageResults = sumOfResults.map(sum => Math.ceil(sum / validFileCount));
-
-        // Create the new JSON object for the calculation result
-        const newJsonData = {
-            timestamp: new Date().toISOString(),
-            calculation_source_files: filenames,
-            survey_results: averageResults
+        const avgSurveyResults = surveySums.map(sum => Math.ceil(sum / totalFiles));
+        const avgMean = {
+            x: parseFloat((meanSums.x / totalFiles).toFixed(2)),
+            y: parseFloat((meanSums.y / totalFiles).toFixed(2)),
+            z: parseFloat((meanSums.z / totalFiles).toFixed(2))
+        };
+        
+        const avgMode = {
+            x: getMode(avgSurveyResults.slice(0, 40)),
+            y: getMode(avgSurveyResults.slice(40, 80)),
+            z: getMode(avgSurveyResults.slice(80, 120))
+        };
+        const avgRoundedMean = {
+            x: Math.round(avgMean.x),
+            y: Math.round(avgMean.y),
+            z: Math.round(avgMean.z)
         };
 
-        const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
-        const newFilename = `calc-${timestamp}.json`;
-        const newFilePath = path.join(dataOutDir, newFilename);
+        const resultData = {
+            timestamp: new Date().toISOString(),
+            source_files: filenames,
+            survey_results: avgSurveyResults,
+            analysis: {
+                voxel: { 
+                    mean: avgMean,
+                    mode: avgMode,
+                    roundedMean: avgRoundedMean
+                },
+                graphs: {
+                    knowledge_density: { mean: avgMean.x, distribution_data: getGaussianData(avgMean.x) },
+                    familiarity: { mean: avgMean.y, distribution_data: getGaussianData(avgMean.y) },
+                    cognitive_load: { mean: avgMean.z, distribution_data: getGaussianData(avgMean.z) }
+                }
+            }
+        };
 
-        await fs.writeFile(newFilePath, JSON.stringify(newJsonData, null, 2));
+        const now = new Date();
+        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
+        const newFilename = `calc_${timestamp}.json`;
+        const newFilePath = path.join(DATA_OUT_DIR, newFilename);
 
-        res.json({ success: true, filename: newFilename });
+        await fs.writeFile(newFilePath, JSON.stringify(resultData, null, 2));
+        
+        res.json({
+            success: true,
+            calculationResult: { filename: newFilename, data: resultData },
+            sourceFiles: sourceFileData
+        });
+
     } catch (error) {
-        console.error('Error during calculation:', error);
-        res.status(500).send('Error performing calculation.');
+        console.error('Calculation error:', error);
+        res.status(500).json({ message: 'Error performing calculation.' });
     }
 });
 
 
-// --- FRONT-END ROUTE (Catch-all) ---
-// This must be the LAST route defined
+// --- CATCH-ALL ROUTE FOR THE FRONT-END ---
 app.get(/^(?!\/api).*/, (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-
+// Start the server
 app.listen(port, () => {
-  console.log(`Express server listening at http://localhost:${port}`);
+    console.log(`Server listening at http://localhost:${port}`);
 });
 
 

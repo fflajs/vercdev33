@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cognitive Space Visualization V46</title>
+    <title>Cognitive Space Visualization V59</title>
 
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,10 +15,17 @@
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; }
         .container { max-width: 1200px; margin: 2rem auto; padding: 2rem; background-color: #ffffff; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
         .slider-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+        .slider-item { display: flex; flex-direction: column; }
         .chart-container { width: 100%; height: 300px; margin-bottom: 2rem; display: flex; justify-content: center; }
         .voxel-container { width: 100%; height: 600px; border-radius: 1rem; overflow: hidden; background-color: #e5e7eb; display: flex; justify-content: center; align-items: center; }
         .voxel-canvas { width: 100%; height: 100%; display: block; }
         select:not([multiple]) { -webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-position: right 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; }
+        .grid-container { max-height: 400px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 0.5rem; }
+        .results-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        .results-table th, .results-table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        .results-table th { background-color: #f9fafb; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+        .results-table td:first-child, .results-table th:first-child { position: sticky; left: 0; background-color: #f9fafb; }
+        .results-table tr:first-child td { font-weight: bold; color: #1d4ed8; }
     </style>
 </head>
 <body>
@@ -27,7 +34,7 @@
     <div class="text-center mb-8">
         <div class="flex items-center justify-center mb-1">
             <h1 class="text-3xl font-bold">Cognition Space Visualizer</h1>
-            <span class="text-lg text-gray-500 ml-2">V46</span>
+            <span class="text-lg text-gray-500 ml-2">V59</span>
         </div>
         <p class="text-md text-gray-500">Proof of Concept September 2025</p>
         <p class="text-gray-600 mt-2">Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.</p>
@@ -51,13 +58,12 @@
         <textarea id="json-output" class="w-full h-48 p-4 border rounded-lg resize-none font-mono text-sm bg-gray-100" readonly></textarea>
         <div class="flex justify-between mt-4 space-x-4">
             <button id="reset-button" class="flex-1 p-3 bg-gray-400 text-white rounded-lg hover:bg-gray-500">Reset</button>
-            <button id="copy-button" class="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Copy JSON</button>
             <button id="save-button" class="flex-1 p-3 bg-green-500 text-white rounded-lg hover:bg-green-600">Save to Server</button>
         </div>
-        <span id="copy-message" class="text-xs text-green-600 mt-2 block text-center"></span>
+        <span id="message-area" class="text-xs text-green-600 mt-2 block text-center"></span>
     </div>
 
-    <!-- Visualizations Sections (Unchanged) -->
+    <!-- Visualizations Sections -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Gaussian Distributions</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -78,7 +84,7 @@
         </div>
     </div>
 
-    <!-- Calculation Section (from V44) -->
+    <!-- Calculation Section -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Calculation</h2>
         <div class="flex flex-col items-center">
@@ -89,8 +95,41 @@
                 <button id="calculate-selected-button" class="p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600">Calculate Average</button>
             </div>
         </div>
-    </div>
 
+        <div id="calculation-results-container" class="mt-8 hidden">
+             <h3 class="text-xl font-semibold mb-4 text-center">Calculated Average Data</h3>
+             <div class="grid-container">
+                <table class="results-table">
+                    <thead id="results-table-header"></thead>
+                    <tbody id="results-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="average-charts-container" class="mt-8 hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Average Gaussian Distributions</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="chart-container"><canvas id="avg-knowledge-density-chart"></canvas></div>
+                <div class="chart-container"><canvas id="avg-familiarity-chart"></canvas></div>
+                <div class="chart-container"><canvas id="avg-cognitive-load-chart"></canvas></div>
+            </div>
+        </div>
+
+        <div id="average-voxel-container" class="mt-8 hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Average 3D Voxel Scene</h2>
+            <div class="voxel-container">
+                <canvas id="avg-voxel-canvas" class="voxel-canvas"></canvas>
+            </div>
+        </div>
+        
+        <div id="average-analysis-container" class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200 hidden">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Analysis & Coaching for Average Data</h2>
+            <div id="average-analysis-content" class="text-center">
+                <p class="text-lg font-medium text-gray-800" id="avg-analysis-desc">Calculation required to see analysis.</p>
+                <p class="mt-2 text-md text-gray-600" id="avg-analysis-tip"></p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -101,14 +140,10 @@
         async function loadInitialData() {
             try {
                 const [voxelResponse, questionsResponse] = await Promise.all([
-                    fetch(`${baseUrl}/api/voxel-data`),
-                    fetch(`${baseUrl}/api/questions`)
+                    fetch(`${baseUrl}/api/voxel-data`), fetch(`${baseUrl}/api/questions`)
                 ]);
                 if (!voxelResponse.ok || !questionsResponse.ok) throw new Error('Failed to fetch initial data.');
-                return {
-                    voxelCsvData: await voxelResponse.text(),
-                    questionStrings: await questionsResponse.json()
-                };
+                return { voxelCsvData: await voxelResponse.text(), questionStrings: await questionsResponse.json() };
             } catch (error) {
                 console.error("Failed to load initial data:", error);
                 document.body.innerHTML = `<div class="text-red-500 text-center p-8">Error: Could not load application data. Please refresh.</div>`;
@@ -123,35 +158,41 @@
         // --- DOM ELEMENTS ---
         const surveyQuestionsDiv = document.getElementById('survey-questions');
         const jsonOutput = document.getElementById('json-output');
-        const copyButton = document.getElementById('copy-button');
         const resetButton = document.getElementById('reset-button');
         const saveButton = document.getElementById('save-button');
-        const copyMessage = document.getElementById('copy-message');
+        const messageArea = document.getElementById('message-area');
         const savedFilesDropdown = document.getElementById('saved-files-dropdown');
         const loadSelectedButton = document.getElementById('load-selected-button');
-        const knowledgeDensityCanvas = document.getElementById('knowledge-density-chart');
-        const familiarityCanvas = document.getElementById('familiarity-chart');
-        const cognitiveLoadCanvas = document.getElementById('cognitive-load-chart');
-        const voxelCanvas = document.getElementById('voxel-canvas');
         const analysisDesc = document.getElementById('analysis-desc');
         const analysisTip = document.getElementById('analysis-tip');
-        // New calculation elements
         const calculationFilesSelect = document.getElementById('calculation-files-select');
         const deleteSelectedButton = document.getElementById('delete-selected-button');
         const calculateSelectedButton = document.getElementById('calculate-selected-button');
+        const calculationResultsContainer = document.getElementById('calculation-results-container');
+        const resultsTableHeader = document.getElementById('results-table-header');
+        const resultsTableBody = document.getElementById('results-table-body');
+        const averageChartsContainer = document.getElementById('average-charts-container');
+        const averageVoxelContainer = document.getElementById('average-voxel-container');
+        const averageAnalysisContainer = document.getElementById('average-analysis-container');
+        const avgAnalysisDesc = document.getElementById('avg-analysis-desc');
+        const avgAnalysisTip = document.getElementById('avg-analysis-tip');
 
-        // --- STATE & 3D SCENE VARIABLES ---
+        // --- STATE & CHART/SCENE INSTANCES ---
         const NUM_QUESTIONS = 120;
         const surveyValues = Array(NUM_QUESTIONS).fill(4);
         const voxelMap = new Map();
-        let scene, camera, renderer, controls, knowledgeDensityChart, familiarityChart, cognitiveLoadChart;
-        const voxelGrid = [];
-        let lastHighlightedVoxel = null;
-        let highlightOutline = null;
-        const redMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, opacity: 0.5, transparent: true });
+        
+        let knowledgeDensityChart, familiarityChart, cognitiveLoadChart;
+        let avgKnowledgeDensityChart, avgFamiliarityChart, avgCognitiveLoadChart;
+        
+        const mainSceneState = { grid: [], scene: null, camera: null, renderer: null, controls: null, outline: null, lastHighlighted: null };
+        const avgSceneState = { grid: [], scene: null, camera: null, renderer: null, controls: null, outline: null, lastHighlighted: null };
+        
+        const redMaterial = new THREE.MeshBasicMaterial({ color: 0xef4444, opacity: 0.7, transparent: true });
+        const yellowMaterial = new THREE.MeshBasicMaterial({ color: 0xfacc15, opacity: 0.6, transparent: true });
         const grayMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true, opacity: 0.2, transparent: true });
 
-        // --- CORE LOGIC & VISUALIZATION FUNCTIONS (UNCHANGED) ---
+        // --- CORE LOGIC & VISUALIZATION FUNCTIONS ---
         function parseVoxelData(csvString) {
             const lines = csvString.trim().split('\n').slice(1);
             for (const line of lines) {
@@ -171,7 +212,14 @@
             analysisDesc.textContent = analysisData ? analysisData.short_desc : 'No specific analysis for this combination.';
             analysisTip.textContent = analysisData ? `Coaching Tip: ${analysisData.coach_tip}` : '';
         }
+        function updateAverageAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ) {
+            const lookupKey = `[${roundedMeanX},${roundedMeanY},${roundedMeanZ}]`;
+            const analysisData = voxelMap.get(lookupKey);
+            avgAnalysisDesc.textContent = analysisData ? analysisData.short_desc : 'No specific analysis for this combination.';
+            avgAnalysisTip.textContent = analysisData ? `Coaching Tip: ${analysisData.coach_tip}` : '';
+        }
         const getMode = (arr) => {
+            if (!arr || arr.length === 0) return null;
             const counts = {}; let maxCount = 0, mode = null;
             for (const value of arr) {
                 counts[value] = (counts[value] || 0) + 1;
@@ -179,71 +227,124 @@
             }
             return mode;
         };
-        const getGaussianData = (mean, stdDev) => {
+        const getGaussianData = (mean, stdDev = 1) => {
             const gaussian = (x, m, s) => Math.exp(-0.5 * Math.pow((x - m) / s, 2)) / (s * Math.sqrt(2 * Math.PI));
             return Array.from({length: 71}, (_, i) => parseFloat(gaussian(1 + i * 0.1, mean, stdDev).toFixed(4)));
         };
-        function renderCharts(data) {
-            const chartLabels = Array.from({ length: 71 }, (_, i) => (1 + i * 0.1).toFixed(1));
-            const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: '' } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Value' } }, y: { grid: { display: false }, title: { display: true, text: 'Probability Density' } } } };
-            const createChartData = (label, data, color) => ({ labels: chartLabels, datasets: [{ label, data, borderColor: `rgb(${color})`, backgroundColor: `rgba(${color}, 0.2)`, borderWidth: 2, fill: true, tension: 0.4 }] });
+        
+        const chartLabels = Array.from({ length: 71 }, (_, i) => (1 + i * 0.1).toFixed(1));
+        const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: '' } }, scales: { x: { grid: { display: false }, title: { display: true, text: 'Value' } }, y: { grid: { display: false }, title: { display: true, text: 'Probability Density' } } } };
+        const createChartData = (label, data, color) => ({ labels: chartLabels, datasets: [{ label, data, borderColor: `rgb(${color})`, backgroundColor: `rgba(${color}, 0.2)`, borderWidth: 2, fill: true, tension: 0.4 }] });
+        
+        function renderMainCharts(data) {
             if (knowledgeDensityChart) knowledgeDensityChart.destroy();
-            knowledgeDensityChart = new Chart(knowledgeDensityCanvas, { type: 'line', data: createChartData('Knowledge Density', data.knowledge_density.distribution_data, '75, 192, 192'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Knowledge Density' } } } });
+            knowledgeDensityChart = new Chart(document.getElementById('knowledge-density-chart'), { type: 'line', data: createChartData('Knowledge Density', data.knowledge_density.distribution_data, '75, 192, 192'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Knowledge Density' } } } });
+            
             if (familiarityChart) familiarityChart.destroy();
-            familiarityChart = new Chart(familiarityCanvas, { type: 'line', data: createChartData('Familiarity', data.familiarity.distribution_data, '54, 162, 235'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Familiarity' } } } });
+            familiarityChart = new Chart(document.getElementById('familiarity-chart'), { type: 'line', data: createChartData('Familiarity', data.familiarity.distribution_data, '54, 162, 235'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Familiarity' } } } });
+            
             if (cognitiveLoadChart) cognitiveLoadChart.destroy();
-            cognitiveLoadChart = new Chart(cognitiveLoadCanvas, { type: 'line', data: createChartData('Cognitive Load', data.cognitive_load.distribution_data, '255, 159, 64'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Cognitive Load' } } } });
+            cognitiveLoadChart = new Chart(document.getElementById('cognitive-load-chart'), { type: 'line', data: createChartData('Cognitive Load', data.cognitive_load.distribution_data, '255, 159, 64'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Cognitive Load' } } } });
         }
-        function initVoxelScene() {
-            scene = new THREE.Scene(); scene.background = new THREE.Color(0xf3f4f6);
-            camera = new THREE.PerspectiveCamera(50, voxelCanvas.clientWidth / voxelCanvas.clientHeight, 0.1, 1000); camera.position.set(1.2, 1.2, 1.2);
-            renderer = new THREE.WebGLRenderer({ antialias: true, canvas: voxelCanvas }); renderer.setSize(voxelCanvas.clientWidth, voxelCanvas.clientHeight);
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(5, 10, 7.5); scene.add(dirLight);
+        
+        function renderAverageCharts(data) {
+            if (avgKnowledgeDensityChart) avgKnowledgeDensityChart.destroy();
+            avgKnowledgeDensityChart = new Chart(document.getElementById('avg-knowledge-density-chart'), { type: 'line', data: createChartData('Knowledge Density', data.knowledge_density.distribution_data, '75, 192, 192'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Avg. Knowledge Density' } } } });
+            
+            if (avgFamiliarityChart) avgFamiliarityChart.destroy();
+            avgFamiliarityChart = new Chart(document.getElementById('avg-familiarity-chart'), { type: 'line', data: createChartData('Familiarity', data.familiarity.distribution_data, '54, 162, 235'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Avg. Familiarity' } } } });
+            
+            if (avgCognitiveLoadChart) avgCognitiveLoadChart.destroy();
+            avgCognitiveLoadChart = new Chart(document.getElementById('avg-cognitive-load-chart'), { type: 'line', data: createChartData('Cognitive Load', data.cognitive_load.distribution_data, '255, 159, 64'), options: { ...chartOptions, plugins: { ...chartOptions.plugins, title: { ...chartOptions.plugins.title, text: 'Avg. Cognitive Load' } } } });
+        }
+
+        function initVoxelScene(canvasId, sceneState) {
+            const voxelCanvas = document.getElementById(canvasId);
+            sceneState.scene = new THREE.Scene(); sceneState.scene.background = new THREE.Color(0xf3f4f6);
+            sceneState.camera = new THREE.PerspectiveCamera(50, voxelCanvas.clientWidth / voxelCanvas.clientHeight, 0.1, 1000); sceneState.camera.position.set(1.2, 1.2, 1.2);
+            sceneState.renderer = new THREE.WebGLRenderer({ antialias: true, canvas: voxelCanvas }); sceneState.renderer.setSize(voxelCanvas.clientWidth, voxelCanvas.clientHeight);
+            sceneState.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(5, 10, 7.5); sceneState.scene.add(dirLight);
+            
             const voxelSize = 1 / 8; const voxelGeom = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
             for (let z = 1; z <= 8; z++) for (let y = 1; y <= 8; y++) for (let x = 1; x <= 8; x++) {
                 const voxel = new THREE.Mesh(voxelGeom, grayMaterial);
                 voxel.position.set((x - 0.5) / 8 - 0.5, (y - 0.5) / 8 - 0.5, (z - 0.5) / 8 - 0.5);
-                scene.add(voxel); voxelGrid.push(voxel);
+                sceneState.scene.add(voxel); sceneState.grid.push(voxel);
             }
-            highlightOutline = new THREE.LineSegments(new THREE.EdgesGeometry(voxelGeom), new THREE.LineBasicMaterial({ color: 0x992222 })); scene.add(highlightOutline);
-            controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05;
-            window.addEventListener('resize', () => {
-                const container = document.querySelector('.voxel-container');
-                camera.aspect = container.clientWidth / container.clientHeight; camera.updateProjectionMatrix();
-                renderer.setSize(container.clientWidth, container.clientHeight);
-            });
-            (function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); })();
+            
+            sceneState.outline = new THREE.LineSegments(new THREE.EdgesGeometry(voxelGeom), new THREE.LineBasicMaterial({ color: 0x992222 })); sceneState.scene.add(sceneState.outline);
+            sceneState.controls = new THREE.OrbitControls(sceneState.camera, sceneState.renderer.domElement); sceneState.controls.enableDamping = true; sceneState.controls.dampingFactor = 0.05;
+            
+            (function animate() {
+                requestAnimationFrame(animate);
+                sceneState.controls.update();
+                sceneState.renderer.render(sceneState.scene, sceneState.camera);
+            })();
         }
-        function updateVoxelScene(voxelData) {
-            if (lastHighlightedVoxel) lastHighlightedVoxel.material = grayMaterial;
-            highlightOutline.visible = false;
+        function updateVoxelScene(voxelData, sceneState) {
+            if (sceneState.lastHighlighted) sceneState.lastHighlighted.material = grayMaterial;
+            if(sceneState.outline) sceneState.outline.visible = false;
+            if(!voxelData || !voxelData.roundedMean) return;
+
             const { x, y, z } = voxelData.roundedMean;
             const index = (x - 1) + (y - 1) * 8 + (z - 1) * 64;
-            if (voxelGrid[index]) {
-                const newVoxel = voxelGrid[index]; newVoxel.material = redMaterial;
-                highlightOutline.position.copy(newVoxel.position);
-                highlightOutline.visible = true; lastHighlightedVoxel = newVoxel;
+            if (sceneState.grid[index]) {
+                const newVoxel = sceneState.grid[index]; newVoxel.material = redMaterial;
+                sceneState.outline.position.copy(newVoxel.position);
+                sceneState.outline.visible = true; sceneState.lastHighlighted = newVoxel;
+            }
+        }
+        function updateAverageVoxelScene(calculationResult, sourceFiles) {
+            const sceneState = avgSceneState;
+            sceneState.grid.forEach(voxel => { voxel.material = grayMaterial; });
+            if (sceneState.outline) sceneState.outline.visible = false;
+
+            sourceFiles.forEach(file => {
+                const voxelData = file.data.analysis.voxel;
+                if (voxelData && voxelData.roundedMean) {
+                    const { x, y, z } = voxelData.roundedMean;
+                    const index = (x - 1) + (y - 1) * 8 + (z - 1) * 64;
+                    if (sceneState.grid[index]) {
+                        sceneState.grid[index].material = yellowMaterial;
+                    }
+                }
+            });
+
+            const avgVoxelData = calculationResult.data.analysis.voxel;
+            if (avgVoxelData && avgVoxelData.roundedMean) {
+                const { x, y, z } = avgVoxelData.roundedMean;
+                const index = (x - 1) + (y - 1) * 8 + (z - 1) * 64;
+                if (sceneState.grid[index]) {
+                    const newVoxel = sceneState.grid[index];
+                    newVoxel.material = redMaterial;
+                    sceneState.outline.position.copy(newVoxel.position);
+                    sceneState.outline.visible = true;
+                }
             }
         }
         function updateAllVisuals() {
             const knowledgeDensity = surveyValues.slice(0, 40), familiarity = surveyValues.slice(40, 80), cognitiveLoad = surveyValues.slice(80, 120);
-            const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+            const mean = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
             const meanX = mean(knowledgeDensity), meanY = mean(familiarity), meanZ = mean(cognitiveLoad);
             const roundedMeanX = Math.round(Math.min(Math.max(meanX, 1), 8)), roundedMeanY = Math.round(Math.min(Math.max(meanY, 1), 8)), roundedMeanZ = Math.round(Math.min(Math.max(meanZ, 1), 8));
             const data = { timestamp: new Date().toISOString(), survey_results: surveyValues, analysis: { voxel: { mean: { x: +meanX.toFixed(2), y: +meanY.toFixed(2), z: +meanZ.toFixed(2) }, mode: { x: getMode(knowledgeDensity), y: getMode(familiarity), z: getMode(cognitiveLoad) }, roundedMean: { x: roundedMeanX, y: roundedMeanY, z: roundedMeanZ } }, graphs: { knowledge_density: { mean: +meanX.toFixed(2), distribution_data: getGaussianData(meanX, 1) }, familiarity: { mean: +meanY.toFixed(2), distribution_data: getGaussianData(meanY, 1) }, cognitive_load: { mean: +meanZ.toFixed(2), distribution_data: getGaussianData(meanZ, 1) } } } };
+            
             jsonOutput.value = JSON.stringify(data, null, 2);
-            renderCharts(data.analysis.graphs); updateVoxelScene(data.analysis.voxel); updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ);
+            
+            renderMainCharts(data.analysis.graphs);
+            updateVoxelScene(data.analysis.voxel, mainSceneState);
+            updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ);
         }
 
-        // --- SERVER INTERACTION FUNCTIONS ---
+        // --- SERVER INTERACTION & UI FUNCTIONS ---
         async function loadSavedFilesList() {
-            try {
+             try {
                 const response = await fetch(`${baseUrl}/api/saved-files`);
                 if (!response.ok) throw new Error('Failed to fetch file list.');
                 const files = await response.json();
                 savedFilesDropdown.innerHTML = '<option value="">Select a file to load...</option>';
-                calculationFilesSelect.innerHTML = ''; // Clear fully
+                calculationFilesSelect.innerHTML = '';
                 files.forEach(file => {
                     savedFilesDropdown.add(new Option(file, file));
                     calculationFilesSelect.add(new Option(file, file));
@@ -251,8 +352,8 @@
             } catch (error) { showMessage('Could not load file list.', 'red'); }
         }
         function showMessage(msg, color = 'green') {
-             copyMessage.textContent = msg; copyMessage.className = `text-xs text-${color}-600 mt-2 block text-center`;
-             setTimeout(() => { copyMessage.textContent = '' }, 3000);
+             messageArea.textContent = msg; messageArea.className = `text-xs text-${color}-600 mt-2 block text-center`;
+             setTimeout(() => { messageArea.textContent = '' }, 4000);
         }
         function updateUIWithLoadedData(data) {
             if (data.survey_results && Array.isArray(data.survey_results) && data.survey_results.length === NUM_QUESTIONS) {
@@ -262,30 +363,76 @@
                     document.getElementById(`slider-${i + 1}`).value = val;
                     document.getElementById(`value-${i + 1}`).textContent = val;
                 });
-                updateAllVisuals(); showMessage('Data loaded successfully!');
+                updateAllVisuals();
+                showMessage('Data loaded successfully!');
+                calculationResultsContainer.classList.add('hidden');
+                averageChartsContainer.classList.add('hidden');
+                averageVoxelContainer.classList.add('hidden');
+                averageAnalysisContainer.classList.add('hidden');
             } else { showMessage('Invalid JSON file format.', 'red'); }
+        }
+        function populateResultsGrid(data) {
+            const { calculationResult, sourceFiles } = data;
+            resultsTableHeader.innerHTML = '';
+            resultsTableBody.innerHTML = '';
+            const headers = ['File Name', 'Mean X (Knowledge)', 'Mean Y (Familiarity)', 'Mean Z (Cognitive Load)', 'Mode X', 'Mode Y', 'Mode Z', 'Rounded Mean X', 'Rounded Mean Y', 'Rounded Mean Z'];
+            const headerRow = document.createElement('tr');
+            headers.forEach(headerText => { const th = document.createElement('th'); th.textContent = headerText; headerRow.appendChild(th); });
+            resultsTableHeader.appendChild(headerRow);
+            
+            const createRow = (file) => {
+                const row = document.createElement('tr');
+                const voxelData = file.data.analysis.voxel || {};
+                row.innerHTML = `
+                    <td>${file.filename}</td> <td>${voxelData.mean?.x ?? 'N/A'}</td> <td>${voxelData.mean?.y ?? 'N/A'}</td>
+                    <td>${voxelData.mean?.z ?? 'N/A'}</td> <td>${voxelData.mode?.x ?? 'N/A'}</td> <td>${voxelData.mode?.y ?? 'N/A'}</td>
+                    <td>${voxelData.mode?.z ?? 'N/A'}</td> <td>${voxelData.roundedMean?.x ?? 'N/A'}</td> <td>${voxelData.roundedMean?.y ?? 'N/A'}</td>
+                    <td>${voxelData.roundedMean?.z ?? 'N/A'}</td>
+                `;
+                return row;
+            };
+
+            resultsTableBody.appendChild(createRow(calculationResult));
+            sourceFiles.forEach(file => { resultsTableBody.appendChild(createRow(file)); });
+            calculationResultsContainer.classList.remove('hidden');
         }
 
         // --- EVENT LISTENERS ---
         questionStrings.forEach((qText, i) => {
-            const item = document.createElement('div'); item.className = 'slider-item';
-            item.innerHTML = `<label class="block text-sm font-medium text-gray-700">${qText} - Value: <span id="value-${i + 1}">4</span></label><input type="range" class="mt-2 w-full" id="slider-${i + 1}" min="1" max="8" value="4">`;
-            surveyQuestionsDiv.appendChild(item);
-        });
-        document.querySelectorAll('input[type="range"]').forEach((slider, index) => {
-            slider.addEventListener('input', () => {
-                surveyValues[index] = parseInt(slider.value);
-                document.getElementById(`value-${index + 1}`).textContent = slider.value;
+            const item = document.createElement('div');
+            item.className = 'slider-item';
+            const label = document.createElement('label');
+            label.className = 'block text-sm font-medium text-gray-700';
+            label.innerHTML = `${qText} - Value: <span id="value-${i + 1}">4</span>`;
+            const sliderContainer = document.createElement('div');
+            sliderContainer.className = 'relative pt-1';
+            const slider = document.createElement('input');
+            slider.type = 'range'; slider.className = 'w-full'; slider.id = `slider-${i + 1}`;
+            slider.min = '1'; slider.max = '8'; slider.value = '4';
+            const ticksContainer = document.createElement('div');
+            ticksContainer.className = 'w-full flex justify-between text-xs text-gray-400 px-1';
+            ticksContainer.innerHTML = `<span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span>`;
+            slider.addEventListener('input', (e) => {
+                surveyValues[i] = parseInt(e.target.value);
+                document.getElementById(`value-${i + 1}`).textContent = e.target.value;
                 updateAllVisuals();
             });
+            sliderContainer.appendChild(slider);
+            sliderContainer.appendChild(ticksContainer);
+            item.appendChild(label);
+            item.appendChild(sliderContainer);
+            surveyQuestionsDiv.appendChild(item);
         });
+        
         resetButton.addEventListener('click', () => {
             surveyValues.fill(4);
             document.querySelectorAll('input[type="range"]').forEach((slider, i) => { slider.value = 4; document.getElementById(`value-${i + 1}`).textContent = 4; });
-            updateAllVisuals(); showMessage('Sliders reset!');
-        });
-        copyButton.addEventListener('click', () => {
-            jsonOutput.select(); document.execCommand('copy'); showMessage('Copied to clipboard!');
+            updateAllVisuals();
+            showMessage('Sliders reset!');
+            calculationResultsContainer.classList.add('hidden');
+            averageChartsContainer.classList.add('hidden');
+            averageVoxelContainer.classList.add('hidden');
+            averageAnalysisContainer.classList.add('hidden');
         });
         saveButton.addEventListener('click', async () => {
             try {
@@ -303,8 +450,6 @@
                 updateUIWithLoadedData(await response.json());
             } catch (error) { showMessage('Error loading file.', 'red'); }
         });
-
-        // Calculation event listeners
         deleteSelectedButton.addEventListener('click', async () => {
             const selectedFiles = Array.from(calculationFilesSelect.selectedOptions).map(opt => opt.value);
             if (selectedFiles.length === 0) return showMessage('No files selected to delete.', 'red');
@@ -317,24 +462,51 @@
                 } catch (error) { showMessage('Error deleting files.', 'red'); }
             }
         });
-        
         calculateSelectedButton.addEventListener('click', async () => {
             const selectedFiles = Array.from(calculationFilesSelect.selectedOptions).map(opt => opt.value);
-            if (selectedFiles.length === 0) return showMessage('No files selected to calculate.', 'red');
+            if (selectedFiles.length === 0) return showMessage('No files selected for calculation.', 'red');
             try {
-                const response = await fetch(`${baseUrl}/api/calculate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: selectedFiles }) });
+                showMessage('Calculating average, please wait...');
+                const response = await fetch(`${baseUrl}/api/calculate`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: selectedFiles })
+                });
                 if (!response.ok) throw new Error('Server failed to calculate average.');
                 const result = await response.json();
-                showMessage(`Calculation saved as ${result.filename}. Load it from the dropdown to see the results.`);
+                
+                populateResultsGrid(result);
+                renderAverageCharts(result.calculationResult.data.analysis.graphs);
+                averageChartsContainer.classList.remove('hidden');
+                
+                averageVoxelContainer.classList.remove('hidden');
+                setTimeout(() => {
+                    updateAverageVoxelScene(result.calculationResult, result.sourceFiles);
+                    const avgVoxelCanvas = document.getElementById('avg-voxel-canvas');
+                    const container = avgVoxelCanvas.parentElement;
+                    if (avgSceneState.renderer && avgSceneState.camera && container) {
+                        avgSceneState.renderer.setSize(container.clientWidth, container.clientHeight);
+                        avgSceneState.camera.aspect = container.clientWidth / container.clientHeight;
+                        avgSceneState.camera.updateProjectionMatrix();
+                    }
+                }, 10);
+
+                const { x, y, z } = result.calculationResult.data.analysis.voxel.roundedMean;
+                updateAverageAnalysis(x, y, z);
+                averageAnalysisContainer.classList.remove('hidden');
+                
+                showMessage(`Calculation successful. Result saved as ${result.calculationResult.filename}.`);
                 await loadSavedFilesList();
-            } catch (error) { showMessage('Error calculating average.', 'red'); }
+            } catch (error) {
+                showMessage('Error calculating average.', 'red');
+                console.error(error);
+            }
         });
 
         // --- INITIALIZATION CALLS ---
         parseVoxelData(voxelCsvData);
-        initVoxelScene();
+        initVoxelScene('voxel-canvas', mainSceneState);
+        initVoxelScene('avg-voxel-canvas', avgSceneState);
         updateAllVisuals();
-        loadSavedFilesList();
+        await loadSavedFilesList();
     };
 </script>
 
