@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cognitive Space Visualization V44</title>
+    <title>Cognitive Space Visualization V46</title>
 
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,6 @@
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; }
         .container { max-width: 1200px; margin: 2rem auto; padding: 2rem; background-color: #ffffff; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
         .slider-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
-        .slider-item { display: flex; flex-direction: column; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; background-color: #fafafa; }
         .chart-container { width: 100%; height: 300px; margin-bottom: 2rem; display: flex; justify-content: center; }
         .voxel-container { width: 100%; height: 600px; border-radius: 1rem; overflow: hidden; background-color: #e5e7eb; display: flex; justify-content: center; align-items: center; }
         .voxel-canvas { width: 100%; height: 100%; display: block; }
@@ -25,13 +24,14 @@
 <body>
 
 <div class="container">
-    <div class="flex items-center justify-center mb-2">
-        <h1 class="text-3xl font-bold text-center">Cognition Space Visualizer</h1>
-        <span class="text-lg text-gray-500 ml-2">V44</span>
+    <div class="text-center mb-8">
+        <div class="flex items-center justify-center mb-1">
+            <h1 class="text-3xl font-bold">Cognition Space Visualizer</h1>
+            <span class="text-lg text-gray-500 ml-2">V46</span>
+        </div>
+        <p class="text-md text-gray-500">Proof of Concept September 2025</p>
+        <p class="text-gray-600 mt-2">Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.</p>
     </div>
-    <p class="text-gray-600 text-center mb-8">
-        Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.
-    </p>
 
     <!-- Survey Questions Section -->
     <div class="p-6 mb-8 bg-gray-50 rounded-lg border border-gray-200">
@@ -48,7 +48,7 @@
                 <button id="load-selected-button" class="p-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">Load Selected</button>
             </div>
         </div>
-        <textarea id="json-output" class="w-full h-96 p-4 border rounded-lg resize-none font-mono text-sm bg-gray-100" readonly></textarea>
+        <textarea id="json-output" class="w-full h-48 p-4 border rounded-lg resize-none font-mono text-sm bg-gray-100" readonly></textarea>
         <div class="flex justify-between mt-4 space-x-4">
             <button id="reset-button" class="flex-1 p-3 bg-gray-400 text-white rounded-lg hover:bg-gray-500">Reset</button>
             <button id="copy-button" class="flex-1 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Copy JSON</button>
@@ -78,7 +78,7 @@
         </div>
     </div>
 
-    <!-- NEW: Calculation Section -->
+    <!-- Calculation Section (from V44) -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Calculation</h2>
         <div class="flex flex-col items-center">
@@ -104,7 +104,7 @@
                     fetch(`${baseUrl}/api/voxel-data`),
                     fetch(`${baseUrl}/api/questions`)
                 ]);
-                if (!voxelResponse.ok || !questionsResponse.ok) throw new Error('Server returned an error.');
+                if (!voxelResponse.ok || !questionsResponse.ok) throw new Error('Failed to fetch initial data.');
                 return {
                     voxelCsvData: await voxelResponse.text(),
                     questionStrings: await questionsResponse.json()
@@ -304,7 +304,7 @@
             } catch (error) { showMessage('Error loading file.', 'red'); }
         });
 
-        // NEW: Calculation event listeners
+        // Calculation event listeners
         deleteSelectedButton.addEventListener('click', async () => {
             const selectedFiles = Array.from(calculationFilesSelect.selectedOptions).map(opt => opt.value);
             if (selectedFiles.length === 0) return showMessage('No files selected to delete.', 'red');
@@ -340,3 +340,5 @@
 
 </body>
 </html>
+
+
