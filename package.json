@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/flavioGH/repo33#readme",
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
   }
 }
