@@ -32,38 +32,31 @@ app.use(express.static(path.join(__dirname)));
 app.get('/api/saved-files', async (req, res) => {
     try {
         const personId = parseInt(req.query.personId, 10);
-        if (!personId) return res.status(400).json({ message: "User not specified." });
+        if (!personId) { 
+             const result = await pool.query('SELECT filename FROM surveys ORDER BY filename ASC');
+             return res.json(result.rows.map(row => row.filename));
+        }
 
         const userResult = await pool.query('SELECT * FROM persons WHERE id = $1', [personId]);
         if (userResult.rows.length === 0) return res.status(404).json({ message: "User not found." });
         const user = userResult.rows[0];
 
         let query;
-        let queryParams;
+        let queryParams = [user.id, user.org_unit_id];
 
-        // --- CHANGE IS HERE ---
-        // This logic now precisely matches your new permission rules.
         if (user.is_manager) {
-            // Rule 1.1 & 1.2 Combined: Manager sees all files from their own unit, 
-            // plus calculated files from all subordinate units.
             query = `
                 WITH RECURSIVE subordinate_units AS (
-                    SELECT id FROM organization_units WHERE id = $1
+                    SELECT id FROM organization_units WHERE id = $2
                     UNION
                     SELECT u.id FROM organization_units u INNER JOIN subordinate_units s ON u.parent_id = s.id
                 )
                 SELECT filename FROM surveys
-                WHERE 
-                    (org_unit_id = $1) 
-                    OR 
-                    (org_unit_id IN (SELECT id FROM subordinate_units) AND survey_type = 'calculated')
+                WHERE (person_id = $1) OR (org_unit_id = $2 AND survey_type = 'individual') OR (org_unit_id IN (SELECT id FROM subordinate_units) AND survey_type = 'calculated')
                 ORDER BY filename ASC;
             `;
-            queryParams = [user.org_unit_id];
         } else {
-            // Rule 2.1: Coworker sees only their own files.
             query = `SELECT filename FROM surveys WHERE person_id = $1 ORDER BY filename ASC;`;
-            queryParams = [user.id];
         }
         
         const result = await pool.query(query, queryParams);
@@ -73,7 +66,6 @@ app.get('/api/saved-files', async (req, res) => {
         res.status(500).json({ message: 'Error fetching file list.' });
     }
 });
-// ... The rest of your server.js file remains exactly the same
 app.get('/api/saved-files/:filename', async (req, res) => {
     try {
         const { filename } = req.params;
@@ -83,27 +75,19 @@ app.get('/api/saved-files/:filename', async (req, res) => {
         res.json({ survey_results: dbRow.survey_results, analysis: { voxel: dbRow.analysis_voxel, graphs: dbRow.analysis_graphs } });
     } catch (error) { res.status(404).json({ message: 'File not found.' }); }
 });
-
 app.post('/api/saved-files', async (req, res) => {
     try {
         const { survey_results, analysis, personId, orgUnitId } = req.body;
         const now = new Date();
         const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
-        
-        const userResult = await pool.query('SELECT is_manager FROM persons WHERE id = $1', [personId]);
-        const role = userResult.rows[0].is_manager ? 'manager' : 'coworker';
-        const filename = `cognitive_data_${orgUnitId}_${personId}_${role}_${timestamp}.json`;
+        const filename = personId ? `cognitive_data_${personId}_${orgUnitId}_${timestamp}.json` : `cognitive_data_${timestamp}.json`;
 
         const query = `INSERT INTO surveys(filename, survey_type, survey_results, analysis_voxel, analysis_graphs, person_id, org_unit_id) VALUES($1, $2, $3, $4, $5, $6, $7)`;
         const values = [filename, 'individual', JSON.stringify(survey_results), JSON.stringify(analysis.voxel), JSON.stringify(analysis.graphs), personId, orgUnitId];
         await pool.query(query, values);
         res.status(201).json({ message: 'Survey saved successfully', filename });
-    } catch (error) { 
-        console.error("Error saving survey to DB:", error);
-        res.status(500).json({ message: 'Error saving survey.' }); 
-    }
+    } catch (error) { res.status(500).json({ message: 'Error saving survey.' }); }
 });
-
 app.delete('/api/saved-files', async (req, res) => {
     try {
         const { filenames } = req.body;
@@ -112,18 +96,17 @@ app.delete('/api/saved-files', async (req, res) => {
         res.json({ message: 'Files deleted successfully.' });
     } catch (error) { res.status(500).json({ message: 'Error deleting files.' }); }
 });
-
 app.post('/api/calculate', async (req, res) => {
     try {
         const { filenames, personId } = req.body;
         if (!Array.isArray(filenames) || filenames.length === 0) return res.status(400).json({ message: 'No files selected.' });
-        
-        const userResult = await pool.query('SELECT * FROM persons WHERE id = $1', [personId]);
-        if (userResult.rows.length === 0 || !userResult.rows[0].is_manager) {
-            return res.status(403).json({ message: 'Permission denied: Only managers can perform calculations.' });
+        if(personId){
+            const userResult = await pool.query('SELECT * FROM persons WHERE id = $1', [personId]);
+            if (userResult.rows.length === 0 || !userResult.rows[0].is_manager) {
+                return res.status(403).json({ message: 'Permission denied: Only managers can perform calculations.' });
+            }
         }
-        const user = userResult.rows[0];
-
+        
         const sourceSurveysResult = await pool.query('SELECT filename, survey_results, analysis_voxel, analysis_graphs FROM surveys WHERE filename = ANY($1::varchar[])', [filenames]);
         const sourceFilesData = sourceSurveysResult.rows.map(row => ({ filename: row.filename, data: { survey_results: row.survey_results, analysis: { voxel: row.analysis_voxel, graphs: row.analysis_graphs } } }));
         const allSurveyResults = sourceFilesData.map(file => file.data.survey_results);
@@ -166,12 +149,11 @@ app.post('/api/calculate', async (req, res) => {
         
         const now = new Date();
         const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
+        const newFilename = `calc_${timestamp}.json`;
         
-        const role = user.is_manager ? 'manager' : 'coworker';
-        const newFilename = `calc_${user.org_unit_id}_${user.id}_${role}_${timestamp}.json`;
-        
+        const user = personId ? (await pool.query('SELECT * FROM persons WHERE id = $1', [personId])).rows[0] : null;
         const insertQuery = `INSERT INTO surveys(filename, survey_type, survey_results, analysis_voxel, analysis_graphs, person_id, org_unit_id) VALUES($1, $2, $3, $4, $5, $6, $7)`;
-        const insertValues = [newFilename, 'calculated', JSON.stringify(averagedData.survey_results), JSON.stringify(averagedData.analysis.voxel), JSON.stringify(averagedData.analysis.graphs), user.id, user.org_unit_id];
+        const insertValues = [newFilename, 'calculated', JSON.stringify(averagedData.survey_results), JSON.stringify(averagedData.analysis.voxel), JSON.stringify(averagedData.analysis.graphs), user ? user.id : null, user ? user.org_unit_id : null];
         await pool.query(insertQuery, insertValues);
 
         res.json({

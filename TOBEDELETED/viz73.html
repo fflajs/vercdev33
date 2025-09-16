@@ -106,7 +106,6 @@
         document.getElementById('version-display').textContent = VERSION;
         document.title = `Cognitive Space Visualization ${VERSION}`;
 
-        // Define all DOM elements and state variables at the top level
         const baseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
         const personId = urlParams.get('personId');
@@ -150,7 +149,6 @@
         const yellowMaterial = new THREE.MeshBasicMaterial({ color: 0xfacc15, opacity: 0.6, transparent: true });
         const grayMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true, opacity: 0.2, transparent: true });
 
-        // All helper functions are defined here...
         function handleUserContext() {
             if (personId && userName && userRole && userUnit && userUnitId) {
                 const decodedUserName = decodeURIComponent(userName);
