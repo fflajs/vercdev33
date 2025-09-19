@@ -4,15 +4,23 @@ const path = require('path');
 const { Pool } = require('pg');
 
 const app = express();
-const port = 3000;
+const port = 3002;
 
 // --- DATABASE CONNECTION ---
+//##const pool = new Pool({
+    //##user: 'gauss',
+    //##host: 'localhost',
+    //##database: 'gaussdb',
+    //##password: process.env.DB_PASSWORD,
+    //##port: 5432,
+//##});
+// --- DATABASE CONNECTION ---
 const pool = new Pool({
-    user: 'gauss',
-    host: 'localhost',
-    database: 'gaussdb',
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_DATABASE,
     password: process.env.DB_PASSWORD,
-    port: 5432,
+    port: process.env.DB_PORT,
 });
 
 pool.connect((err, client, release) => {
