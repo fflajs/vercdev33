@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+    <div class="w-full max-w-sm bg-white p-8 rounded-lg shadow-lg">
+        <h1 class="text-3xl font-bold mb-2 text-center">Cognitive Visualizer Login</h1>
+        <p class="text-gray-600 mb-6 text-center">Please enter your full name.</p>
+        
+        <form id="login-form">
+            <div class="mb-4">
+                <label for="name" class="block text-gray-700 text-sm font-bold mb-2">Name</label>
+                <input type="text" id="name" name="name" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+            </div>
+            <div class="flex items-center justify-between">
+                <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                    Login
+                </button>
+                <a href="/index.html" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
+                    Back to Main Menu
+                </a>
+            </div>
+        </form>
+        <p id="error-message" class="text-red-500 text-xs italic mt-4 text-center"></p>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const nameInput = document.getElementById('name');
+            const errorMessage = document.getElementById('error-message');
+            const name = nameInput.value.trim();
+            errorMessage.textContent = '';
+
+            if (!name) {
+                errorMessage.textContent = 'Please enter a name.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Login failed.');
+                }
+
+                // If login is successful, construct the URL and redirect
+                const user = data;
+                const role = user.is_manager ? 'Manager' : 'Coworker';
+                const getOrgPath = (unitName) => encodeURIComponent(unitName); // Simplified for direct login
+                
+                const url = new URL('/cognitive-tool.html', window.location.origin);
+                url.searchParams.set('personId', user.id);
+                url.searchParams.set('userName', user.name);
+                url.searchParams.set('userRole', role);
+                url.searchParams.set('userUnit', getOrgPath(user.org_unit_name));
+                url.searchParams.set('userUnitId', user.org_unit_id);
+
+                window.location.href = url.href;
+
+            } catch (error) {
+                errorMessage.textContent = error.message;
+            }
+        });
+    </script>
+</body>
+</html>
+

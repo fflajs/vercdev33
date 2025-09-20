@@ -7,14 +7,6 @@ const app = express();
 const port = 3002;
 
 // --- DATABASE CONNECTION ---
-//##const pool = new Pool({
-    //##user: 'gauss',
-    //##host: 'localhost',
-    //##database: 'gaussdb',
-    //##password: process.env.DB_PASSWORD,
-    //##port: 5432,
-//##});
-// --- DATABASE CONNECTION ---
 const pool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
@@ -37,73 +29,144 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname)));
 
 // --- API ROUTES FOR COGNITIVE VISUALIZER ---
-app.get('/api/saved-files', async (req, res) => {
+
+app.get('/api/initial-load/:personId', async (req, res) => {
     try {
-        const personId = parseInt(req.query.personId, 10);
+        const { personId } = req.params;
         if (!personId) return res.status(400).json({ message: "User not specified." });
 
-        const userResult = await pool.query('SELECT * FROM persons WHERE id = $1', [personId]);
+        const userResult = await pool.query('SELECT org_unit_id FROM persons WHERE id = $1', [personId]);
         if (userResult.rows.length === 0) return res.status(404).json({ message: "User not found." });
-        const user = userResult.rows[0];
+        const userOrgUnitId = userResult.rows[0].org_unit_id;
 
-        let query;
-        let queryParams;
+        const individualQuery = pool.query(`
+            SELECT survey_results, analysis_voxel, analysis_graphs 
+            FROM surveys 
+            WHERE person_id = $1 AND survey_type = 'individual'
+        `, [personId]);
 
-        // --- CHANGE IS HERE ---
-        // This logic now precisely matches your new permission rules.
-        if (user.is_manager) {
-            // Rule 1.1 & 1.2 Combined: Manager sees all files from their own unit, 
-            // plus calculated files from all subordinate units.
-            query = `
-                WITH RECURSIVE subordinate_units AS (
-                    SELECT id FROM organization_units WHERE id = $1
-                    UNION
-                    SELECT u.id FROM organization_units u INNER JOIN subordinate_units s ON u.parent_id = s.id
-                )
-                SELECT filename FROM surveys
-                WHERE 
-                    (org_unit_id = $1) 
-                    OR 
-                    (org_unit_id IN (SELECT id FROM subordinate_units) AND survey_type = 'calculated')
-                ORDER BY filename ASC;
-            `;
-            queryParams = [user.org_unit_id];
-        } else {
-            // Rule 2.1: Coworker sees only their own files.
-            query = `SELECT filename FROM surveys WHERE person_id = $1 ORDER BY filename ASC;`;
-            queryParams = [user.id];
-        }
-        
-        const result = await pool.query(query, queryParams);
-        res.json(result.rows.map(row => row.filename));
+        const calculatedQuery = pool.query(`
+            SELECT survey_results, analysis_voxel, analysis_graphs 
+            FROM surveys 
+            WHERE org_unit_id = $1 AND survey_type = 'calculated'
+        `, [userOrgUnitId]);
+
+        const [individualResult, calculatedResult] = await Promise.all([individualQuery, calculatedQuery]);
+
+        const individualData = individualResult.rows.length > 0 ? {
+            survey_results: individualResult.rows[0].survey_results,
+            analysis: {
+                voxel: individualResult.rows[0].analysis_voxel,
+                graphs: individualResult.rows[0].analysis_graphs
+            }
+        } : null;
+
+        const calculatedData = calculatedResult.rows.length > 0 ? {
+            survey_results: calculatedResult.rows[0].survey_results,
+            analysis: {
+                voxel: calculatedResult.rows[0].analysis_voxel,
+                graphs: calculatedResult.rows[0].analysis_graphs
+            }
+        } : null;
+
+        res.json({ individualData, calculatedData });
+
     } catch (error) {
-        console.error('Error fetching file list:', error);
-        res.status(500).json({ message: 'Error fetching file list.' });
+        console.error('Error fetching initial load data:', error);
+        res.status(500).json({ message: 'Error fetching initial load data.' });
     }
 });
-// ... The rest of your server.js file remains exactly the same
-app.get('/api/saved-files/:filename', async (req, res) => {
+
+app.get('/api/organization-stats/:personId', async (req, res) => {
     try {
-        const { filename } = req.params;
-        const result = await pool.query('SELECT survey_results, analysis_voxel, analysis_graphs FROM surveys WHERE filename = $1', [filename]);
-        if (result.rows.length === 0) return res.status(404).json({ message: 'File not found.' });
-        const dbRow = result.rows[0];
-        res.json({ survey_results: dbRow.survey_results, analysis: { voxel: dbRow.analysis_voxel, graphs: dbRow.analysis_graphs } });
-    } catch (error) { res.status(404).json({ message: 'File not found.' }); }
+        const { personId } = req.params;
+        const managerCheck = await pool.query('SELECT is_manager FROM persons WHERE id = $1', [personId]);
+        if (managerCheck.rows.length === 0 || !managerCheck.rows[0].is_manager) {
+            return res.status(403).json({ message: 'Permission denied.' });
+        }
+
+        const queries = {
+            target: pool.query("SELECT value FROM app_data WHERE key = 'target' AND value IS NOT NULL AND value <> ''"),
+            totalPeople: pool.query("SELECT COUNT(*) as count FROM persons"),
+            descriptions: pool.query("SELECT COUNT(*) as count FROM persons WHERE description IS NOT NULL AND description <> ''"),
+            cognitiveData: pool.query("SELECT COUNT(DISTINCT person_id) as count FROM surveys WHERE survey_type = 'individual'"),
+            totalUnits: pool.query("SELECT COUNT(*) as count FROM organization_units"),
+            calculatedUnits: pool.query("SELECT COUNT(*) as count FROM surveys WHERE survey_type = 'calculated'")
+        };
+
+        const results = await Promise.all(Object.values(queries));
+        const [targetResult, totalPeopleResult, descriptionsResult, cognitiveDataResult, totalUnitsResult, calculatedUnitsResult] = results;
+
+        const stats = {
+            targetEntered: targetResult.rows.length > 0 ? 1 : 0,
+            totalPeople: parseInt(totalPeopleResult.rows[0].count, 10),
+            descriptionsEntered: parseInt(descriptionsResult.rows[0].count, 10),
+            cognitiveDataEntered: parseInt(cognitiveDataResult.rows[0].count, 10),
+            totalUnits: parseInt(totalUnitsResult.rows[0].count, 10),
+            calculatedUnits: parseInt(calculatedUnitsResult.rows[0].count, 10)
+        };
+        
+        res.json(stats);
+
+    } catch (error) {
+        console.error('Error fetching organization stats:', error);
+        res.status(500).json({ message: 'Error fetching organization stats.' });
+    }
 });
+
+// NEW endpoint for handling name-based login
+app.post('/api/login', async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name) {
+            return res.status(400).json({ message: 'Name is required.' });
+        }
+
+        const query = `
+            SELECT 
+                p.id, p.name, p.is_manager, p.org_unit_id, o.name as org_unit_name
+            FROM persons p
+            JOIN organization_units o ON p.org_unit_id = o.id
+            WHERE p.name = $1
+        `;
+        const result = await pool.query(query, [name]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'User with this name not found.' });
+        }
+
+        res.json(result.rows[0]);
+
+    } catch (error) {
+        console.error('Error during login:', error);
+        res.status(500).json({ message: 'An error occurred during login.' });
+    }
+});
+
 
 app.post('/api/saved-files', async (req, res) => {
     try {
         const { survey_results, analysis, personId, orgUnitId } = req.body;
-        const now = new Date();
-        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
         
         const userResult = await pool.query('SELECT is_manager FROM persons WHERE id = $1', [personId]);
+        if (userResult.rows.length === 0) return res.status(404).json({ message: "User not found." });
+        
         const role = userResult.rows[0].is_manager ? 'manager' : 'coworker';
-        const filename = `cognitive_data_${orgUnitId}_${personId}_${role}_${timestamp}.json`;
+        const filename = `cognitive_data_${orgUnitId}_${personId}_${role}.json`;
 
-        const query = `INSERT INTO surveys(filename, survey_type, survey_results, analysis_voxel, analysis_graphs, person_id, org_unit_id) VALUES($1, $2, $3, $4, $5, $6, $7)`;
-        const values = [filename, 'individual', JSON.stringify(survey_results), JSON.stringify(analysis.voxel), JSON.stringify(analysis.graphs), personId, orgUnitId];
+        const query = `
+            INSERT INTO surveys (person_id, survey_type, filename, survey_results, analysis_voxel, analysis_graphs, org_unit_id)
+            VALUES ($1, 'individual', $2, $3, $4, $5, $6)
+            ON CONFLICT (person_id) WHERE survey_type = 'individual'
+            DO UPDATE SET
+                filename = EXCLUDED.filename,
+                survey_results = EXCLUDED.survey_results,
+                analysis_voxel = EXCLUDED.analysis_voxel,
+                analysis_graphs = EXCLUDED.analysis_graphs,
+                org_unit_id = EXCLUDED.org_unit_id;
+        `;
+        const values = [personId, filename, JSON.stringify(survey_results), JSON.stringify(analysis.voxel), JSON.stringify(analysis.graphs), orgUnitId];
+        
         await pool.query(query, values);
         res.status(201).json({ message: 'Survey saved successfully', filename });
     } catch (error) { 
@@ -112,29 +175,35 @@ app.post('/api/saved-files', async (req, res) => {
     }
 });
 
-app.delete('/api/saved-files', async (req, res) => {
-    try {
-        const { filenames } = req.body;
-        if (!Array.isArray(filenames)) return res.status(400).json({ message: 'Invalid request format.' });
-        await pool.query('DELETE FROM surveys WHERE filename = ANY($1::varchar[])', [filenames]);
-        res.json({ message: 'Files deleted successfully.' });
-    } catch (error) { res.status(500).json({ message: 'Error deleting files.' }); }
-});
-
 app.post('/api/calculate', async (req, res) => {
     try {
-        const { filenames, personId } = req.body;
-        if (!Array.isArray(filenames) || filenames.length === 0) return res.status(400).json({ message: 'No files selected.' });
+        const { personId, orgUnitId } = req.body;
         
         const userResult = await pool.query('SELECT * FROM persons WHERE id = $1', [personId]);
         if (userResult.rows.length === 0 || !userResult.rows[0].is_manager) {
             return res.status(403).json({ message: 'Permission denied: Only managers can perform calculations.' });
         }
-        const user = userResult.rows[0];
-
-        const sourceSurveysResult = await pool.query('SELECT filename, survey_results, analysis_voxel, analysis_graphs FROM surveys WHERE filename = ANY($1::varchar[])', [filenames]);
-        const sourceFilesData = sourceSurveysResult.rows.map(row => ({ filename: row.filename, data: { survey_results: row.survey_results, analysis: { voxel: row.analysis_voxel, graphs: row.analysis_graphs } } }));
-        const allSurveyResults = sourceFilesData.map(file => file.data.survey_results);
+        
+        const subordinateDataQuery = `
+            WITH RECURSIVE subordinate_units AS (
+                SELECT id FROM organization_units WHERE id = $1
+                UNION
+                SELECT u.id FROM organization_units u INNER JOIN subordinate_units s ON u.parent_id = s.id
+            )
+            SELECT filename, survey_results, analysis_voxel FROM surveys
+            WHERE org_unit_id IN (SELECT id FROM subordinate_units) AND survey_type = 'individual';
+        `;
+        
+        const sourceSurveysResult = await pool.query(subordinateDataQuery, [orgUnitId]);
+        if (sourceSurveysResult.rows.length === 0) {
+            return res.status(404).json({ message: 'No individual surveys found in this unit or its subordinates to calculate.' });
+        }
+        
+        const allSurveyResults = sourceSurveysResult.rows.map(row => row.survey_results);
+        const sourceFilesData = sourceSurveysResult.rows.map(row => ({
+            filename: row.filename,
+            data: { analysis: { voxel: row.analysis_voxel } }
+        }));
         
         const numFiles = allSurveyResults.length;
         const averagedSurveyResults = Array(120).fill(0);
@@ -159,35 +228,36 @@ app.post('/api/calculate', async (req, res) => {
         const averagedData = {
             timestamp: new Date().toISOString(), survey_results: averagedSurveyResults.map(v => Math.ceil(v)),
             analysis: {
-                voxel: {
-                    mean: { x: +knowledgeAvg.toFixed(2), y: +familiarityAvg.toFixed(2), z: +cognitiveLoadAvg.toFixed(2) },
-                    mode: { x: getMode(averagedSurveyResults.slice(0, 40).map(Math.round)), y: getMode(averagedSurveyResults.slice(40, 80).map(Math.round)), z: getMode(averagedSurveyResults.slice(80, 120).map(Math.round)) },
-                    roundedMean: { x: Math.round(Math.min(Math.max(knowledgeAvg, 1), 8)), y: Math.round(Math.min(Math.max(familiarityAvg, 1), 8)), z: Math.round(Math.min(Math.max(cognitiveLoadAvg, 1), 8)) }
-                },
-                graphs: {
-                    knowledge_density: { mean: +knowledgeAvg.toFixed(2), distribution_data: getGaussianData(knowledgeAvg) },
-                    familiarity: { mean: +familiarityAvg.toFixed(2), distribution_data: getGaussianData(familiarityAvg) },
-                    cognitive_load: { mean: +cognitiveLoadAvg.toFixed(2), distribution_data: getGaussianData(cognitiveLoadAvg) }
-                }
+                voxel: { mean: { x: +knowledgeAvg.toFixed(2), y: +familiarityAvg.toFixed(2), z: +cognitiveLoadAvg.toFixed(2) }, mode: { x: getMode(averagedSurveyResults.slice(0, 40).map(Math.round)), y: getMode(averagedSurveyResults.slice(40, 80).map(Math.round)), z: getMode(averagedSurveyResults.slice(80, 120).map(Math.round)) }, roundedMean: { x: Math.round(Math.min(Math.max(knowledgeAvg, 1), 8)), y: Math.round(Math.min(Math.max(familiarityAvg, 1), 8)), z: Math.round(Math.min(Math.max(cognitiveLoadAvg, 1), 8)) } },
+                graphs: { knowledge_density: { mean: +knowledgeAvg.toFixed(2), distribution_data: getGaussianData(knowledgeAvg) }, familiarity: { mean: +familiarityAvg.toFixed(2), distribution_data: getGaussianData(familiarityAvg) }, cognitive_load: { mean: +cognitiveLoadAvg.toFixed(2), distribution_data: getGaussianData(cognitiveLoadAvg) } }
             }
         };
         
-        const now = new Date();
-        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
+        const newFilename = `calc_${orgUnitId}.json`;
         
-        const role = user.is_manager ? 'manager' : 'coworker';
-        const newFilename = `calc_${user.org_unit_id}_${user.id}_${role}_${timestamp}.json`;
-        
-        const insertQuery = `INSERT INTO surveys(filename, survey_type, survey_results, analysis_voxel, analysis_graphs, person_id, org_unit_id) VALUES($1, $2, $3, $4, $5, $6, $7)`;
-        const insertValues = [newFilename, 'calculated', JSON.stringify(averagedData.survey_results), JSON.stringify(averagedData.analysis.voxel), JSON.stringify(averagedData.analysis.graphs), user.id, user.org_unit_id];
+        const insertQuery = `
+            INSERT INTO surveys (org_unit_id, survey_type, filename, survey_results, analysis_voxel, analysis_graphs)
+            VALUES ($1, 'calculated', $2, $3, $4, $5)
+            ON CONFLICT (org_unit_id) WHERE survey_type = 'calculated'
+            DO UPDATE SET
+                filename = EXCLUDED.filename,
+                survey_results = EXCLUDED.survey_results,
+                analysis_voxel = EXCLUDED.analysis_voxel,
+                analysis_graphs = EXCLUDED.analysis_graphs;
+        `;
+        const insertValues = [orgUnitId, newFilename, JSON.stringify(averagedData.survey_results), JSON.stringify(averagedData.analysis.voxel), JSON.stringify(averagedData.analysis.graphs)];
         await pool.query(insertQuery, insertValues);
 
         res.json({
+            message: `Calculation for OrgUnit ${orgUnitId} successful. Saved as ${newFilename}.`,
             calculationResult: { filename: newFilename, data: averagedData },
             sourceFiles: sourceFilesData
         });
 
-    } catch (error) { res.status(500).json({ message: 'Error calculating average.' }); }
+    } catch (error) { 
+        console.error("Error calculating average:", error);
+        res.status(500).json({ message: 'Error calculating average.' }); 
+    }
 });
 
 
@@ -227,12 +297,30 @@ app.delete('/api/org-tree/:id', async (req, res) => {
 app.get('/api/person/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const query = `SELECT p.id, p.name, p.is_manager, p.org_unit_id, o.name as org_unit_name FROM persons p JOIN organization_units o ON p.org_unit_id = o.id WHERE p.id = $1`;
-        const result = await pool.query(query, [id]);
+        
+        const rootUnitResult = await pool.query('SELECT id FROM organization_units WHERE parent_id IS NULL');
+        const rootUnitId = rootUnitResult.rows.length > 0 ? rootUnitResult.rows[0].id : null;
+
+        const query = `
+            SELECT 
+                p.id, p.name, p.is_manager, p.org_unit_id, p.description,
+                o.name as org_unit_name,
+                CASE WHEN p.org_unit_id = $2 AND p.is_manager = true THEN true ELSE false END as "isRootManager"
+            FROM persons p 
+            JOIN organization_units o ON p.org_unit_id = o.id 
+            WHERE p.id = $1
+        `;
+        const result = await pool.query(query, [id, rootUnitId]);
+        
         if (result.rows.length === 0) return res.status(404).json({ message: 'Person not found.' });
+        
         res.json(result.rows[0]);
-    } catch(e) { res.status(500).json({ message: 'Error fetching person.' }) }
+    } catch(e) {
+        console.error('Error fetching person details:', e);
+        res.status(500).json({ message: 'Error fetching person.' })
+    }
 });
+
 app.post('/api/persons', async (req, res) => {
     try {
         const { name, orgUnitId, isManager } = req.body;
@@ -261,6 +349,74 @@ app.delete('/api/persons/:id', async (req, res) => {
         if (result.rowCount === 0) return res.status(404).json({ message: 'Person not found.' });
         res.status(204).send();
     } catch (error) { res.status(500).json({ message: 'Error deleting person.' }); }
+});
+
+// --- API ROUTES FOR TARGET AND DESCRIPTION ---
+app.get('/api/app-data/:key', async (req, res) => {
+    try {
+        const { key } = req.params;
+        const result = await pool.query('SELECT value FROM app_data WHERE key = $1', [key]);
+        const value = result.rows.length > 0 ? result.rows[0].value : '';
+        res.json({ value });
+    } catch (error) {
+        console.error(`Error fetching app data for key ${key}:`, error);
+        res.status(500).json({ message: 'Error fetching application data.' });
+    }
+});
+
+app.put('/api/app-data/:key', async (req, res) => {
+    try {
+        const { key } = req.params;
+        const { value, personId } = req.body;
+
+        if (key === 'target') {
+            const rootUnitResult = await pool.query('SELECT id FROM organization_units WHERE parent_id IS NULL');
+            if (rootUnitResult.rows.length === 0) return res.status(403).json({ message: 'Permission denied: No root unit found.' });
+            const rootUnitId = rootUnitResult.rows[0].id;
+
+            const managerResult = await pool.query(
+                'SELECT id FROM persons WHERE id = $1 AND org_unit_id = $2 AND is_manager = true',
+                [personId, rootUnitId]
+            );
+            if (managerResult.rows.length === 0) return res.status(403).json({ message: 'Permission denied: Only the root manager can edit the target.' });
+        }
+        
+        const existingResult = await pool.query('SELECT key FROM app_data WHERE key = $1', [key]);
+
+        if (existingResult.rows.length > 0) {
+            await pool.query(
+                'UPDATE app_data SET value = $1, updated_by_person_id = $2, updated_at = NOW() WHERE key = $3',
+                [value, personId, key]
+            );
+        } else {
+            await pool.query(
+                'INSERT INTO app_data (key, value, updated_by_person_id, updated_at) VALUES ($1, $2, $3, NOW())',
+                [key, value, personId]
+            );
+        }
+
+        res.status(200).json({ message: 'Data saved successfully.' });
+    } catch (error) {
+        console.error(`Error saving app data for key ${key}:`, error);
+        res.status(500).json({ message: 'Error saving application data.' });
+    }
+});
+
+app.put('/api/person-description', async (req, res) => {
+    try {
+        const { description, personId } = req.body;
+        if (personId === undefined) return res.status(400).json({ message: 'personId is required.'});
+
+        const query = 'UPDATE persons SET description = $1 WHERE id = $2 RETURNING id';
+        const result = await pool.query(query, [description, personId]);
+        
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Person not found.'});
+
+        res.status(200).json({ message: 'Description saved successfully.' });
+    } catch (error) {
+        console.error('Error saving description:', error);
+        res.status(500).json({ message: 'Error saving description.' });
+    }
 });
 
 // --- STATIC DATA ROUTES ---

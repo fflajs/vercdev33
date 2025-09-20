@@ -26,6 +26,7 @@
         .results-table th { background-color: #f9fafb; font-weight: 600; position: sticky; top: 0; z-index: 10; }
         .results-table td:first-child, .results-table th:first-child { position: sticky; left: 0; background-color: #f9fafb; }
         .results-table tr:first-child td { font-weight: bold; color: #1d4ed8; }
+        .stats-table td { padding: 0.5rem 1rem; }
     </style>
 </head>
 <body>
@@ -39,6 +40,37 @@
         <p class="text-md text-gray-500">Proof of Concept September 2025</p>
     </div>
     <div id="user-context-display" class="text-center mb-6 p-3 bg-gray-100 rounded-lg border text-sm"></div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <label for="target-textarea" class="text-lg font-semibold text-gray-800">Target</label>
+            <textarea id="target-textarea" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Overall target set by root manager..."></textarea>
+            <button id="save-target-button" class="mt-2 w-full p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400">Save Target</button>
+        </div>
+        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <label for="description-textarea" class="text-lg font-semibold text-gray-800">Description</label>
+            <textarea id="description-textarea" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Your personal description..."></textarea>
+            <button id="save-description-button" class="mt-2 w-full p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Save Description</button>
+        </div>
+    </div>
+
+    <!-- NEW Statistics Section -->
+    <div id="stats-section" class="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-8 hidden">
+        <h2 class="text-xl font-semibold text-center text-gray-800 mb-4">Organization Statistics</h2>
+        <table class="w-full text-sm text-left text-gray-600 stats-table">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                <tr>
+                    <th scope="col" class="px-6 py-3">Metric</th>
+                    <th scope="col" class="px-6 py-3 text-center">Count</th>
+                    <th scope="col" class="px-6 py-3 text-center">Percentage</th>
+                </tr>
+            </thead>
+            <tbody id="stats-table-body">
+                <!-- Rows will be inserted here by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
     <p class="text-gray-600 text-center mb-8">Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.</p>
 
     <!-- ALL APP CONTENT IS STATIC HTML -->
@@ -49,10 +81,6 @@
     <div class="p-6 bg-gray-50 rounded-lg border border-gray-200">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-2xl font-semibold">Computed JSON Data</h2>
-            <div class="flex items-center space-x-2">
-                <select id="saved-files-dropdown" class="p-2 border rounded-lg bg-white"></select>
-                <button id="load-selected-button" class="p-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">Load Selected</button>
-            </div>
         </div>
         <textarea id="json-output" class="w-full h-48 p-4 border rounded-lg resize-none font-mono text-sm bg-gray-100" readonly></textarea>
         <div class="flex justify-between mt-4 space-x-4">
@@ -83,11 +111,8 @@
     <div id="calculation-section" class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Calculation</h2>
         <div class="flex flex-col items-center">
-            <label for="calculation-files-select" class="mb-2">Select files for calculation (use Ctrl/Cmd to select multiple):</label>
-            <select id="calculation-files-select" multiple class="w-full h-40 p-2 border rounded-lg bg-white mb-4"></select>
             <div class="flex space-x-4">
-                <button id="delete-selected-button" class="p-3 bg-red-500 text-white rounded-lg hover:bg-red-600">Delete Selected</button>
-                <button id="calculate-selected-button" class="p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600">Calculate Average</button>
+                <button id="calculate-selected-button" class="p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600">Calculate Unit Average</button>
             </div>
         </div>
         <div id="calculation-results-container" class="mt-8 hidden">
@@ -106,39 +131,34 @@
         document.getElementById('version-display').textContent = VERSION;
         document.title = `Cognitive Space Visualization ${VERSION}`;
 
-        // Define all DOM elements and state variables at the top level
         const baseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
         const personId = urlParams.get('personId');
-        const userName = urlParams.get('userName');
-        const userRole = urlParams.get('userRole');
-        const userUnit = urlParams.get('userUnit');
-        const userUnitId = urlParams.get('userUnitId');
         let currentUserIsManager = false;
+        let isRootManager = false;
 
         const userContextDisplay = document.getElementById('user-context-display');
         const calculationSection = document.getElementById('calculation-section');
         const saveButton = document.getElementById('save-button');
-        const loadSelectedButton = document.getElementById('load-selected-button');
-        const savedFilesDropdown = document.getElementById('saved-files-dropdown');
-        const deleteSelectedButton = document.getElementById('delete-selected-button');
         const calculateSelectedButton = document.getElementById('calculate-selected-button');
-        const calculationFilesSelect = document.getElementById('calculation-files-select');
         const surveyQuestionsDiv = document.getElementById('survey-questions');
         const jsonOutput = document.getElementById('json-output');
         const resetButton = document.getElementById('reset-button');
         const messageArea = document.getElementById('message-area');
         const analysisDesc = document.getElementById('analysis-desc');
         const analysisTip = document.getElementById('analysis-tip');
-        const calculationResultsContainer = document.getElementById('calculation-results-container');
-        const resultsTableHeader = document.getElementById('results-table-header');
-        const resultsTableBody = document.getElementById('results-table-body');
         const averageChartsContainer = document.getElementById('average-charts-container');
         const averageVoxelContainer = document.getElementById('average-voxel-container');
         const averageAnalysisContainer = document.getElementById('average-analysis-container');
         const avgAnalysisDesc = document.getElementById('avg-analysis-desc');
         const avgAnalysisTip = document.getElementById('avg-analysis-tip');
-        
+        const targetTextarea = document.getElementById('target-textarea');
+        const saveTargetButton = document.getElementById('save-target-button');
+        const descriptionTextarea = document.getElementById('description-textarea');
+        const saveDescriptionButton = document.getElementById('save-description-button');
+        const statsSection = document.getElementById('stats-section');
+        const statsTableBody = document.getElementById('stats-table-body');
+
         const NUM_QUESTIONS = 120;
         const surveyValues = Array(NUM_QUESTIONS).fill(4);
         const voxelMap = new Map();
@@ -150,29 +170,130 @@
         const yellowMaterial = new THREE.MeshBasicMaterial({ color: 0xfacc15, opacity: 0.6, transparent: true });
         const grayMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true, opacity: 0.2, transparent: true });
 
-        // All helper functions are defined here...
-        function handleUserContext() {
-            if (personId && userName && userRole && userUnit && userUnitId) {
-                const decodedUserName = decodeURIComponent(userName);
-                const decodedUserRole = decodeURIComponent(userRole);
-                const decodedUserUnit = decodeURIComponent(userUnit);
-                currentUserIsManager = (decodedUserRole === 'Manager');
-                userContextDisplay.innerHTML = `<span class="font-semibold">User:</span> <span class="text-blue-600">${decodedUserName}</span> | <span class="font-semibold">Role:</span> <span class="text-blue-600">${decodedUserRole}</span> | <span class="font-semibold">Unit:</span> <span class="text-blue-600">${decodedUserUnit}</span>`;
-                if (!currentUserIsManager) calculationSection.classList.add('hidden');
+        async function handleUserContext() {
+            if (personId) {
+                try {
+                    const response = await fetch(`${baseUrl}/api/person/${personId}`);
+                    if (!response.ok) throw new Error('Could not fetch user context.');
+                    const user = await response.json();
+
+                    isRootManager = user.isRootManager;
+                    currentUserIsManager = user.is_manager;
+
+                    userContextDisplay.innerHTML = `<span class="font-semibold">User:</span> <span class="text-blue-600">${user.name}</span> | <span class="font-semibold">Role:</span> <span class="text-blue-600">${user.is_manager ? 'Manager' : 'Coworker'}</span> | <span class="font-semibold">Unit:</span> <span class="text-blue-600">${user.org_unit_name}</span>`;
+                    
+                    if (!currentUserIsManager) {
+                        calculationSection.classList.add('hidden');
+                    } else {
+                        loadAndDisplayStats(); // Load stats only for managers
+                    }
+                    descriptionTextarea.value = user.description || '';
+                    targetTextarea.readOnly = !isRootManager;
+                    saveTargetButton.disabled = !isRootManager;
+
+                } catch(error) {
+                     userContextDisplay.innerHTML = `<span class="text-red-500">Could not load user context. App functions disabled.</span>`;
+                     [saveButton, calculateSelectedButton, saveTargetButton, saveDescriptionButton, resetButton].forEach(btn => btn.disabled = true);
+                     [targetTextarea, descriptionTextarea].forEach(ta => ta.readOnly = true);
+                }
             } else {
-                userContextDisplay.innerHTML = `<span class="font-semibold">User:</span> <span class="text-blue-600">boss</span> | <span class="font-semibold">Role:</span> <span class="text-blue-600">manager</span> | <span class="font-semibold">Unit:</span> <span class="text-blue-600">TopUnit</span>`;
-                currentUserIsManager = true;
-                showMessage('Running in Standalone Mode. File operations are disabled.', 'yellow');
-                saveButton.disabled = true;
-                loadSelectedButton.disabled = true;
-                deleteSelectedButton.disabled = true;
-                calculateSelectedButton.disabled = true;
-                savedFilesDropdown.innerHTML = '<option>Launch from Org Chart to manage files</option>';
-                calculationFilesSelect.innerHTML = '';
+                userContextDisplay.innerHTML = `<span class="font-semibold">Mode:</span> <span class="text-blue-600">Standalone</span>`;
+                showMessage('Running in Standalone Mode. File and data operations are disabled.', 'yellow');
+                [saveButton, calculateSelectedButton, saveTargetButton, saveDescriptionButton].forEach(btn => btn.disabled = true);
+                [targetTextarea, descriptionTextarea].forEach(ta => ta.readOnly = true);
+            }
+        }
+        
+        async function loadAppData() {
+            try {
+                const targetResponse = await fetch(`${baseUrl}/api/app-data/target`);
+                if (!targetResponse.ok) throw new Error('Could not fetch target data.');
+                const targetData = await targetResponse.json();
+                targetTextarea.value = targetData.value || '';
+            } catch(error) {
+                showMessage('Could not load Target data.', 'red');
             }
         }
 
-        async function loadInitialData() {
+        async function loadAndDisplayStats() {
+            try {
+                const response = await fetch(`${baseUrl}/api/organization-stats/${personId}`);
+                if (!response.ok) return; // Fail silently if not a manager
+                const stats = await response.json();
+                
+                statsTableBody.innerHTML = ''; // Clear previous stats
+                
+                const formatPercent = (numerator, denominator) => {
+                    if (denominator === 0) return 'N/A';
+                    return `${((numerator / denominator) * 100).toFixed(1)}%`;
+                };
+
+                const rows = [
+                    { label: 'Is the Objective of the organization entered?', value: stats.targetEntered > 0 ? 'Yes' : 'No', percent: stats.targetEntered > 0 ? '100%' : '0%' },
+                    { label: 'Total number of people in the organization:', value: stats.totalPeople, percent: '100%' },
+                    { label: 'Total number of people who entered "Description":', value: stats.descriptionsEntered, percent: formatPercent(stats.descriptionsEntered, stats.totalPeople) },
+                    { label: 'Total number of people who entered "cognitive_data":', value: stats.cognitiveDataEntered, percent: formatPercent(stats.cognitiveDataEntered, stats.totalPeople) },
+                    { label: 'Total number of organizational units:', value: stats.totalUnits, percent: '100%' },
+                    { label: 'Total number of organizational units that calculated the average:', value: stats.calculatedUnits, percent: formatPercent(stats.calculatedUnits, stats.totalUnits) }
+                ];
+
+                rows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'bg-white border-b';
+                    tr.innerHTML = `
+                        <td class="px-6 py-2 font-medium text-gray-900 whitespace-nowrap">${row.label}</td>
+                        <td class="px-6 py-2 text-center">${row.value}</td>
+                        <td class="px-6 py-2 text-center">${row.percent}</td>
+                    `;
+                    statsTableBody.appendChild(tr);
+                });
+
+                statsSection.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Could not load organization stats:", error);
+            }
+        }
+
+        async function loadInitialSurveys() {
+            if (!personId) return;
+            try {
+                const response = await fetch(`${baseUrl}/api/initial-load/${personId}`);
+                if (!response.ok) {
+                    console.log('No initial survey data found for user, using defaults.');
+                    return;
+                }
+                const data = await response.json();
+
+                if (data.individualData) {
+                    updateUIWithLoadedData(data.individualData);
+                }
+
+                if (data.calculatedData) {
+                    renderAverageCharts(data.calculatedData.analysis.graphs);
+                    averageChartsContainer.classList.remove('hidden');
+                    averageVoxelContainer.classList.remove('hidden');
+                    setTimeout(() => {
+                        updateAverageVoxelScene({ data: data.calculatedData }, []);
+                        const avgVoxelCanvas = document.getElementById('avg-voxel-canvas');
+                        const container = avgVoxelCanvas.parentElement;
+                        if (avgSceneState.renderer && avgSceneState.camera && container) {
+                            avgSceneState.renderer.setSize(container.clientWidth, container.clientHeight);
+                            avgSceneState.camera.aspect = container.clientWidth / container.clientHeight;
+                            avgSceneState.camera.updateProjectionMatrix();
+                        }
+                    }, 100);
+                    const { x, y, z } = data.calculatedData.analysis.voxel.roundedMean;
+                    updateAverageAnalysis(x, y, z);
+                    averageAnalysisContainer.classList.remove('hidden');
+                }
+            } catch (error) {
+                showMessage('Could not auto-load survey data.', 'red');
+                console.error('Error loading initial survey data:', error);
+            }
+        }
+
+        async function loadInitialCoreData() {
             try {
                 const [voxelResponse, questionsResponse] = await Promise.all([ fetch(`${baseUrl}/api/voxel-data`), fetch(`${baseUrl}/api/questions`) ]);
                 if (!voxelResponse.ok || !questionsResponse.ok) throw new Error('Failed to fetch initial data.');
@@ -285,14 +406,18 @@
             const sceneState = avgSceneState;
             sceneState.grid.forEach(voxel => { voxel.material = grayMaterial; });
             if (sceneState.outline) sceneState.outline.visible = false;
-            sourceFiles.forEach(file => {
-                const voxelData = file.data.analysis.voxel;
-                if (voxelData && voxelData.roundedMean) {
-                    const { x, y, z } = voxelData.roundedMean;
-                    const index = (x - 1) + (y - 1) * 8 + (z - 1) * 64;
-                    if (sceneState.grid[index]) sceneState.grid[index].material = yellowMaterial;
-                }
-            });
+            
+            if (sourceFiles && Array.isArray(sourceFiles)) {
+                sourceFiles.forEach(file => {
+                    const voxelData = file.data.analysis.voxel;
+                    if (voxelData && voxelData.roundedMean) {
+                        const { x, y, z } = voxelData.roundedMean;
+                        const index = (x - 1) + (y - 1) * 8 + (z - 1) * 64;
+                        if (sceneState.grid[index]) sceneState.grid[index].material = yellowMaterial;
+                    }
+                });
+            }
+            
             const avgVoxelData = calculationResult.data.analysis.voxel;
             if (avgVoxelData && avgVoxelData.roundedMean) {
                 const { x, y, z } = avgVoxelData.roundedMean;
@@ -318,20 +443,6 @@
             updateAnalysis(roundedMeanX, roundedMeanY, roundedMeanZ);
         }
 
-        async function loadSavedFilesList() {
-             if (!personId) return;
-             try {
-                const response = await fetch(`${baseUrl}/api/saved-files?personId=${personId}`);
-                if (!response.ok) throw new Error('Failed to fetch file list.');
-                const files = await response.json();
-                savedFilesDropdown.innerHTML = '<option value="">Select a file to load...</option>';
-                calculationFilesSelect.innerHTML = '';
-                files.forEach(file => {
-                    savedFilesDropdown.add(new Option(file, file));
-                    calculationFilesSelect.add(new Option(file, file));
-                });
-            } catch (error) { showMessage('Could not load file list.', 'red'); }
-        }
         function showMessage(msg, color = 'green') {
              messageArea.textContent = msg; messageArea.className = `text-xs text-${color}-600 mt-2 block text-center`;
              setTimeout(() => { messageArea.textContent = '' }, 4000);
@@ -345,32 +456,10 @@
                     surveyValues[i] = val;
                 });
                 updateAllVisuals();
-                showMessage('Data loaded successfully!');
-                calculationResultsContainer.classList.add('hidden');
-                averageChartsContainer.classList.add('hidden');
-                averageVoxelContainer.classList.add('hidden');
-                averageAnalysisContainer.classList.add('hidden');
-            } else { showMessage('Invalid JSON file format.', 'red'); }
+                showMessage('Personal survey data loaded.');
+            } else { showMessage('Invalid survey data format.', 'red'); }
         }
-        function populateResultsGrid(data) {
-            const { calculationResult, sourceFiles } = data;
-            resultsTableHeader.innerHTML = '';
-            resultsTableBody.innerHTML = '';
-            const headers = ['File Name', 'Mean X (Knowledge)', 'Mean Y (Familiarity)', 'Mean Z (Cognitive Load)', 'Mode X', 'Mode Y', 'Mode Z', 'Rounded Mean X', 'Rounded Mean Y', 'Rounded Mean Z'];
-            const headerRow = document.createElement('tr');
-            headers.forEach(headerText => { const th = document.createElement('th'); th.textContent = headerText; headerRow.appendChild(th); });
-            resultsTableHeader.appendChild(headerRow);
-            const createRow = (file) => {
-                const row = document.createElement('tr');
-                const voxelData = file.data.analysis.voxel || {};
-                row.innerHTML = `<td>${file.filename}</td> <td>${voxelData.mean?.x ?? 'N/A'}</td> <td>${voxelData.mean?.y ?? 'N/A'}</td><td>${voxelData.mean?.z ?? 'N/A'}</td> <td>${voxelData.mode?.x ?? 'N/A'}</td> <td>${voxelData.mode?.y ?? 'N/A'}</td><td>${voxelData.mode?.z ?? 'N/A'}</td> <td>${voxelData.roundedMean?.x ?? 'N/A'}</td> <td>${voxelData.roundedMean?.y ?? 'N/A'}</td><td>${voxelData.roundedMean?.z ?? 'N/A'}</td>`;
-                return row;
-            };
-            resultsTableBody.appendChild(createRow(calculationResult));
-            sourceFiles.forEach(file => { resultsTableBody.appendChild(createRow(file)); });
-            calculationResultsContainer.classList.remove('hidden');
-        }
-
+        
         function setupEventListeners(initialData) {
             const { questionStrings } = initialData;
             questionStrings.forEach((qText, i) => {
@@ -404,7 +493,6 @@
                 document.querySelectorAll('input[type="range"]').forEach((slider, i) => { slider.value = 4; document.getElementById(`value-${i + 1}`).textContent = 4; });
                 updateAllVisuals();
                 showMessage('Sliders reset!');
-                calculationResultsContainer.classList.add('hidden');
                 averageChartsContainer.classList.add('hidden');
                 averageVoxelContainer.classList.add('hidden');
                 averageAnalysisContainer.classList.add('hidden');
@@ -412,51 +500,40 @@
 
             saveButton.addEventListener('click', async () => {
                 if (!personId) return showMessage('Cannot save in standalone mode.', 'red');
+                const urlParams = new URLSearchParams(window.location.search);
+                const userUnitId = urlParams.get('userUnitId');
                 try {
                     const saveData = { ...JSON.parse(jsonOutput.value), personId, orgUnitId: userUnitId };
                     const response = await fetch(`${baseUrl}/api/saved-files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saveData) });
                     if (!response.ok) throw new Error('Server failed to save file.');
                     const result = await response.json();
-                    showMessage(`File saved as ${result.filename}`); await loadSavedFilesList();
+                    showMessage(`File saved as ${result.filename}`);
                 } catch (error) { showMessage('Error saving file.', 'red'); }
-            });
-
-            loadSelectedButton.addEventListener('click', async () => {
-                if (!personId) return showMessage('Cannot load in standalone mode.', 'red');
-                const filename = savedFilesDropdown.value; if (!filename) return showMessage('Please select a file first.', 'red');
-                try {
-                    const response = await fetch(`${baseUrl}/api/saved-files/${filename}`);
-                    if (!response.ok) throw new Error('Could not load the selected file.');
-                    updateUIWithLoadedData(await response.json());
-                } catch (error) { showMessage('Error loading file.', 'red'); }
-            });
-
-            deleteSelectedButton.addEventListener('click', async () => {
-                if (!personId) return showMessage('Cannot delete in standalone mode.', 'red');
-                const selectedFiles = Array.from(calculationFilesSelect.selectedOptions).map(opt => opt.value);
-                if (selectedFiles.length === 0) return showMessage('No files selected to delete.', 'red');
-                if (confirm(`Are you sure you want to delete ${selectedFiles.length} file(s)?`)) {
-                    try {
-                        const response = await fetch(`${baseUrl}/api/saved-files`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: selectedFiles }) });
-                        if (!response.ok) throw new Error('Server failed to delete files.');
-                        showMessage(`${selectedFiles.length} file(s) deleted successfully.`);
-                        await loadSavedFilesList();
-                    } catch (error) { showMessage('Error deleting files.', 'red'); }
-                }
             });
 
             calculateSelectedButton.addEventListener('click', async () => {
                 if (!personId) return showMessage('Cannot calculate in standalone mode.', 'red');
-                const selectedFiles = Array.from(calculationFilesSelect.selectedOptions).map(opt => opt.value);
-                if (selectedFiles.length === 0) return showMessage('No files selected for calculation.', 'red');
+                if (!currentUserIsManager) return showMessage('Only managers can perform calculations.', 'red');
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                const userUnitId = urlParams.get('userUnitId');
                 try {
-                    showMessage('Calculating average, please wait...');
-                    const response = await fetch(`${baseUrl}/api/calculate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filenames: selectedFiles, personId }) });
-                    if (!response.ok) throw new Error((await response.json()).message || 'Server failed to calculate average.');
+                    showMessage('Calculating unit average, please wait...');
+                    const response = await fetch(`${baseUrl}/api/calculate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ personId: personId, orgUnitId: userUnitId })
+                    });
+            
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Server failed to calculate average.');
+                    }
+            
                     const result = await response.json();
-                    
+                    showMessage(result.message);
+
                     if (result && result.calculationResult && result.sourceFiles) {
-                        populateResultsGrid(result);
                         renderAverageCharts(result.calculationResult.data.analysis.graphs);
                         averageChartsContainer.classList.remove('hidden');
                         averageVoxelContainer.classList.remove('hidden');
@@ -470,33 +547,68 @@
                                 avgSceneState.camera.aspect = container.clientWidth / container.clientHeight;
                                 avgSceneState.camera.updateProjectionMatrix();
                             }
-                        }, 10);
+                        }, 100);
 
                         const { x, y, z } = result.calculationResult.data.analysis.voxel.roundedMean;
                         updateAverageAnalysis(x, y, z);
                         averageAnalysisContainer.classList.remove('hidden');
-                        
-                        showMessage(`Calculation successful. Result saved as ${result.calculationResult.filename}.`);
-                        await loadSavedFilesList();
+
                     } else {
-                        throw new Error("Invalid data structure received from server.");
+                        averageChartsContainer.classList.add('hidden');
+                        averageVoxelContainer.classList.add('hidden');
+                        averageAnalysisContainer.classList.add('hidden');
                     }
-                } catch (error) { showMessage(`Error: ${error.message}`, 'red'); console.error(error); }
+            
+                } catch (error) {
+                    showMessage(`Error: ${error.message}`, 'red');
+                    console.error(error);
+                }
+            });
+
+            saveTargetButton.addEventListener('click', async () => {
+                if (!personId || !isRootManager) return;
+                try {
+                    const response = await fetch(`${baseUrl}/api/app-data/target`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ value: targetTextarea.value, personId })
+                    });
+                    if (!response.ok) throw new Error((await response.json()).message || 'Failed to save target.');
+                    const result = await response.json();
+                    showMessage(result.message);
+                } catch (error) {
+                    showMessage(`Error: ${error.message}`, 'red');
+                }
+            });
+
+            saveDescriptionButton.addEventListener('click', async () => {
+                if (!personId) return;
+                try {
+                    const response = await fetch(`${baseUrl}/api/person-description`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ description: descriptionTextarea.value, personId })
+                    });
+                    if (!response.ok) throw new Error((await response.json()).message || 'Failed to save description.');
+                    const result = await response.json();
+                    showMessage(result.message);
+                } catch (error) {
+                    showMessage(`Error: ${error.message}`, 'red');
+                }
             });
         }
         
         // --- INITIALIZATION ---
-        handleUserContext();
-        const initialData = await loadInitialData();
-        if (initialData) {
-            setupEventListeners(initialData);
-            parseVoxelData(initialData.voxelCsvData);
+        await handleUserContext();
+        await loadAppData();
+        const coreData = await loadInitialCoreData();
+        if (coreData) {
+            setupEventListeners(coreData);
+            parseVoxelData(coreData.voxelCsvData);
             initVoxelScene('voxel-canvas', mainSceneState);
             initVoxelScene('avg-voxel-canvas', avgSceneState);
-            updateAllVisuals();
-            if (personId) {
-                await loadSavedFilesList();
-            }
+            await loadInitialSurveys(); // Auto-loads data if available
+            updateAllVisuals(); // Renders the initial state (either default or loaded)
         }
     };
 </script>
