@@ -48,13 +48,12 @@
             <button id="save-target-button" class="mt-2 w-full p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400">Save Target</button>
         </div>
         <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <label for="description-textarea" class="text-lg font-semibold text-gray-800">Description</label>
-            <textarea id="description-textarea" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Your personal description..."></textarea>
+            <label for="description-textarea" class="text-lg font-semibold text-gray-800">Description (for this Role)</label>
+            <textarea id="description-textarea" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Your personal description for this role..."></textarea>
             <button id="save-description-button" class="mt-2 w-full p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Save Description</button>
         </div>
     </div>
 
-    <!-- NEW Statistics Section -->
     <div id="stats-section" class="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-8 hidden">
         <h2 class="text-xl font-semibold text-center text-gray-800 mb-4">Organization Statistics</h2>
         <table class="w-full text-sm text-left text-gray-600 stats-table">
@@ -66,14 +65,12 @@
                 </tr>
             </thead>
             <tbody id="stats-table-body">
-                <!-- Rows will be inserted here by JavaScript -->
             </tbody>
         </table>
     </div>
 
     <p class="text-gray-600 text-center mb-8">Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.</p>
 
-    <!-- ALL APP CONTENT IS STATIC HTML -->
     <div class="p-6 mb-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Survey Questions</h2>
         <div id="survey-questions" class="slider-container"></div>
@@ -115,10 +112,6 @@
                 <button id="calculate-selected-button" class="p-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600">Calculate Unit Average</button>
             </div>
         </div>
-        <div id="calculation-results-container" class="mt-8 hidden">
-             <h3 class="text-xl font-semibold mb-4 text-center">Calculated Average Data</h3>
-             <div class="grid-container"><table class="results-table"><thead id="results-table-header"></thead><tbody id="results-table-body"></tbody></table></div>
-        </div>
         <div id="average-charts-container" class="mt-8 hidden"><h2 class="text-2xl font-semibold mb-4 text-center">Average Gaussian Distributions</h2><div class="grid grid-cols-1 md:grid-cols-3 gap-8"><div class="chart-container"><canvas id="avg-knowledge-density-chart"></canvas></div><div class="chart-container"><canvas id="avg-familiarity-chart"></canvas></div><div class="chart-container"><canvas id="avg-cognitive-load-chart"></canvas></div></div></div>
         <div id="average-voxel-container" class="mt-8 hidden"><h2 class="text-2xl font-semibold mb-4 text-center">Average 3D Voxel Scene</h2><div class="voxel-container"><canvas id="avg-voxel-canvas" class="voxel-canvas"></canvas></div></div>
         <div id="average-analysis-container" class="p-6 mt-8 bg-gray-50 rounded-lg border border-gray-200 hidden"><h2 class="text-2xl font-semibold mb-4 text-center">Analysis & Coaching for Average Data</h2><div id="average-analysis-content" class="text-center"><p class="text-lg font-medium text-gray-800" id="avg-analysis-desc"></p><p class="mt-2 text-md text-gray-600" id="avg-analysis-tip"></p></div></div>
@@ -133,7 +126,8 @@
 
         const baseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
-        const personId = urlParams.get('personId');
+        const personRoleId = urlParams.get('personRoleId');
+        let personId; // Will be fetched from context
         let currentUserIsManager = false;
         let isRootManager = false;
 
@@ -171,21 +165,22 @@
         const grayMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true, opacity: 0.2, transparent: true });
 
         async function handleUserContext() {
-            if (personId) {
+            if (personRoleId) {
                 try {
-                    const response = await fetch(`${baseUrl}/api/person/${personId}`);
+                    const response = await fetch(`${baseUrl}/api/person-context/${personRoleId}`);
                     if (!response.ok) throw new Error('Could not fetch user context.');
                     const user = await response.json();
-
+                    
+                    personId = user.personId;
                     isRootManager = user.isRootManager;
                     currentUserIsManager = user.is_manager;
 
-                    userContextDisplay.innerHTML = `<span class="font-semibold">User:</span> <span class="text-blue-600">${user.name}</span> | <span class="font-semibold">Role:</span> <span class="text-blue-600">${user.is_manager ? 'Manager' : 'Coworker'}</span> | <span class="font-semibold">Unit:</span> <span class="text-blue-600">${user.org_unit_name}</span>`;
+                    userContextDisplay.innerHTML = `<span class="font-semibold">User:</span> <span class="text-blue-600">${user.name}</span> | <span class="font-semibold">Role:</span> <span class="text-blue-600">${user.is_manager ? 'Manager' : 'Coworker'}</span> | <span class="font-semibold">Unit:</span> <span class="text-blue-600">${user.orgUnitName}</span>`;
                     
                     if (!currentUserIsManager) {
                         calculationSection.classList.add('hidden');
                     } else {
-                        loadAndDisplayStats(); // Load stats only for managers
+                        loadAndDisplayStats();
                     }
                     descriptionTextarea.value = user.description || '';
                     targetTextarea.readOnly = !isRootManager;
@@ -217,34 +212,26 @@
 
         async function loadAndDisplayStats() {
             try {
-                const response = await fetch(`${baseUrl}/api/organization-stats/${personId}`);
-                if (!response.ok) return; // Fail silently if not a manager
+                const response = await fetch(`${baseUrl}/api/organization-stats/${personRoleId}`);
+                if (!response.ok) return;
                 const stats = await response.json();
                 
-                statsTableBody.innerHTML = ''; // Clear previous stats
-                
-                const formatPercent = (numerator, denominator) => {
-                    if (denominator === 0) return 'N/A';
-                    return `${((numerator / denominator) * 100).toFixed(1)}%`;
-                };
+                statsTableBody.innerHTML = '';
+                const formatPercent = (numerator, denominator) => denominator === 0 ? 'N/A' : `${((numerator / denominator) * 100).toFixed(1)}%`;
 
                 const rows = [
                     { label: 'Is the Objective of the organization entered?', value: stats.targetEntered > 0 ? 'Yes' : 'No', percent: stats.targetEntered > 0 ? '100%' : '0%' },
-                    { label: 'Total number of people in the organization:', value: stats.totalPeople, percent: '100%' },
-                    { label: 'Total number of people who entered "Description":', value: stats.descriptionsEntered, percent: formatPercent(stats.descriptionsEntered, stats.totalPeople) },
-                    { label: 'Total number of people who entered "cognitive_data":', value: stats.cognitiveDataEntered, percent: formatPercent(stats.cognitiveDataEntered, stats.totalPeople) },
+                    { label: 'Total number of assigned roles:', value: stats.totalRoles, percent: '100%' },
+                    { label: 'Total number of roles with a "Description":', value: stats.descriptionsEntered, percent: formatPercent(stats.descriptionsEntered, stats.totalRoles) },
+                    { label: 'Total number of roles with "cognitive_data":', value: stats.cognitiveDataEntered, percent: formatPercent(stats.cognitiveDataEntered, stats.totalRoles) },
                     { label: 'Total number of organizational units:', value: stats.totalUnits, percent: '100%' },
-                    { label: 'Total number of organizational units that calculated the average:', value: stats.calculatedUnits, percent: formatPercent(stats.calculatedUnits, stats.totalUnits) }
+                    { label: 'Total number of units with a calculated average:', value: stats.calculatedUnits, percent: formatPercent(stats.calculatedUnits, stats.totalUnits) }
                 ];
 
                 rows.forEach(row => {
                     const tr = document.createElement('tr');
                     tr.className = 'bg-white border-b';
-                    tr.innerHTML = `
-                        <td class="px-6 py-2 font-medium text-gray-900 whitespace-nowrap">${row.label}</td>
-                        <td class="px-6 py-2 text-center">${row.value}</td>
-                        <td class="px-6 py-2 text-center">${row.percent}</td>
-                    `;
+                    tr.innerHTML = `<td class="px-6 py-2 font-medium text-gray-900 whitespace-nowrap">${row.label}</td><td class="px-6 py-2 text-center">${row.value}</td><td class="px-6 py-2 text-center">${row.percent}</td>`;
                     statsTableBody.appendChild(tr);
                 });
 
@@ -256,9 +243,9 @@
         }
 
         async function loadInitialSurveys() {
-            if (!personId) return;
+            if (!personRoleId) return;
             try {
-                const response = await fetch(`${baseUrl}/api/initial-load/${personId}`);
+                const response = await fetch(`${baseUrl}/api/initial-load/${personRoleId}`);
                 if (!response.ok) {
                     console.log('No initial survey data found for user, using defaults.');
                     return;
@@ -499,11 +486,10 @@
             });
 
             saveButton.addEventListener('click', async () => {
-                if (!personId) return showMessage('Cannot save in standalone mode.', 'red');
-                const urlParams = new URLSearchParams(window.location.search);
+                if (!personRoleId) return showMessage('Cannot save in standalone mode.', 'red');
                 const userUnitId = urlParams.get('userUnitId');
                 try {
-                    const saveData = { ...JSON.parse(jsonOutput.value), personId, orgUnitId: userUnitId };
+                    const saveData = { ...JSON.parse(jsonOutput.value), personRoleId, orgUnitId: userUnitId };
                     const response = await fetch(`${baseUrl}/api/saved-files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saveData) });
                     if (!response.ok) throw new Error('Server failed to save file.');
                     const result = await response.json();
@@ -512,17 +498,16 @@
             });
 
             calculateSelectedButton.addEventListener('click', async () => {
-                if (!personId) return showMessage('Cannot calculate in standalone mode.', 'red');
+                if (!personRoleId) return showMessage('Cannot calculate in standalone mode.', 'red');
                 if (!currentUserIsManager) return showMessage('Only managers can perform calculations.', 'red');
                 
-                const urlParams = new URLSearchParams(window.location.search);
                 const userUnitId = urlParams.get('userUnitId');
                 try {
                     showMessage('Calculating unit average, please wait...');
                     const response = await fetch(`${baseUrl}/api/calculate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ personId: personId, orgUnitId: userUnitId })
+                        body: JSON.stringify({ personRoleId: personRoleId, orgUnitId: userUnitId })
                     });
             
                     if (!response.ok) {
@@ -566,7 +551,7 @@
             });
 
             saveTargetButton.addEventListener('click', async () => {
-                if (!personId || !isRootManager) return;
+                if (!personId) return;
                 try {
                     const response = await fetch(`${baseUrl}/api/app-data/target`, {
                         method: 'PUT',
@@ -582,12 +567,12 @@
             });
 
             saveDescriptionButton.addEventListener('click', async () => {
-                if (!personId) return;
+                if (!personRoleId) return;
                 try {
-                    const response = await fetch(`${baseUrl}/api/person-description`, {
+                    const response = await fetch(`${baseUrl}/api/role-description`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ description: descriptionTextarea.value, personId })
+                        body: JSON.stringify({ description: descriptionTextarea.value, personRoleId })
                     });
                     if (!response.ok) throw new Error((await response.json()).message || 'Failed to save description.');
                     const result = await response.json();
@@ -607,8 +592,8 @@
             parseVoxelData(coreData.voxelCsvData);
             initVoxelScene('voxel-canvas', mainSceneState);
             initVoxelScene('avg-voxel-canvas', avgSceneState);
-            await loadInitialSurveys(); // Auto-loads data if available
-            updateAllVisuals(); // Renders the initial state (either default or loaded)
+            await loadInitialSurveys();
+            updateAllVisuals();
         }
     };
 </script>

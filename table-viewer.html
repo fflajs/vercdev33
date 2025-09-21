@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Table Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .table-container {
+            max-height: 400px;
+            overflow: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+
+    <div class="max-w-7xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold">Database Table Viewer</h1>
+            <a href="/admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
+        </div>
+
+        <div id="loading-message" class="text-center text-gray-500">Loading table data...</div>
+
+        <div id="tables-wrapper" class="space-y-8">
+            <!-- Tables will be dynamically inserted here -->
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const tablesWrapper = document.getElementById('tables-wrapper');
+            const loadingMessage = document.getElementById('loading-message');
+
+            const createTableSection = (title, data) => {
+                const section = document.createElement('div');
+                const header = document.createElement('h2');
+                header.className = 'text-2xl font-semibold mb-2';
+                header.textContent = title;
+                section.appendChild(header);
+
+                if (!data || data.length === 0) {
+                    const noDataMessage = document.createElement('p');
+                    noDataMessage.textContent = 'No data in this table.';
+                    noDataMessage.className = 'text-gray-500 italic';
+                    section.appendChild(noDataMessage);
+                    return section;
+                }
+
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'table-container border rounded-lg';
+                
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                const tbody = document.createElement('tbody');
+                
+                // Create headers
+                const headerRow = document.createElement('tr');
+                const headers = Object.keys(data[0]);
+                headers.forEach(key => {
+                    const th = document.createElement('th');
+                    th.textContent = key;
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+
+                // Create body rows
+                data.forEach(rowData => {
+                    const tr = document.createElement('tr');
+                    headers.forEach(header => {
+                        const td = document.createElement('td');
+                        let cellData = rowData[header];
+                        // Handle JSON objects for better readability
+                        if (typeof cellData === 'object' && cellData !== null) {
+                            cellData = JSON.stringify(cellData);
+                        }
+                        td.textContent = cellData;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+
+                table.appendChild(thead);
+                table.appendChild(tbody);
+                tableContainer.appendChild(table);
+                section.appendChild(tableContainer);
+                return section;
+            };
+
+            try {
+                const response = await fetch('/api/all-tables-data');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch table data. Only Admins can view this page.');
+                }
+                const allTables = await response.json();
+                loadingMessage.style.display = 'none';
+
+                // Define the order and titles for the tables
+                const tableOrder = [
+                    { key: 'organization_units', title: 'Organization Units' },
+                    { key: 'people', title: 'People' },
+                    { key: 'person_roles', title: 'Person Roles' },
+                    { key: 'surveys', title: 'Surveys' },
+                    { key: 'app_data', title: 'Application Data' }
+                ];
+                
+                tableOrder.forEach(tableInfo => {
+                    if (allTables[tableInfo.key]) {
+                        const section = createTableSection(tableInfo.title, allTables[tableInfo.key]);
+                        tablesWrapper.appendChild(section);
+                    }
+                });
+
+            } catch (error) {
+                loadingMessage.textContent = `Error: ${error.message}`;
+                loadingMessage.className = 'text-center text-red-500';
+            }
+        });
+    </script>
+</body>
+</html>
+

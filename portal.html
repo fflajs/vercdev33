@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Application Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+    <div class="text-center bg-white p-12 rounded-lg shadow-lg">
+        <h1 id="welcome-message" class="text-4xl font-bold mb-2">Welcome!</h1>
+        <p class="text-gray-600 mb-8">Please select an application to continue.</p>
+        <div class="space-y-4">
+            <a href="/login.html" class="block w-full bg-blue-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-blue-600 transition-colors duration-200">
+                Login to Cognitive Visualizer
+            </a>
+            <a href="/analysis.html" class="block w-full bg-purple-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-purple-600 transition-colors duration-200 mt-4">
+                Analyze Descriptions
+            </a>
+        </div>
+        <a href="/index.html" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800 mt-6">
+            Logout
+        </a>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const userName = sessionStorage.getItem('loggedInUser');
+            if (userName) {
+                document.getElementById('welcome-message').textContent = `Welcome, ${userName}!`;
+            } else {
+                // If not logged in, redirect to homepage
+                window.location.href = '/index.html';
+            }
+        });
+    </script>
+</body>
+</html>
+
+

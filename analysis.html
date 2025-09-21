@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold">Aggregated Text Analysis</h1>
+            <a href="/portal.html" class="text-blue-500 hover:underline">&larr; Back to Portal</a>
+        </div>
+        
+        <div class="space-y-6">
+            <div>
+                <label for="aggregated-text" class="block text-xl font-semibold text-gray-700 mb-2">Aggregated Target and Descriptions</label>
+                <textarea id="aggregated-text" rows="10" class="w-full p-3 border rounded-lg bg-gray-50 font-mono text-sm" readonly placeholder="Loading aggregated text..."></textarea>
+            </div>
+            
+            <div class="text-center">
+                 <button id="analyze-button" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200 disabled:bg-gray-400">
+                    Generate Summary and Key Points
+                </button>
+            </div>
+
+            <div id="loading-spinner" class="text-center hidden">
+                <svg class="animate-spin h-8 w-8 text-blue-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-2 text-gray-600">Analyzing text... this may take a moment.</p>
+            </div>
+            
+            <div>
+                <label for="summary-text" class="block text-xl font-semibold text-gray-700 mb-2">Analysis Results</label>
+                <textarea id="summary-text" rows="10" class="w-full p-3 border rounded-lg bg-blue-50 font-mono text-sm" readonly placeholder="Analysis results will appear here..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const aggregatedTextArea = document.getElementById('aggregated-text');
+            const summaryTextArea = document.getElementById('summary-text');
+            const analyzeButton = document.getElementById('analyze-button');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const userName = sessionStorage.getItem('loggedInUser');
+
+            if (!userName) {
+                window.location.href = '/index.html';
+                return;
+            }
+
+            // --- 1. Fetch and display the aggregated text ---
+            try {
+                const response = await fetch('/api/aggregate-texts');
+                if (!response.ok) throw new Error('Could not fetch texts.');
+                const data = await response.json();
+                aggregatedTextArea.value = data.aggregatedText;
+            } catch (error) {
+                aggregatedTextArea.value = `Error: ${error.message}`;
+                analyzeButton.disabled = true;
+            }
+
+            // --- 2. Set up the Analyze button click event ---
+            analyzeButton.addEventListener('click', async () => {
+                const textToAnalyze = aggregatedTextArea.value;
+                if (!textToAnalyze.trim()) {
+                    summaryTextArea.value = "There is no text to analyze.";
+                    return;
+                }
+
+                analyzeButton.disabled = true;
+                loadingSpinner.classList.remove('hidden');
+                summaryTextArea.value = '';
+
+                try {
+                    const response = await fetch('/api/analyze-text', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: textToAnalyze })
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Analysis failed on the server.');
+                    }
+                    
+                    const result = await response.json();
+                    summaryTextArea.value = result.analysis;
+
+                } catch (error) {
+                    summaryTextArea.value = `Error during analysis: ${error.message}`;
+                } finally {
+                    analyzeButton.disabled = false;
+                    loadingSpinner.classList.add('hidden');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

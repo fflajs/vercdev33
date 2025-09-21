@@ -19,10 +19,9 @@
     <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold">Organization Chart Manager</h1>
-            <a href="/index.html" class="text-blue-500 hover:underline">&larr; Back to Main Menu</a>
+            <a href="/admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
         </div>
-        <p class="text-gray-600 mb-6">Select a person and click "Launch Tool" to open the Cognitive Space Visualizer for that user.</p>
-
+        
         <div class="mb-6">
             <h2 class="text-xl font-semibold mb-2">Add New Top-Level Unit</h2>
             <div class="flex">
@@ -34,15 +33,15 @@
         <div id="org-chart-container" class="tree"></div>
     </div>
 
-    <div id="person-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center modal">
+    <!-- Modal for assigning a role -->
+    <div id="role-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center modal">
         <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
             <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
-            <input type="hidden" id="modal-person-id">
             <input type="hidden" id="modal-unit-id">
             <div class="space-y-4">
                 <div>
-                    <label for="modal-person-name" class="block text-sm font-medium text-gray-700">Person's Name</label>
-                    <input type="text" id="modal-person-name" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                    <label for="modal-person-select" class="block text-sm font-medium text-gray-700">Select Person</label>
+                    <select id="modal-person-select" class="mt-1 block w-full p-2 border border-gray-300 rounded-md"></select>
                 </div>
                 <div class="flex items-center">
                     <input type="checkbox" id="modal-is-manager" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
@@ -51,7 +50,7 @@
             </div>
             <div class="mt-6 flex justify-end space-x-3">
                 <button id="modal-cancel-button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
-                <button id="modal-save-button" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Save</button>
+                <button id="modal-save-button" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Add Role</button>
             </div>
         </div>
     </div>
@@ -61,17 +60,17 @@
             const chartContainer = document.getElementById('org-chart-container');
             const newUnitNameInput = document.getElementById('new-unit-name');
             const addTopLevelButton = document.getElementById('add-top-level-button');
-            const baseUrl = window.location.origin;
-            const personModal = document.getElementById('person-modal');
+            
+            const roleModal = document.getElementById('role-modal');
             const modalTitle = document.getElementById('modal-title');
-            const modalPersonIdInput = document.getElementById('modal-person-id');
             const modalUnitIdInput = document.getElementById('modal-unit-id');
-            const modalPersonNameInput = document.getElementById('modal-person-name');
+            const modalPersonSelect = document.getElementById('modal-person-select');
             const modalIsManagerCheckbox = document.getElementById('modal-is-manager');
             const modalSaveButton = document.getElementById('modal-save-button');
             const modalCancelButton = document.getElementById('modal-cancel-button');
-            let units = [];
-            let persons = [];
+            
+            const baseUrl = window.location.origin;
+            let units = [], people = [], roles = [];
 
             async function apiRequest(endpoint, method = 'GET', body = null) {
                 try {
@@ -90,41 +89,44 @@
                 }
             }
             
-            function buildTree(currentUnits, currentPersons, parentId = null) {
-                const children = currentUnits.filter(unit => unit.parent_id === parentId);
+            function buildTree(parentId = null) {
+                const children = units.filter(unit => unit.parent_id === parentId);
                 if (children.length === 0) return '';
                 let html = '<ul>';
                 children.forEach(unit => {
-                    const unitPersons = currentPersons.filter(p => p.org_unit_id === unit.id);
-                    const manager = unitPersons.find(p => p.is_manager);
-                    const coworkers = unitPersons.filter(p => !p.is_manager);
-                    const sortedPersons = [manager, ...coworkers].filter(Boolean);
+                    const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
+                    const managerRole = unitRoles.find(r => r.is_manager);
+                    const coworkerRoles = unitRoles.filter(r => !r.is_manager);
+                    const sortedRoles = [managerRole, ...coworkerRoles].filter(Boolean);
+
                     html += `
                         <li data-id="${unit.id}">
                             <span class="font-semibold text-lg">${unit.name}</span>
                             <div class="inline-block ml-4">
-                                <a href="#" class="add-child text-green-600 hover:underline text-sm font-semibold" data-id="${unit.id}">+ Add Child Unit</a>
-                                <a href="#" class="add-person text-purple-600 hover:underline text-sm font-semibold ml-2" data-id="${unit.id}" data-unit-name="${unit.name}">+ Add Person</a>
+                                <a href="#" class="add-child-unit text-green-600 hover:underline text-sm font-semibold" data-id="${unit.id}">+ Add Sub-Unit</a>
+                                <a href="#" class="add-person-role text-purple-600 hover:underline text-sm font-semibold ml-2" data-id="${unit.id}" data-unit-name="${unit.name}">+ Assign Person</a>
                                 <a href="#" class="edit-unit text-blue-600 hover:underline text-sm font-semibold ml-2" data-id="${unit.id}" data-name="${unit.name}">Edit</a>
                                 <a href="#" class="delete-unit text-red-600 hover:underline text-sm font-semibold ml-2" data-id="${unit.id}">Delete</a>
                             </div>`;
-                    const renderPerson = (person, index) => {
-                        const isManager = person.is_manager;
-                        const roleText = isManager ? '(Manager)' : '';
-                        const icon = isManager ? '<span class="manager-icon">★</span>' : '';
+
+                    const renderRole = (role, index) => {
+                        const person = people.find(p => p.id === role.person_id);
+                        if (!person) return '';
+                        const roleText = role.is_manager ? '(Manager)' : '(Coworker)';
+                        const icon = role.is_manager ? '<span class="manager-icon">★</span>' : '';
                         const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-transparent';
                         return `
                             <div class="flex justify-between items-center py-1 px-2 rounded ${bgColor}">
                                 <span class="font-medium">${icon} ${person.name} ${roleText}</span>
                                 <div class="flex-shrink-0">
-                                    <a href="/cognitive-tool.html?personId=${person.id}" class="launch-tool-btn bg-gray-200 text-gray-800 text-xs font-bold py-1 px-2 rounded-full hover:bg-gray-300 ml-4" data-id="${person.id}">Launch Tool</a>
-                                    <a href="#" class="edit-person text-blue-500 text-xs ml-2" data-id="${person.id}">Edit</a>
-                                    <a href="#" class="delete-person text-red-500 text-xs ml-2" data-id="${person.id}">Delete</a>
+                                    <a href="#" class="launch-tool-btn bg-gray-200 text-gray-800 text-xs font-bold py-1 px-2 rounded-full hover:bg-gray-300 ml-4" data-role-id="${role.id}">Launch Tool</a>
+                                    <a href="#" class="delete-role text-red-500 text-xs ml-2" data-role-id="${role.id}">Remove</a>
                                 </div>
                             </div>`;
                     };
-                    sortedPersons.forEach((person, index) => { html += renderPerson(person, index); });
-                    html += buildTree(currentUnits, currentPersons, unit.id);
+
+                    sortedRoles.forEach((role, index) => { html += renderRole(role, index); });
+                    html += buildTree(unit.id);
                     html += '</li>';
                 });
                 html += '</ul>';
@@ -133,24 +135,27 @@
 
             async function renderTree() {
                 try {
-                    const data = await apiRequest('/api/org-tree');
+                    const data = await apiRequest('/api/org-data');
                     units = data.units;
-                    persons = data.persons;
-                    chartContainer.innerHTML = buildTree(units, persons);
+                    people = data.people;
+                    roles = data.roles;
+                    chartContainer.innerHTML = buildTree();
                 } catch (error) { chartContainer.innerHTML = `<p class="text-red-500">Could not render the organization tree.</p>`; }
             }
 
-            function showPersonModal(config) {
+            function showRoleModal(config) {
                 modalTitle.textContent = config.title;
-                modalPersonIdInput.value = config.personId || '';
                 modalUnitIdInput.value = config.unitId || '';
-                modalPersonNameInput.value = config.name || '';
-                modalIsManagerCheckbox.checked = config.isManager || false;
-                personModal.classList.remove('hidden');
+                modalPersonSelect.innerHTML = '<option value="">Select a person...</option>';
+                people.forEach(p => {
+                    modalPersonSelect.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+                });
+                modalIsManagerCheckbox.checked = false;
+                roleModal.classList.remove('hidden');
             }
 
-            function hidePersonModal() {
-                personModal.classList.add('hidden');
+            function hideRoleModal() {
+                roleModal.classList.add('hidden');
             }
 
             addTopLevelButton.addEventListener('click', async () => {
@@ -164,72 +169,65 @@
 
             chartContainer.addEventListener('click', async (e) => {
                 const target = e.target;
-                const id = parseInt(target.dataset.id);
-
+                const unitId = parseInt(target.closest('li')?.dataset.id);
+                
                 if (target.classList.contains('launch-tool-btn')) {
                     e.preventDefault();
-                    const person = persons.find(p => p.id === id);
-                    if (person) {
-                        const getOrgPath = (unitId) => {
-                            let path = []; let currentUnit = units.find(u => u.id === unitId);
-                            while(currentUnit) { path.unshift(currentUnit.name); currentUnit = units.find(u => u.id === currentUnit.parent_id); }
-                            return path.join(' > ');
-                        };
-                        const orgPath = getOrgPath(person.org_unit_id);
-                        const role = person.is_manager ? 'Manager' : 'Coworker';
-                        
-                        const url = new URL(target.href, window.location.origin);
+                    const roleId = parseInt(target.dataset.roleId);
+                    const role = roles.find(r => r.id === roleId);
+                    const person = people.find(p => p.id === role.person_id);
+                    const unit = units.find(u => u.id === role.org_unit_id);
+                    if (person && unit) {
+                        const roleText = role.is_manager ? 'Manager' : 'Coworker';
+                        const url = new URL('/cognitive-tool.html', window.location.origin);
+                        url.searchParams.set('personRoleId', role.id);
                         url.searchParams.set('userName', person.name);
-                        url.searchParams.set('userRole', role);
-                        url.searchParams.set('userUnit', orgPath);
-                        url.searchParams.set('userUnitId', person.org_unit_id);
-
-                        const confirmationMessage = `You are about to launch the Cognitive Space Visualizer.\n\nAll actions will be performed as:\n\nUser: ${person.name}\nRole: ${role}\nUnit: ${orgPath}\n\nDo you want to continue?`;
-                        if (confirm(confirmationMessage)) window.location.href = url.href;
+                        url.searchParams.set('userRole', roleText);
+                        url.searchParams.set('userUnit', unit.name);
+                        url.searchParams.set('userUnitId', unit.id);
+                        window.location.href = url.href;
                     }
-                    return;
-                }
-                
-                if (target.closest('a')) e.preventDefault();
-                
-                if (target.classList.contains('add-child')) {
-                    const name = prompt('Enter name for the new child unit:');
-                    if(name) await apiRequest('/api/org-tree', 'POST', { name, parentId: id });
+                } else if (target.classList.contains('add-child-unit')) {
+                    e.preventDefault();
+                    const name = prompt('Enter name for the new sub-unit:');
+                    if(name) await apiRequest('/api/org-tree', 'POST', { name, parentId: unitId });
                 } else if (target.classList.contains('edit-unit')) {
+                    e.preventDefault();
                     const newName = prompt('Enter new name for the unit:', target.dataset.name);
-                    if(newName) await apiRequest(`/api/org-tree/${id}`, 'PUT', { name: newName });
+                    if(newName) await apiRequest(`/api/org-tree/${unitId}`, 'PUT', { name: newName });
                 } else if (target.classList.contains('delete-unit')) {
-                    if (confirm('Are you sure you want to delete this unit and all its children/personnel?')) await apiRequest(`/api/org-tree/${id}`, 'DELETE');
-                } else if (target.classList.contains('add-person')) {
-                    showPersonModal({ title: `Add Person to "${target.dataset.unitName}"`, unitId: id });
-                } else if (target.classList.contains('edit-person')) {
-                    const person = persons.find(p => p.id === id);
-                    if (person) showPersonModal({ title: `Edit Person: ${person.name}`, personId: person.id, name: person.name, isManager: person.is_manager });
-                } else if (target.classList.contains('delete-person')) {
-                    if (confirm('Are you sure you want to delete this person?')) await apiRequest(`/api/persons/${id}`, 'DELETE');
+                    e.preventDefault();
+                    if (confirm('Are you sure you want to delete this unit and all its sub-units and roles?')) {
+                        await apiRequest(`/api/org-tree/${unitId}`, 'DELETE');
+                    }
+                } else if (target.classList.contains('add-person-role')) {
+                    e.preventDefault();
+                    showRoleModal({ title: `Assign Person to "${target.dataset.unitName}"`, unitId: unitId });
+                } else if (target.classList.contains('delete-role')) {
+                    e.preventDefault();
+                    const roleId = parseInt(target.dataset.roleId);
+                    if (confirm('Are you sure you want to remove this person from this role?')) {
+                        await apiRequest(`/api/roles/${roleId}`, 'DELETE');
+                    }
                 }
-                
-                if(target.closest('a')) await renderTree();
+
+                if (target.closest('a')) await renderTree();
             });
 
             modalSaveButton.addEventListener('click', async () => {
-                const personId = parseInt(modalPersonIdInput.value);
+                const personId = parseInt(modalPersonSelect.value);
                 const unitId = parseInt(modalUnitIdInput.value);
-                const name = modalPersonNameInput.value.trim();
                 const isManager = modalIsManagerCheckbox.checked;
-                if (!name) return alert('Person name cannot be empty.');
 
-                if (personId) {
-                    await apiRequest(`/api/persons/${personId}`, 'PUT', { name, isManager });
-                } else {
-                    await apiRequest('/api/persons', 'POST', { name, orgUnitId: unitId, isManager });
-                }
-                hidePersonModal();
+                if (!personId) return alert('Please select a person.');
+                
+                await apiRequest('/api/roles', 'POST', { personId, orgUnitId: unitId, isManager });
+                hideRoleModal();
                 await renderTree();
             });
             
-            modalCancelButton.addEventListener('click', hidePersonModal);
-            personModal.addEventListener('click', (e) => { if (e.target === personModal) hidePersonModal(); });
+            modalCancelButton.addEventListener('click', hideRoleModal);
+            roleModal.addEventListener('click', (e) => { if (e.target === roleModal) hideRoleModal(); });
 
             await renderTree();
         });
