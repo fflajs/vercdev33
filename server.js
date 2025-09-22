@@ -5,7 +5,7 @@ const { Pool } = require('pg');
 const https = require('https'); // Use the built-in https module
 
 const app = express();
-const port = 3002;
+const port = process.env.PORT || 3000;
 
 // --- DATABASE CONNECTION ---
 const pool = new Pool({
