@@ -9,8 +9,11 @@
 <body class="bg-gray-100 p-8">
     <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold">Aggregated Text Analysis</h1>
-            <a href="/portal.html" class="text-blue-500 hover:underline">&larr; Back to Portal</a>
+            <div>
+                <h1 class="text-3xl font-bold">Aggregated Text Analysis</h1>
+                <p id="iteration-display" class="text-blue-600 font-semibold mt-1">Loading active iteration...</p>
+            </div>
+            <a href="/portal.html" class="text-blue-500 hover:underline flex-shrink-0 ml-4">&larr; Back to Portal</a>
         </div>
         
         <div class="space-y-6">
@@ -46,6 +49,7 @@
             const summaryTextArea = document.getElementById('summary-text');
             const analyzeButton = document.getElementById('analyze-button');
             const loadingSpinner = document.getElementById('loading-spinner');
+            const iterationDisplay = document.getElementById('iteration-display');
             const userName = sessionStorage.getItem('loggedInUser');
 
             if (!userName) {
@@ -53,7 +57,19 @@
                 return;
             }
 
-            // --- 1. Fetch and display the aggregated text ---
+            // --- 1. Fetch and display iteration context ---
+            try {
+                const response = await fetch('/api/active-iteration');
+                if (!response.ok) throw new Error((await response.json()).message);
+                const activeIteration = await response.json();
+                iterationDisplay.textContent = `Analysis for Active Iteration: ${activeIteration.name} (ID: ${activeIteration.id})`;
+            } catch (error) {
+                iterationDisplay.textContent = `Error: ${error.message}`;
+                iterationDisplay.classList.remove('text-blue-600');
+                iterationDisplay.classList.add('text-red-600');
+            }
+
+            // --- 2. Fetch and display the aggregated text ---
             try {
                 const response = await fetch('/api/aggregate-texts');
                 if (!response.ok) throw new Error('Could not fetch texts.');
@@ -64,7 +80,7 @@
                 analyzeButton.disabled = true;
             }
 
-            // --- 2. Set up the Analyze button click event ---
+            // --- 3. Set up the Analyze button click event ---
             analyzeButton.addEventListener('click', async () => {
                 const textToAnalyze = aggregatedTextArea.value;
                 if (!textToAnalyze.trim()) {
@@ -102,4 +118,5 @@
     </script>
 </body>
 </html>
+
 

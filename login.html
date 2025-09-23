@@ -8,7 +8,7 @@
 <body class="bg-gray-100 flex items-center justify-center h-screen">
     <div class="w-full max-w-sm bg-white p-8 rounded-lg shadow-lg">
         <h1 class="text-3xl font-bold mb-2 text-center">Cognitive Visualizer Login</h1>
-        <p class="text-gray-600 mb-6 text-center">Please enter your details.</p>
+        <p id="iteration-display" class="text-gray-600 mb-6 text-center">Please enter your details for the active iteration.</p>
         
         <form id="login-form">
             <div class="mb-4">
@@ -32,8 +32,8 @@
                 <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
                     Login
                 </button>
-                <a href="/index.html" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
-                    Back to Main Menu
+                <a href="/portal.html" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
+                    Back to Portal
                 </a>
             </div>
         </form>
@@ -43,11 +43,23 @@
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const orgUnitSelect = document.getElementById('org-unit');
+            const errorMessage = document.getElementById('error-message');
+            const iterationDisplay = document.getElementById('iteration-display');
+            let activeIterationId = null;
 
-            // Fetch and populate the organization units
             try {
-                const response = await fetch('/api/org-data');
-                const data = await response.json();
+                const iterationResponse = await fetch('/api/active-iteration');
+                if (!iterationResponse.ok) throw new Error('No active iteration found. Please contact an administrator.');
+                const activeIteration = await iterationResponse.json();
+                activeIterationId = activeIteration.id;
+
+                // Update the subtitle with the active iteration name
+                iterationDisplay.textContent = `Please enter your details for the active iteration: ${activeIteration.name} (ID: ${activeIteration.id})`;
+
+                const orgDataResponse = await fetch(`/api/org-data/${activeIterationId}`);
+                if (!orgDataResponse.ok) throw new Error('Could not load organizational units for the active iteration.');
+                const data = await orgDataResponse.json();
+
                 orgUnitSelect.innerHTML = '<option value="">Select a unit</option>';
                 data.units.forEach(unit => {
                     const option = document.createElement('option');
@@ -56,53 +68,50 @@
                     orgUnitSelect.appendChild(option);
                 });
             } catch (error) {
-                orgUnitSelect.innerHTML = '<option value="">Could not load units</option>';
-            }
-        });
-
-        document.getElementById('login-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            
-            const name = document.getElementById('name').value.trim();
-            const orgUnitId = document.getElementById('org-unit').value;
-            const isManager = document.getElementById('role').value;
-            const errorMessage = document.getElementById('error-message');
-            errorMessage.textContent = '';
-
-            if (!name || !orgUnitId || isManager === '') {
-                errorMessage.textContent = 'Please fill out all fields.';
-                return;
+                iterationDisplay.textContent = `Error: ${error.message}`;
+                iterationDisplay.classList.remove('text-gray-600');
+                iterationDisplay.classList.add('text-red-600');
+                orgUnitSelect.innerHTML = `<option value="">Could not load units</option>`;
+                orgUnitSelect.disabled = true;
+                document.querySelector('button[type="submit"]').disabled = true;
             }
 
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, orgUnitId, isManager: isManager === 'true' })
-                });
+            document.getElementById('login-form').addEventListener('submit', async function(event) {
+                event.preventDefault();
+                
+                const name = document.getElementById('name').value.trim();
+                const orgUnitId = document.getElementById('org-unit').value;
+                const isManager = document.getElementById('role').value;
+                errorMessage.textContent = '';
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.message || 'Login failed.');
+                if (!name || !orgUnitId || isManager === '' || !activeIterationId) {
+                    errorMessage.textContent = 'Please fill out all fields.';
+                    return;
                 }
 
-                // If login is successful, construct the URL and redirect
-                const user = data;
-                const roleText = user.is_manager ? 'Manager' : 'Coworker';
-                
-                const url = new URL('/cognitive-tool.html', window.location.origin);
-                url.searchParams.set('personRoleId', user.personRoleId);
-                url.searchParams.set('userName', user.name);
-                url.searchParams.set('userRole', roleText);
-                url.searchParams.set('userUnit', user.orgUnitName);
-                url.searchParams.set('userUnitId', user.org_unit_id);
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, orgUnitId, isManager: isManager === 'true', iterationId: activeIterationId })
+                    });
 
-                window.location.href = url.href;
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.message || 'Login failed.');
 
-            } catch (error) {
-                errorMessage.textContent = error.message;
-            }
+                    const user = data;
+                    
+                    const url = new URL('/cognitive-tool.html', window.location.origin);
+                    url.searchParams.set('personRoleId', user.personRoleId);
+                    url.searchParams.set('iterationId', activeIterationId);
+                    url.searchParams.set('userUnitId', user.org_unit_id);
+
+                    window.location.href = url.href;
+
+                } catch (error) {
+                    errorMessage.textContent = error.message;
+                }
+            });
         });
     </script>
 </body>

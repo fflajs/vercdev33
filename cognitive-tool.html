@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cognitive Space Visualization V73</title>
+    <title>Cognitive Space Visualization</title>
 
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -33,11 +33,9 @@
 
 <div class="container">
     <div class="text-center mb-4">
-        <div class="flex items-center justify-center mb-1">
-            <h1 class="text-3xl font-bold">Cognition Space Visualizer</h1>
-            <span id="version-display" class="text-lg text-gray-500 ml-2">V73</span>
-        </div>
-        <p class="text-md text-gray-500">Proof of Concept September 2025</p>
+        <h1 class="text-3xl font-bold">Cognition Space Visualizer</h1>
+        <p id="iteration-display" class="text-blue-600 font-semibold mt-1">Loading active iteration...</p>
+        <p class="text-md text-gray-500 mt-2">Proof of Concept September 2025</p>
     </div>
     <div id="user-context-display" class="text-center mb-6 p-3 bg-gray-100 rounded-lg border text-sm"></div>
 
@@ -55,7 +53,7 @@
     </div>
 
     <div id="stats-section" class="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-8 hidden">
-        <h2 class="text-xl font-semibold text-center text-gray-800 mb-4">Organization Statistics</h2>
+        <h2 class="text-xl font-semibold text-center text-gray-800 mb-4">Organization Statistics (Active Iteration)</h2>
         <table class="w-full text-sm text-left text-gray-600 stats-table">
             <thead class="text-xs text-gray-700 uppercase bg-gray-100">
                 <tr>
@@ -120,14 +118,13 @@
 
 <script>
     window.onload = async function() {
-        const VERSION = "v73";
-        document.getElementById('version-display').textContent = VERSION;
-        document.title = `Cognitive Space Visualization ${VERSION}`;
+        document.title = `Cognitive Space Visualization`;
 
         const baseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
         const personRoleId = urlParams.get('personRoleId');
-        let personId; // Will be fetched from context
+        const iterationId = urlParams.get('iterationId'); // Get iterationId from URL
+        let personId; 
         let currentUserIsManager = false;
         let isRootManager = false;
 
@@ -152,6 +149,8 @@
         const saveDescriptionButton = document.getElementById('save-description-button');
         const statsSection = document.getElementById('stats-section');
         const statsTableBody = document.getElementById('stats-table-body');
+        const iterationDisplay = document.getElementById('iteration-display');
+
 
         const NUM_QUESTIONS = 120;
         const surveyValues = Array(NUM_QUESTIONS).fill(4);
@@ -164,8 +163,21 @@
         const yellowMaterial = new THREE.MeshBasicMaterial({ color: 0xfacc15, opacity: 0.6, transparent: true });
         const grayMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, wireframe: true, opacity: 0.2, transparent: true });
 
+        async function loadIterationContext() {
+            try {
+                const response = await fetch('/api/active-iteration');
+                if (!response.ok) throw new Error((await response.json()).message);
+                const activeIteration = await response.json();
+                iterationDisplay.textContent = `Current Active Iteration: ${activeIteration.name} (ID: ${activeIteration.id})`;
+            } catch (error) {
+                iterationDisplay.textContent = `Error: ${error.message}`;
+                iterationDisplay.classList.remove('text-blue-600');
+                iterationDisplay.classList.add('text-red-600');
+            }
+        }
+
         async function handleUserContext() {
-            if (personRoleId) {
+            if (personRoleId && iterationId) {
                 try {
                     const response = await fetch(`${baseUrl}/api/person-context/${personRoleId}`);
                     if (!response.ok) throw new Error('Could not fetch user context.');
@@ -192,8 +204,8 @@
                      [targetTextarea, descriptionTextarea].forEach(ta => ta.readOnly = true);
                 }
             } else {
-                userContextDisplay.innerHTML = `<span class="font-semibold">Mode:</span> <span class="text-blue-600">Standalone</span>`;
-                showMessage('Running in Standalone Mode. File and data operations are disabled.', 'yellow');
+                userContextDisplay.innerHTML = `<span class="font-semibold">Mode:</span> <span class="text-red-600">Invalid Access. Please login.</span>`;
+                showMessage('Missing user or iteration context. Please login again.', 'red');
                 [saveButton, calculateSelectedButton, saveTargetButton, saveDescriptionButton].forEach(btn => btn.disabled = true);
                 [targetTextarea, descriptionTextarea].forEach(ta => ta.readOnly = true);
             }
@@ -486,10 +498,10 @@
             });
 
             saveButton.addEventListener('click', async () => {
-                if (!personRoleId) return showMessage('Cannot save in standalone mode.', 'red');
+                if (!personRoleId || !iterationId) return showMessage('Cannot save in standalone mode.', 'red');
                 const userUnitId = urlParams.get('userUnitId');
                 try {
-                    const saveData = { ...JSON.parse(jsonOutput.value), personRoleId, orgUnitId: userUnitId };
+                    const saveData = { ...JSON.parse(jsonOutput.value), personRoleId, orgUnitId: userUnitId, iterationId };
                     const response = await fetch(`${baseUrl}/api/saved-files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saveData) });
                     if (!response.ok) throw new Error('Server failed to save file.');
                     const result = await response.json();
@@ -498,7 +510,7 @@
             });
 
             calculateSelectedButton.addEventListener('click', async () => {
-                if (!personRoleId) return showMessage('Cannot calculate in standalone mode.', 'red');
+                if (!personRoleId || !iterationId) return showMessage('Cannot calculate in standalone mode.', 'red');
                 if (!currentUserIsManager) return showMessage('Only managers can perform calculations.', 'red');
                 
                 const userUnitId = urlParams.get('userUnitId');
@@ -507,7 +519,7 @@
                     const response = await fetch(`${baseUrl}/api/calculate`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ personRoleId: personRoleId, orgUnitId: userUnitId })
+                        body: JSON.stringify({ personRoleId, orgUnitId: userUnitId, iterationId })
                     });
             
                     if (!response.ok) {
@@ -584,6 +596,7 @@
         }
         
         // --- INITIALIZATION ---
+        await loadIterationContext();
         await handleUserContext();
         await loadAppData();
         const coreData = await loadInitialCoreData();

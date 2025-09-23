@@ -110,12 +110,12 @@ app.post('/api/iterations/next', async (req, res) => {
 
         const activeCheck = await client.query('SELECT id FROM iterations WHERE end_date IS NULL');
         if (activeCheck.rows.length > 0) {
-            throw new Error('An active iteration already exists. It must be closed before creating the next one.');
+            throw new Error('An active iteration already exists. Please close it before creating a new one.');
         }
 
         const lastClosedResult = await client.query('SELECT id FROM iterations WHERE end_date IS NOT NULL ORDER BY end_date DESC LIMIT 1');
         if (lastClosedResult.rows.length === 0) {
-            throw new Error('No previously closed iteration found to copy from. Please create an initial iteration.');
+            throw new Error('No previously closed iteration found to copy from.');
         }
         const sourceIterationId = lastClosedResult.rows[0].id;
 
@@ -125,6 +125,7 @@ app.post('/api/iterations/next', async (req, res) => {
         const oldUnits = await client.query('SELECT * FROM organization_units WHERE iteration_id = $1', [sourceIterationId]);
         const unitIdMap = new Map();
 
+        // This function recursively copies units to maintain the hierarchy
         const copyUnitsRecursive = async (parentId, newParentId) => {
             const children = oldUnits.rows.filter(u => u.parent_id === parentId);
             for (const child of children) {
@@ -138,12 +139,12 @@ app.post('/api/iterations/next', async (req, res) => {
             }
         };
         
-        await copyUnitsRecursive(null, null);
+        await copyUnitsRecursive(null, null); // Start with top-level units
 
         const oldRoles = await client.query('SELECT * FROM person_roles WHERE iteration_id = $1', [sourceIterationId]);
         for (const role of oldRoles.rows) {
             const newOrgUnitId = unitIdMap.get(role.org_unit_id);
-            if (newOrgUnitId) {
+            if (newOrgUnitId) { // Only copy roles if their unit was copied
                  await client.query(
                     'INSERT INTO person_roles(person_id, org_unit_id, is_manager, description, iteration_id) VALUES($1, $2, $3, $4, $5)',
                     [role.person_id, newOrgUnitId, role.is_manager, role.description, newIterationId]
@@ -374,7 +375,7 @@ app.post('/api/calculate', async (req, res) => {
                 analysis_graphs = EXCLUDED.analysis_graphs,
                 iteration_id = EXCLUDED.iteration_id;
         `;
-        const insertValues = [orgUnitId, newFilename, JSON.stringify(averagedSurveyResults), JSON.stringify(averagedData.analysis.voxel), JSON.stringify(averagedData.analysis.graphs), iterationId];
+        const insertValues = [orgUnitId, newFilename, JSON.stringify(averagedData.survey_results), JSON.stringify(averagedData.analysis.voxel), JSON.stringify(averagedData.analysis.graphs), iterationId];
         await pool.query(insertQuery, insertValues);
 
         res.json({ message: `Calculation for OrgUnit ${orgUnitId} successful. Saved as ${newFilename}.`, calculationResult: { filename: newFilename, data: averagedData }, sourceFiles: sourceFilesData });

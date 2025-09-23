@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iteration Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold">Iteration Manager</h1>
+            <a href="/admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
+        </div>
+        
+        <p class="text-gray-600 mb-6">
+            Here you can manage application iterations. Closing the active iteration archives its org chart. You can then start the "Next" iteration, which copies the structure from the last closed one, or create a completely new, blank iteration.
+        </p>
+
+        <!-- Create Next (Copy) or New (Blank) Iteration Section -->
+        <div id="create-section" class="mb-8 p-4 bg-gray-50 rounded-lg border hidden">
+            <h2 id="create-title" class="text-xl font-semibold mb-2"></h2>
+            <div class="flex items-center space-x-2">
+                <input type="text" id="new-iteration-name" class="flex-grow p-2 border rounded-md" placeholder="Enter name for the new iteration...">
+                <button id="create-iteration-button" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">Create</button>
+            </div>
+             <p id="create-note" class="text-xs text-gray-500 mt-2"></p>
+        </div>
+
+        <!-- Iterations List -->
+        <div>
+            <h2 class="text-xl font-semibold mb-4">Existing Iterations</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="iterations-table-body" class="divide-y divide-gray-200">
+                        <!-- Rows will be inserted by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const tableBody = document.getElementById('iterations-table-body');
+            const createSection = document.getElementById('create-section');
+            const createTitle = document.getElementById('create-title');
+            const createNote = document.getElementById('create-note');
+            const newIterationNameInput = document.getElementById('new-iteration-name');
+            const createIterationButton = document.getElementById('create-iteration-button');
+            const baseUrl = window.location.origin;
+            let lastClosedIteration = null;
+
+            async function apiRequest(endpoint, method = 'GET', body = null) {
+                try {
+                    const options = { method, headers: { 'Content-Type': 'application/json' } };
+                    if (body) options.body = JSON.stringify(body);
+                    const response = await fetch(`${baseUrl}${endpoint}`, options);
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                    }
+                    return response.status === 204 ? null : await response.json();
+                } catch (error) {
+                    alert(`An API error occurred: ${error.message}`);
+                    throw error;
+                }
+            }
+
+            function getNextIterationName(iterations) {
+                const closedIterations = iterations.filter(i => i.end_date);
+                if (closedIterations.length === 0) return 'Iteration 2';
+                
+                const lastClosed = closedIterations.sort((a,b) => new Date(b.end_date) - new Date(a.end_date))[0];
+                lastClosedIteration = lastClosed;
+
+                const match = lastClosed.name.match(/\d+$/);
+                if (match) {
+                    const num = parseInt(match[0], 10) + 1;
+                    return lastClosed.name.replace(/\d+$/, num);
+                }
+                return `Next ${lastClosed.name}`;
+            }
+
+            async function loadIterations() {
+                try {
+                    const iterations = await apiRequest('/api/iterations');
+                    tableBody.innerHTML = '';
+                    const activeIteration = iterations.find(i => !i.end_date);
+
+                    if (iterations.length > 0) {
+                        iterations.forEach(iter => {
+                            const tr = document.createElement('tr');
+                            const endDate = iter.end_date ? new Date(iter.end_date).toLocaleString() : 'N/A';
+                            const isActive = !iter.end_date;
+
+                            tr.innerHTML = `
+                                <td class="px-6 py-4 whitespace-nowrap">${iter.id}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">${iter.name}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">${new Date(iter.start_date).toLocaleString()}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">${endDate}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                        ${isActive ? 'Active' : 'Closed'}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    ${isActive ? `<button data-id="${iter.id}" class="close-iteration-btn text-red-600 hover:text-red-900">Close</button>` : ''}
+                                </td>
+                            `;
+                            tableBody.appendChild(tr);
+                        });
+                    } else {
+                        tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-4">No iterations found.</td></tr>';
+                    }
+
+                    if (!activeIteration) {
+                        const suggestedName = getNextIterationName(iterations);
+                        newIterationNameInput.value = suggestedName;
+                        if (lastClosedIteration) {
+                             createTitle.textContent = 'Create Next Iteration';
+                             createNote.textContent = `This will copy the org chart and roles from the last closed iteration: "${lastClosedIteration.name}".`;
+                        } else {
+                             createTitle.textContent = 'Create New (Blank) Iteration';
+                             createNote.textContent = `This will create the first, empty iteration.`;
+                        }
+                        createSection.classList.remove('hidden');
+                    } else {
+                        createSection.classList.add('hidden');
+                    }
+
+                } catch (error) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-red-500">Could not load iterations.</td></tr>';
+                }
+            }
+
+            createIterationButton.addEventListener('click', async () => {
+                const name = newIterationNameInput.value.trim();
+                if (!name) {
+                    alert('Please enter a name for the iteration.');
+                    return;
+                }
+                try {
+                    if (lastClosedIteration) {
+                        // Use the "next" endpoint to copy
+                        await apiRequest('/api/iterations/next', 'POST', { name });
+                    } else {
+                        // Use the "create blank" endpoint
+                        await apiRequest('/api/iterations', 'POST', { name });
+                    }
+                    newIterationNameInput.value = '';
+                    await loadIterations();
+                } catch (error) {
+                    console.error("Failed to create iteration", error);
+                }
+            });
+
+            tableBody.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('close-iteration-btn')) {
+                    const id = e.target.dataset.id;
+                    if (confirm(`Are you sure you want to close iteration ${id}? This action cannot be undone and will archive the current organizational chart.`)) {
+                        try {
+                            await apiRequest(`/api/iterations/${id}/close`, 'PUT');
+                            await loadIterations();
+                        } catch (error) {
+                             console.error("Failed to close iteration", error);
+                        }
+                    }
+                }
+            });
+
+            await loadIterations();
+        });
+    </script>
+</body>
+</html>
+
+

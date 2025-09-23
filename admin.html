@@ -8,12 +8,16 @@
 <body class="bg-gray-100 flex items-center justify-center h-screen">
     <div class="text-center bg-white p-12 rounded-lg shadow-lg">
         <h1 class="text-4xl font-bold mb-2">Administration Portal</h1>
+        <p id="iteration-display" class="text-blue-600 font-semibold mb-8">Loading active iteration...</p>
         <p class="text-gray-600 mb-8">Welcome, Admin. Please select a tool.</p>
         <div class="space-y-4">
+            <a href="/iteration-manager.html" class="block w-full bg-blue-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-blue-600 transition-colors duration-200">
+                Launch Iteration Manager
+            </a>
             <a href="/org-chart.html" class="block w-full bg-red-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-red-600 transition-colors duration-200">
                 Launch Organization Manager
             </a>
-            <a href="/table-viewer.html" class="block w-full bg-gray-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-gray-600 transition-colors duration-200 mt-4">
+            <a href="/table-viewer.html" class="block w-full bg-gray-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-gray-600 transition-colors duration-200">
                 Launch Table Viewer
             </a>
         </div>
@@ -21,6 +25,25 @@
             Logout
         </a>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const iterationDisplay = document.getElementById('iteration-display');
+            try {
+                const response = await fetch('/api/active-iteration');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message);
+                }
+                const activeIteration = await response.json();
+                iterationDisplay.textContent = `Current Active Iteration: ${activeIteration.name} (ID: ${activeIteration.id})`;
+            } catch (error) {
+                iterationDisplay.textContent = `Error: ${error.message}`;
+                iterationDisplay.classList.remove('text-blue-600');
+                iterationDisplay.classList.add('text-red-600');
+            }
+        });
+    </script>
 </body>
 </html>
 

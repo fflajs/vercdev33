@@ -17,16 +17,28 @@
 <body class="bg-gray-100 p-8">
 
     <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-2">
             <h1 class="text-3xl font-bold">Organization Chart Manager</h1>
             <a href="/admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
         </div>
+        <div id="iteration-context" class="text-center mb-6 p-2 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+            Loading active iteration...
+        </div>
         
-        <div class="mb-6">
-            <h2 class="text-xl font-semibold mb-2">Add New Top-Level Unit</h2>
-            <div class="flex">
-                <input type="text" id="new-unit-name" class="flex-grow p-2 border rounded-l-md" placeholder="Enter new unit name...">
-                <button id="add-top-level-button" class="bg-blue-500 text-white p-2 rounded-r-md hover:bg-blue-600">Add Unit</button>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <h2 class="text-xl font-semibold mb-2">Add New Top-Level Unit</h2>
+                <div class="flex">
+                    <input type="text" id="new-unit-name" class="flex-grow p-2 border rounded-l-md" placeholder="Enter new unit name...">
+                    <button id="add-top-level-button" class="bg-blue-500 text-white p-2 rounded-r-md hover:bg-blue-600">Add Unit</button>
+                </div>
+            </div>
+            <div>
+                <h2 class="text-xl font-semibold mb-2">Create New Person</h2>
+                <div class="flex">
+                    <input type="text" id="new-person-name" class="flex-grow p-2 border rounded-l-md" placeholder="Enter new person's full name...">
+                    <button id="add-person-button" class="bg-green-500 text-white p-2 rounded-r-md hover:bg-green-600">Create Person</button>
+                </div>
             </div>
         </div>
 
@@ -60,6 +72,9 @@
             const chartContainer = document.getElementById('org-chart-container');
             const newUnitNameInput = document.getElementById('new-unit-name');
             const addTopLevelButton = document.getElementById('add-top-level-button');
+            const newPersonNameInput = document.getElementById('new-person-name');
+            const addPersonButton = document.getElementById('add-person-button');
+            const iterationContextDiv = document.getElementById('iteration-context');
             
             const roleModal = document.getElementById('role-modal');
             const modalTitle = document.getElementById('modal-title');
@@ -71,6 +86,7 @@
             
             const baseUrl = window.location.origin;
             let units = [], people = [], roles = [];
+            let activeIterationId = null;
 
             async function apiRequest(endpoint, method = 'GET', body = null) {
                 try {
@@ -84,7 +100,6 @@
                     return response.status === 204 ? null : await response.json();
                 } catch (error) {
                     alert(`An API error occurred: ${error.message}`);
-                    console.error(`API Error on ${method} ${endpoint}:`, error);
                     throw error;
                 }
             }
@@ -135,7 +150,7 @@
 
             async function renderTree() {
                 try {
-                    const data = await apiRequest('/api/org-data');
+                    const data = await apiRequest(`/api/org-data/${activeIterationId}`);
                     units = data.units;
                     people = data.people;
                     roles = data.roles;
@@ -157,13 +172,39 @@
             function hideRoleModal() {
                 roleModal.classList.add('hidden');
             }
+            
+            async function initialize() {
+                 try {
+                    const activeIteration = await apiRequest('/api/active-iteration');
+                    activeIterationId = activeIteration.id;
+                    iterationContextDiv.innerHTML = `Managing Organizational Chart for Active Iteration: <span class="font-bold">${activeIteration.name} (ID: ${activeIteration.id})</span>`;
+                    await renderTree();
+                } catch (error) {
+                    iterationContextDiv.innerHTML = `<span class="font-bold text-red-600">${error.message}. Please create an active iteration in the Iteration Manager.</span>`;
+                    document.querySelectorAll('input, button').forEach(el => el.disabled = true);
+                }
+            }
 
             addTopLevelButton.addEventListener('click', async () => {
                 const name = newUnitNameInput.value.trim();
-                if (name) {
-                    await apiRequest('/api/org-tree', 'POST', { name, parentId: null });
+                if (name && activeIterationId) {
+                    await apiRequest('/api/org-tree', 'POST', { name, parentId: null, iterationId: activeIterationId });
                     newUnitNameInput.value = '';
                     await renderTree();
+                }
+            });
+
+            addPersonButton.addEventListener('click', async () => {
+                const name = newPersonNameInput.value.trim();
+                if (name) {
+                    try {
+                        await apiRequest('/api/people', 'POST', { name });
+                        newPersonNameInput.value = '';
+                        await renderTree(); // Re-render to update the person list for the modal
+                        alert(`Person "${name}" created. You can now assign them to units.`);
+                    } catch (error) {
+                         console.error("Failed to create person", error);
+                    }
                 }
             });
 
@@ -178,19 +219,16 @@
                     const person = people.find(p => p.id === role.person_id);
                     const unit = units.find(u => u.id === role.org_unit_id);
                     if (person && unit) {
-                        const roleText = role.is_manager ? 'Manager' : 'Coworker';
                         const url = new URL('/cognitive-tool.html', window.location.origin);
                         url.searchParams.set('personRoleId', role.id);
-                        url.searchParams.set('userName', person.name);
-                        url.searchParams.set('userRole', roleText);
-                        url.searchParams.set('userUnit', unit.name);
+                        url.searchParams.set('iterationId', activeIterationId);
                         url.searchParams.set('userUnitId', unit.id);
                         window.location.href = url.href;
                     }
                 } else if (target.classList.contains('add-child-unit')) {
                     e.preventDefault();
                     const name = prompt('Enter name for the new sub-unit:');
-                    if(name) await apiRequest('/api/org-tree', 'POST', { name, parentId: unitId });
+                    if(name && activeIterationId) await apiRequest('/api/org-tree', 'POST', { name, parentId: unitId, iterationId: activeIterationId });
                 } else if (target.classList.contains('edit-unit')) {
                     e.preventDefault();
                     const newName = prompt('Enter new name for the unit:', target.dataset.name);
@@ -219,9 +257,12 @@
                 const unitId = parseInt(modalUnitIdInput.value);
                 const isManager = modalIsManagerCheckbox.checked;
 
-                if (!personId) return alert('Please select a person.');
+                if (!personId || !activeIterationId) {
+                    alert('Please select a person and ensure an iteration is active.');
+                    return;
+                }
                 
-                await apiRequest('/api/roles', 'POST', { personId, orgUnitId: unitId, isManager });
+                await apiRequest('/api/roles', 'POST', { personId, orgUnitId: unitId, isManager, iterationId: activeIterationId });
                 hideRoleModal();
                 await renderTree();
             });
@@ -229,7 +270,7 @@
             modalCancelButton.addEventListener('click', hideRoleModal);
             roleModal.addEventListener('click', (e) => { if (e.target === roleModal) hideRoleModal(); });
 
-            await renderTree();
+            await initialize();
         });
     </script>
 </body>

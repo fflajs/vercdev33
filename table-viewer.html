@@ -24,21 +24,23 @@
             background-color: #f2f2f2;
             position: sticky;
             top: 0;
+            z-index: 10;
         }
     </style>
 </head>
 <body class="bg-gray-100 p-8">
-
     <div class="max-w-7xl mx-auto bg-white p-8 rounded-lg shadow-lg">
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold">Database Table Viewer</h1>
             <a href="/admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
         </div>
 
-        <div id="loading-message" class="text-center text-gray-500">Loading table data...</div>
+        <div id="loading-message" class="text-center text-gray-500">
+            <p>Loading table data...</p>
+        </div>
 
-        <div id="tables-wrapper" class="space-y-8">
-            <!-- Tables will be dynamically inserted here -->
+        <div id="tables-wrapper" class="space-y-8 hidden">
+            <!-- Tables will be inserted here by JavaScript -->
         </div>
     </div>
 
@@ -49,50 +51,51 @@
 
             const createTableSection = (title, data) => {
                 const section = document.createElement('div');
-                const header = document.createElement('h2');
-                header.className = 'text-2xl font-semibold mb-2';
-                header.textContent = title;
-                section.appendChild(header);
+                const heading = document.createElement('h2');
+                heading.className = 'text-2xl font-semibold mb-2';
+                heading.textContent = title;
+                section.appendChild(heading);
 
                 if (!data || data.length === 0) {
                     const noDataMessage = document.createElement('p');
-                    noDataMessage.textContent = 'No data in this table.';
                     noDataMessage.className = 'text-gray-500 italic';
+                    noDataMessage.textContent = 'No data in this table.';
                     section.appendChild(noDataMessage);
                     return section;
                 }
 
                 const tableContainer = document.createElement('div');
                 tableContainer.className = 'table-container border rounded-lg';
-                
+
                 const table = document.createElement('table');
                 const thead = document.createElement('thead');
                 const tbody = document.createElement('tbody');
                 
-                // Create headers
-                const headerRow = document.createElement('tr');
+                // Create headers from the keys of the first object
                 const headers = Object.keys(data[0]);
-                headers.forEach(key => {
+                const headerRow = document.createElement('tr');
+                headers.forEach(headerText => {
                     const th = document.createElement('th');
-                    th.textContent = key;
+                    th.textContent = headerText;
                     headerRow.appendChild(th);
                 });
                 thead.appendChild(headerRow);
 
-                // Create body rows
+                // Create data rows
                 data.forEach(rowData => {
-                    const tr = document.createElement('tr');
+                    const row = document.createElement('tr');
                     headers.forEach(header => {
                         const td = document.createElement('td');
                         let cellData = rowData[header];
-                        // Handle JSON objects for better readability
+                        // Nicely format JSONB objects for display
                         if (typeof cellData === 'object' && cellData !== null) {
-                            cellData = JSON.stringify(cellData);
+                            td.textContent = JSON.stringify(cellData);
+                        } else {
+                            td.textContent = cellData;
                         }
-                        td.textContent = cellData;
-                        tr.appendChild(td);
+                        row.appendChild(td);
                     });
-                    tbody.appendChild(tr);
+                    tbody.appendChild(row);
                 });
 
                 table.appendChild(thead);
@@ -104,14 +107,12 @@
 
             try {
                 const response = await fetch('/api/all-tables-data');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch table data. Only Admins can view this page.');
-                }
+                if (!response.ok) throw new Error('Failed to fetch table data.');
                 const allTables = await response.json();
-                loadingMessage.style.display = 'none';
 
                 // Define the order and titles for the tables
-                const tableOrder = [
+                const tableConfig = [
+                    { key: 'iterations', title: 'Iterations' },
                     { key: 'organization_units', title: 'Organization Units' },
                     { key: 'people', title: 'People' },
                     { key: 'person_roles', title: 'Person Roles' },
@@ -119,19 +120,23 @@
                     { key: 'app_data', title: 'Application Data' }
                 ];
                 
-                tableOrder.forEach(tableInfo => {
-                    if (allTables[tableInfo.key]) {
-                        const section = createTableSection(tableInfo.title, allTables[tableInfo.key]);
+                tableConfig.forEach(config => {
+                    if (allTables[config.key]) {
+                        const section = createTableSection(config.title, allTables[config.key]);
                         tablesWrapper.appendChild(section);
                     }
                 });
 
+                loadingMessage.classList.add('hidden');
+                tablesWrapper.classList.remove('hidden');
+
             } catch (error) {
-                loadingMessage.textContent = `Error: ${error.message}`;
-                loadingMessage.className = 'text-center text-red-500';
+                loadingMessage.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+                console.error('Error loading table data:', error);
             }
         });
     </script>
 </body>
 </html>
+
 
