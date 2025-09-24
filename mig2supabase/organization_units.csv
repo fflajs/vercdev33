@@ -1,0 +1,9 @@
+id,name,parent_id,iteration_id
+26,Istra,,10
+27,Pula,26,10
+28,Rijeka,27,10
+29,Rovinj,26,10
+30,Istra,,11
+31,Pula,30,11
+32,Rijeka,31,11
+33,Rovinj,30,11

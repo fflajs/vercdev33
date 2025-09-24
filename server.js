@@ -27,7 +27,6 @@ pool.connect((err, client, release) => {
 
 // --- GOOGLE AI SETUP ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-// UPDATED the model name here from "gemini-pro" to a current version
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
 
@@ -541,7 +540,10 @@ app.post('/api/people', async (req, res) => {
         if (name.toLowerCase() === 'admin') { return res.status(400).json({ message: 'This name is reserved.' }); }
         const result = await pool.query('INSERT INTO people(name) VALUES($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING *', [name]);
         res.status(201).json(result.rows[0]);
-    } catch(e){ res.status(500).json({ message: 'Error creating person.' }); }
+    } catch(e){ 
+        console.error('Error in POST /api/people:', e); // Added logging
+        res.status(500).json({ message: 'Error creating person.' }); 
+    }
 });
 
 app.post('/api/roles', async (req, res) => {
