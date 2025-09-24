@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/flavioGH/repo33#readme",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "pg": "^8.16.3"

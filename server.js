@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
-const https = require('https'); 
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -24,6 +24,12 @@ pool.connect((err, client, release) => {
         console.log('Database connection successful. Current time from DB:', result.rows[0].now);
     });
 });
+
+// --- GOOGLE AI SETUP ---
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// UPDATED the model name here from "gemini-pro" to a current version
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+
 
 const dataDir = path.join(__dirname, 'data');
 app.use(express.json({ limit: '10mb' }));
@@ -64,7 +70,7 @@ app.get('/api/all-tables-data', async (req, res) => {
 // --- API ENDPOINTS FOR ITERATION MANAGEMENT ---
 app.get('/api/iterations', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM iterations ORDER BY start_date DESC');
+        const result = await pool.query('SELECT id, name, start_date, end_date, question_set FROM iterations ORDER BY start_date DESC');
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching iterations:', error);
@@ -74,7 +80,7 @@ app.get('/api/iterations', async (req, res) => {
 
 app.get('/api/active-iteration', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM iterations WHERE end_date IS NULL LIMIT 1');
+        const result = await pool.query('SELECT id, name, start_date, end_date, question_set FROM iterations WHERE end_date IS NULL LIMIT 1');
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'No active iteration found.' });
         }
@@ -87,12 +93,17 @@ app.get('/api/active-iteration', async (req, res) => {
 
 app.post('/api/iterations', async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, question_set } = req.body;
         const activeCheck = await pool.query('SELECT id FROM iterations WHERE end_date IS NULL');
         if (activeCheck.rows.length > 0) {
             return res.status(400).json({ message: 'An active iteration already exists. Please close it before creating a new one.' });
         }
-        const result = await pool.query('INSERT INTO iterations(name) VALUES($1) RETURNING *', [name]);
+        const query = question_set
+            ? 'INSERT INTO iterations(name, question_set) VALUES($1, $2) RETURNING *'
+            : 'INSERT INTO iterations(name) VALUES($1) RETURNING *';
+        const values = question_set ? [name, question_set] : [name];
+        
+        const result = await pool.query(query, values);
         res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error('Error creating iteration:', error);
@@ -100,9 +111,8 @@ app.post('/api/iterations', async (req, res) => {
     }
 });
 
-// --- NEW ENDPOINT FOR "NEXT" ITERATION ---
 app.post('/api/iterations/next', async (req, res) => {
-    const { name } = req.body;
+    const { name, question_set } = req.body;
     const client = await pool.connect();
 
     try {
@@ -119,7 +129,11 @@ app.post('/api/iterations/next', async (req, res) => {
         }
         const sourceIterationId = lastClosedResult.rows[0].id;
 
-        const newIterationResult = await client.query('INSERT INTO iterations(name) VALUES($1) RETURNING id', [name]);
+        const insertQuery = question_set
+            ? 'INSERT INTO iterations(name, question_set) VALUES($1, $2) RETURNING id'
+            : 'INSERT INTO iterations(name) VALUES($1) RETURNING id';
+        const insertValues = question_set ? [name, question_set] : [name];
+        const newIterationResult = await client.query(insertQuery, insertValues);
         const newIterationId = newIterationResult.rows[0].id;
 
         const oldUnits = await client.query('SELECT * FROM organization_units WHERE iteration_id = $1', [sourceIterationId]);
@@ -163,7 +177,6 @@ app.post('/api/iterations/next', async (req, res) => {
     }
 });
 
-
 app.put('/api/iterations/:id/close', async (req, res) => {
     try {
         const { id } = req.params;
@@ -178,6 +191,98 @@ app.put('/api/iterations/:id/close', async (req, res) => {
     }
 });
 
+app.delete('/api/iterations/:id', async (req, res) => {
+    const targetId = parseInt(req.params.id, 10);
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+        
+        const minIdResult = await client.query('SELECT MIN(id) as min_id FROM iterations');
+        const isDeletingFirstIteration = minIdResult.rows.length > 0 && minIdResult.rows[0].min_id === targetId;
+
+        const iterationsToDeleteResult = await client.query('SELECT id FROM iterations WHERE id >= $1', [targetId]);
+        if (iterationsToDeleteResult.rows.length === 0) {
+            await client.query('COMMIT');
+            return res.status(204).send();
+        }
+        const iterationIdsToDelete = iterationsToDeleteResult.rows.map(row => row.id);
+
+        await client.query('DELETE FROM surveys WHERE iteration_id = ANY($1::int[])', [iterationIdsToDelete]);
+        await client.query('DELETE FROM person_roles WHERE iteration_id = ANY($1::int[])', [iterationIdsToDelete]);
+        await client.query('DELETE FROM organization_units WHERE iteration_id = ANY($1::int[])', [iterationIdsToDelete]);
+        await client.query('DELETE FROM iterations WHERE id = ANY($1::int[])', [iterationIdsToDelete]);
+
+        if (isDeletingFirstIteration) {
+            await client.query("UPDATE app_data SET value = '' WHERE key = 'target'");
+        }
+
+        await client.query('COMMIT');
+        res.status(204).send();
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error(`Error during cascading delete for iteration ID >= ${targetId}:`, error);
+        res.status(500).json({ message: 'An error occurred while deleting the iteration(s).' });
+    } finally {
+        client.release();
+    }
+});
+
+// --- NEW ENDPOINTS FOR TEXT ANALYSIS ---
+app.get('/api/aggregate-texts', async (req, res) => {
+    try {
+        const activeIterationResult = await pool.query('SELECT id FROM iterations WHERE end_date IS NULL LIMIT 1');
+        if (activeIterationResult.rows.length === 0) {
+            return res.status(404).json({ message: 'No active iteration found.' });
+        }
+        const iterationId = activeIterationResult.rows[0].id;
+
+        const targetQuery = pool.query("SELECT value FROM app_data WHERE key = 'target'");
+        const descriptionsQuery = pool.query("SELECT description FROM person_roles WHERE iteration_id = $1 AND description IS NOT NULL AND description <> ''", [iterationId]);
+
+        const [targetResult, descriptionsResult] = await Promise.all([targetQuery, descriptionsQuery]);
+
+        let aggregatedText = "--- ORGANIZATIONAL TARGET ---\n";
+        aggregatedText += (targetResult.rows.length > 0 ? targetResult.rows[0].value : "Not defined.") + "\n\n";
+        aggregatedText += "--- AGGREGATED ROLE DESCRIPTIONS ---\n";
+        
+        if (descriptionsResult.rows.length > 0) {
+            descriptionsResult.rows.forEach(row => {
+                aggregatedText += `- ${row.description}\n`;
+            });
+        } else {
+            aggregatedText += "No descriptions entered for this iteration.";
+        }
+
+        res.json({ aggregatedText });
+
+    } catch (error) {
+        console.error('Error aggregating texts:', error);
+        res.status(500).json({ message: 'Error aggregating texts.' });
+    }
+});
+
+app.post('/api/analyze-text', async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text) {
+            return res.status(400).json({ message: 'Text to analyze is required.' });
+        }
+
+        const prompt = `Please provide a concise summary of the following organizational texts. Identify the main goal from the "TARGET" section and then list the key themes, responsibilities, and potential overlaps or conflicts from the "ROLE DESCRIPTIONS" section.\n\n${text}`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const analysis = response.text();
+        
+        res.json({ analysis });
+
+    } catch (error) {
+        console.error('Error analyzing text with Google AI:', error);
+        res.status(500).json({ message: 'Error analyzing text.' });
+    }
+});
 
 // --- (The rest of the file remains the same) ---
 app.post('/api/check-person', async (req, res) => {
@@ -353,14 +458,22 @@ app.post('/api/calculate', async (req, res) => {
         }));
         
         const numFiles = allSurveyResults.length;
-        const averagedSurveyResults = Array(120).fill(0);
+        const totalQuestions = allSurveyResults[0].length; 
+        const questionsPerGroup = totalQuestions / 3;
+
+        const averagedSurveyResults = Array(totalQuestions).fill(0);
         for (const resultSet of allSurveyResults) {
-            for (let i = 0; i < 120; i++) { averagedSurveyResults[i] += resultSet[i] / numFiles; }
+            for (let i = 0; i < totalQuestions; i++) { averagedSurveyResults[i] += resultSet[i] / numFiles; }
         }
+        
         const getMode = (arr) => { if (!arr || arr.length === 0) return null; const counts = {}; let maxCount = 0, mode = null; for (const value of arr) { counts[value] = (counts[value] || 0) + 1; if (counts[value] > maxCount) { maxCount = counts[value]; mode = value; } } return mode; };
         const getGaussianData = (mean, stdDev = 1) => { const gaussian = (x, m, s) => Math.exp(-0.5 * Math.pow((x - m) / s, 2)) / (s * Math.sqrt(2 * Math.PI)); return Array.from({length: 71}, (_, i) => parseFloat(gaussian(1 + i * 0.1, mean, stdDev).toFixed(4))); };
-        const knowledgeAvg = averagedSurveyResults.slice(0, 40).reduce((a, b) => a + b, 0) / 40; const familiarityAvg = averagedSurveyResults.slice(40, 80).reduce((a, b) => a + b, 0) / 40; const cognitiveLoadAvg = averagedSurveyResults.slice(80, 120).reduce((a, b) => a + b, 0) / 40;
-        const averagedData = { timestamp: new Date().toISOString(), survey_results: averagedSurveyResults.map(v => Math.ceil(v)), analysis: { voxel: { mean: { x: +knowledgeAvg.toFixed(2), y: +familiarityAvg.toFixed(2), z: +cognitiveLoadAvg.toFixed(2) }, mode: { x: getMode(averagedSurveyResults.slice(0, 40).map(Math.round)), y: getMode(averagedSurveyResults.slice(40, 80).map(Math.round)), z: getMode(averagedSurveyResults.slice(80, 120).map(Math.round)) }, roundedMean: { x: Math.round(Math.min(Math.max(knowledgeAvg, 1), 8)), y: Math.round(Math.min(Math.max(familiarityAvg, 1), 8)), z: Math.round(Math.min(Math.max(cognitiveLoadAvg, 1), 8)) } }, graphs: { knowledge_density: { mean: +knowledgeAvg.toFixed(2), distribution_data: getGaussianData(knowledgeAvg) }, familiarity: { mean: +familiarityAvg.toFixed(2), distribution_data: getGaussianData(familiarityAvg) }, cognitive_load: { mean: +cognitiveLoadAvg.toFixed(2), distribution_data: getGaussianData(cognitiveLoadAvg) } } } };
+        
+        const knowledgeAvg = averagedSurveyResults.slice(0, questionsPerGroup).reduce((a, b) => a + b, 0) / questionsPerGroup;
+        const familiarityAvg = averagedSurveyResults.slice(questionsPerGroup, questionsPerGroup * 2).reduce((a, b) => a + b, 0) / questionsPerGroup;
+        const cognitiveLoadAvg = averagedSurveyResults.slice(questionsPerGroup * 2, totalQuestions).reduce((a, b) => a + b, 0) / questionsPerGroup;
+
+        const averagedData = { timestamp: new Date().toISOString(), survey_results: averagedSurveyResults.map(v => Math.ceil(v)), analysis: { voxel: { mean: { x: +knowledgeAvg.toFixed(2), y: +familiarityAvg.toFixed(2), z: +cognitiveLoadAvg.toFixed(2) }, mode: { x: getMode(averagedSurveyResults.slice(0, questionsPerGroup).map(Math.round)), y: getMode(averagedSurveyResults.slice(questionsPerGroup, questionsPerGroup * 2).map(Math.round)), z: getMode(averagedSurveyResults.slice(questionsPerGroup * 2, totalQuestions).map(Math.round)) }, roundedMean: { x: Math.round(Math.min(Math.max(knowledgeAvg, 1), 8)), y: Math.round(Math.min(Math.max(familiarityAvg, 1), 8)), z: Math.round(Math.min(Math.max(cognitiveLoadAvg, 1), 8)) } }, graphs: { knowledge_density: { mean: +knowledgeAvg.toFixed(2), distribution_data: getGaussianData(knowledgeAvg) }, familiarity: { mean: +familiarityAvg.toFixed(2), distribution_data: getGaussianData(familiarityAvg) }, cognitive_load: { mean: +cognitiveLoadAvg.toFixed(2), distribution_data: getGaussianData(cognitiveLoadAvg) } } } };
         const newFilename = `calc_${orgUnitId}.json`;
         
         const insertQuery = `
@@ -458,7 +571,8 @@ app.get('/api/person-context/:personRoleId', async (req, res) => {
             SELECT 
                 pr.id as "personRoleId", p.id as "personId", p.name, pr.description,
                 pr.is_manager, pr.org_unit_id, o.name as "orgUnitName",
-                (SELECT ou.parent_id IS NULL FROM organization_units ou WHERE ou.id = pr.org_unit_id) as "isRootUnit"
+                (SELECT ou.parent_id IS NULL FROM organization_units ou WHERE ou.id = pr.org_unit_id) as "isRootUnit",
+                (SELECT MIN(id) FROM iterations) as "firstIterationId"
             FROM person_roles pr
             JOIN people p ON pr.person_id = p.id
             JOIN organization_units o ON pr.org_unit_id = o.id
@@ -491,6 +605,39 @@ app.put('/api/app-data/:key', async (req, res) => {
     try {
         const { key } = req.params;
         const { value, personId } = req.body;
+
+        if (key === 'target') {
+            const iterationCheckQuery = `
+                SELECT
+                    (SELECT MIN(id) FROM iterations) as first_id,
+                    (SELECT id FROM iterations WHERE end_date IS NULL LIMIT 1) as active_id
+            `;
+            const iterationResult = await pool.query(iterationCheckQuery);
+
+            if (iterationResult.rows.length === 0 || !iterationResult.rows[0].active_id) {
+                 return res.status(403).json({ message: 'Cannot set Target without an active iteration.' });
+            }
+            const { first_id, active_id } = iterationResult.rows[0];
+
+            if (active_id !== first_id) {
+                return res.status(403).json({ message: 'The Target can only be set during the first iteration.' });
+            }
+
+            const managerCheckQuery = `
+                SELECT 1 FROM person_roles pr
+                JOIN organization_units ou ON pr.org_unit_id = ou.id
+                WHERE pr.person_id = $1
+                  AND pr.is_manager = TRUE
+                  AND ou.parent_id IS NULL
+                  AND pr.iteration_id = $2
+            `;
+            const managerResult = await pool.query(managerCheckQuery, [personId, active_id]);
+
+            if (managerResult.rows.length === 0) {
+                return res.status(403).json({ message: 'Only a root manager can set the Target in the first iteration.' });
+            }
+        }
+
         const existingResult = await pool.query('SELECT key FROM app_data WHERE key = $1', [key]);
         if (existingResult.rows.length > 0) {
             await pool.query('UPDATE app_data SET value = $1, updated_by_person_id = $2, updated_at = NOW() WHERE key = $3', [value, personId, key]);
@@ -519,7 +666,41 @@ app.put('/api/role-description', async (req, res) => {
 });
 
 app.get('/api/voxel-data', (req, res) => res.sendFile(path.join(dataDir, 'voxel_data.csv')));
-app.get('/api/questions', (req, res) => res.sendFile(path.join(dataDir, 'questions.json')));
+
+app.get('/api/questions/:iterationId', async (req, res) => {
+    try {
+        const { iterationId } = req.params;
+        if (!iterationId) {
+            return res.status(400).json({ message: 'Iteration ID is required.' });
+        }
+
+        const result = await pool.query('SELECT question_set FROM iterations WHERE id = $1', [iterationId]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Iteration not found.' });
+        }
+
+        const filename = result.rows[0].question_set;
+        
+        const allowedFiles = ['Deep_Analysis_120.json', 'Normal_Analysis_60.json', 'Pulse_Check_12.json'];
+        if (!allowedFiles.includes(filename)) {
+            console.error(`Forbidden file access attempt: ${filename}`);
+            return res.status(403).json({ message: 'Invalid or forbidden question set.' });
+        }
+
+        const filePath = path.join(dataDir, filename);
+        res.sendFile(filePath, (err) => {
+            if (err) {
+                console.error(`Error sending file ${filePath}:`, err);
+                res.status(404).json({ message: 'Question file not found on server.' });
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching questions:', error);
+        res.status(500).json({ message: 'Error fetching questions.' });
+    }
+});
+
 
 // --- SERVE STATIC FILES LAST (Correct Position) ---
 app.use(express.static(path.join(__dirname)));
@@ -528,5 +709,3 @@ app.use(express.static(path.join(__dirname)));
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
-
-

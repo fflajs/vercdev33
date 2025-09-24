@@ -17,17 +17,28 @@
             Here you can manage application iterations. Closing the active iteration archives its org chart. You can then start the "Next" iteration, which copies the structure from the last closed one, or create a completely new, blank iteration.
         </p>
 
-        <!-- Create Next (Copy) or New (Blank) Iteration Section -->
         <div id="create-section" class="mb-8 p-4 bg-gray-50 rounded-lg border hidden">
-            <h2 id="create-title" class="text-xl font-semibold mb-2"></h2>
-            <div class="flex items-center space-x-2">
-                <input type="text" id="new-iteration-name" class="flex-grow p-2 border rounded-md" placeholder="Enter name for the new iteration...">
-                <button id="create-iteration-button" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">Create</button>
+            <h2 id="create-title" class="text-xl font-semibold mb-4"></h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="new-iteration-name" class="block text-sm font-medium text-gray-700">New Iteration Name</label>
+                    <input type="text" id="new-iteration-name" class="mt-1 block w-full p-2 border rounded-md" placeholder="Enter name for the new iteration...">
+                </div>
+                <div>
+                    <label for="question-set-select" class="block text-sm font-medium text-gray-700">Question Set</label>
+                    <select id="question-set-select" class="mt-1 block w-full p-2 border rounded-md bg-white">
+                        <option value="Deep_Analysis_120.json" selected>Deep Analysis (120 questions)</option>
+                        <option value="Normal_Analysis_60.json">Normal Analysis (60 questions)</option>
+                        <option value="Pulse_Check_12.json">Pulse Check (12 questions)</option>
+                    </select>
+                </div>
+                <div>
+                    <button id="create-iteration-button" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">Create</button>
+                </div>
             </div>
              <p id="create-note" class="text-xs text-gray-500 mt-2"></p>
         </div>
 
-        <!-- Iterations List -->
         <div>
             <h2 class="text-xl font-semibold mb-4">Existing Iterations</h2>
             <div class="overflow-x-auto">
@@ -38,13 +49,13 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question Set</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                         </tr>
                     </thead>
                     <tbody id="iterations-table-body" class="divide-y divide-gray-200">
-                        <!-- Rows will be inserted by JavaScript -->
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
         </div>
@@ -57,6 +68,7 @@
             const createTitle = document.getElementById('create-title');
             const createNote = document.getElementById('create-note');
             const newIterationNameInput = document.getElementById('new-iteration-name');
+            const questionSetSelect = document.getElementById('question-set-select');
             const createIterationButton = document.getElementById('create-iteration-button');
             const baseUrl = window.location.origin;
             let lastClosedIteration = null;
@@ -78,8 +90,19 @@
             }
 
             function getNextIterationName(iterations) {
+                // Handle the case where the database is completely empty
+                if (iterations.length === 0) {
+                    lastClosedIteration = null;
+                    return 'Iteration 1';
+                }
+
                 const closedIterations = iterations.filter(i => i.end_date);
-                if (closedIterations.length === 0) return 'Iteration 2';
+                
+                // Handle case where there are active iterations but none are closed yet
+                if (closedIterations.length === 0) {
+                    lastClosedIteration = null;
+                    return 'Iteration 2';
+                }
                 
                 const lastClosed = closedIterations.sort((a,b) => new Date(b.end_date) - new Date(a.end_date))[0];
                 lastClosedIteration = lastClosed;
@@ -103,25 +126,28 @@
                             const tr = document.createElement('tr');
                             const endDate = iter.end_date ? new Date(iter.end_date).toLocaleString() : 'N/A';
                             const isActive = !iter.end_date;
+                            const questionSetName = iter.question_set.replace('.json', '').replace(/_/g, ' ');
 
                             tr.innerHTML = `
                                 <td class="px-6 py-4 whitespace-nowrap">${iter.id}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">${iter.name}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">${new Date(iter.start_date).toLocaleString()}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">${endDate}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${questionSetName}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
                                         ${isActive ? 'Active' : 'Closed'}
                                     </span>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    ${isActive ? `<button data-id="${iter.id}" class="close-iteration-btn text-red-600 hover:text-red-900">Close</button>` : ''}
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    ${isActive ? `<a href="#" data-id="${iter.id}" class="close-iteration-btn text-indigo-600 hover:text-indigo-900">Close</a>` : ''}
+                                    <a href="#" data-id="${iter.id}" class="delete-iteration-btn text-red-600 hover:text-red-900 ml-4">Delete</a>
                                 </td>
                             `;
                             tableBody.appendChild(tr);
                         });
                     } else {
-                        tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-4">No iterations found.</td></tr>';
+                        tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-4">No iterations found.</td></tr>';
                     }
 
                     if (!activeIteration) {
@@ -140,23 +166,25 @@
                     }
 
                 } catch (error) {
-                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-red-500">Could not load iterations.</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="7" class="text-center p-4 text-red-500">Could not load iterations.</td></tr>';
                 }
             }
 
             createIterationButton.addEventListener('click', async () => {
                 const name = newIterationNameInput.value.trim();
+                const question_set = questionSetSelect.value;
                 if (!name) {
                     alert('Please enter a name for the iteration.');
                     return;
                 }
                 try {
+                    const body = { name, question_set };
                     if (lastClosedIteration) {
                         // Use the "next" endpoint to copy
-                        await apiRequest('/api/iterations/next', 'POST', { name });
+                        await apiRequest('/api/iterations/next', 'POST', body);
                     } else {
                         // Use the "create blank" endpoint
-                        await apiRequest('/api/iterations', 'POST', { name });
+                        await apiRequest('/api/iterations', 'POST', body);
                     }
                     newIterationNameInput.value = '';
                     await loadIterations();
@@ -166,6 +194,7 @@
             });
 
             tableBody.addEventListener('click', async (e) => {
+                e.preventDefault();
                 if (e.target.classList.contains('close-iteration-btn')) {
                     const id = e.target.dataset.id;
                     if (confirm(`Are you sure you want to close iteration ${id}? This action cannot be undone and will archive the current organizational chart.`)) {
@@ -177,6 +206,21 @@
                         }
                     }
                 }
+
+                if (e.target.classList.contains('delete-iteration-btn')) {
+                    const id = e.target.dataset.id;
+                    const iterName = e.target.closest('tr').children[1].textContent;
+                    const warningMessage = `EXTREME DANGER: Are you sure you want to delete iteration "${iterName}" (ID: ${id})?\n\nThis will permanently delete THIS iteration AND ALL iterations that came AFTER it, along with all of their associated organizational data (units, roles, surveys).\n\nThis action cannot be undone.`;
+
+                    if (confirm(warningMessage)) {
+                        try {
+                            await apiRequest(`/api/iterations/${id}`, 'DELETE');
+                            await loadIterations();
+                        } catch (error) {
+                            console.error("Failed to delete iteration(s)", error);
+                        }
+                    }
+                }
             });
 
             await loadIterations();
@@ -184,5 +228,3 @@
     </script>
 </body>
 </html>
-
-

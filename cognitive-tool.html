@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cognitive Space Visualization</title>
 
-    <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -46,7 +45,7 @@
             <button id="save-target-button" class="mt-2 w-full p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400">Save Target</button>
         </div>
         <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <label for="description-textarea" class="text-lg font-semibold text-gray-800">Description (for this Role)</label>
+            <label for="description-textarea" class="text-lg font-semibold text-gray-800">Description</label>
             <textarea id="description-textarea" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Your personal description for this role..."></textarea>
             <button id="save-description-button" class="mt-2 w-full p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Save Description</button>
         </div>
@@ -67,7 +66,7 @@
         </table>
     </div>
 
-    <p class="text-gray-600 text-center mb-8">Enter 120 values to compute the mean, mode, and visualize the data in 3D and 2D.</p>
+    <p id="survey-intro-text" class="text-gray-600 text-center mb-8">Enter values to compute the mean, mode, and visualize the data in 3D and 2D.</p>
 
     <div class="p-6 mb-8 bg-gray-50 rounded-lg border border-gray-200">
         <h2 class="text-2xl font-semibold mb-4 text-center">Survey Questions</h2>
@@ -123,11 +122,11 @@
         const baseUrl = window.location.origin;
         const urlParams = new URLSearchParams(window.location.search);
         const personRoleId = urlParams.get('personRoleId');
-        const iterationId = urlParams.get('iterationId'); // Get iterationId from URL
+        const iterationId = urlParams.get('iterationId'); 
         let personId; 
         let currentUserIsManager = false;
-        let isRootManager = false;
 
+        // --- DOM Element References ---
         const userContextDisplay = document.getElementById('user-context-display');
         const calculationSection = document.getElementById('calculation-section');
         const saveButton = document.getElementById('save-button');
@@ -150,10 +149,11 @@
         const statsSection = document.getElementById('stats-section');
         const statsTableBody = document.getElementById('stats-table-body');
         const iterationDisplay = document.getElementById('iteration-display');
+        const surveyIntroText = document.getElementById('survey-intro-text');
 
-
-        const NUM_QUESTIONS = 120;
-        const surveyValues = Array(NUM_QUESTIONS).fill(4);
+        // --- State Variables ---
+        let surveyValues = []; 
+        let questionStrings = []; 
         const voxelMap = new Map();
         let chartInstances = { knowledge: null, familiarity: null, cognitive: null };
         let avgChartInstances = { knowledge: null, familiarity: null, cognitive: null };
@@ -168,7 +168,8 @@
                 const response = await fetch('/api/active-iteration');
                 if (!response.ok) throw new Error((await response.json()).message);
                 const activeIteration = await response.json();
-                iterationDisplay.textContent = `Current Active Iteration: ${activeIteration.name} (ID: ${activeIteration.id})`;
+                const questionSetName = activeIteration.question_set.replace('.json', '').replace(/_/g, ' ');
+                iterationDisplay.innerHTML = `Active Iteration: <span class="font-bold">${activeIteration.name} (ID: ${activeIteration.id})</span> | Question Set: <span class="font-bold">${questionSetName}</span>`;
             } catch (error) {
                 iterationDisplay.textContent = `Error: ${error.message}`;
                 iterationDisplay.classList.remove('text-blue-600');
@@ -184,7 +185,6 @@
                     const user = await response.json();
                     
                     personId = user.personId;
-                    isRootManager = user.isRootManager;
                     currentUserIsManager = user.is_manager;
 
                     userContextDisplay.innerHTML = `<span class="font-semibold">User:</span> <span class="text-blue-600">${user.name}</span> | <span class="font-semibold">Role:</span> <span class="text-blue-600">${user.is_manager ? 'Manager' : 'Coworker'}</span> | <span class="font-semibold">Unit:</span> <span class="text-blue-600">${user.orgUnitName}</span>`;
@@ -195,8 +195,16 @@
                         loadAndDisplayStats();
                     }
                     descriptionTextarea.value = user.description || '';
-                    targetTextarea.readOnly = !isRootManager;
-                    saveTargetButton.disabled = !isRootManager;
+
+                    // New logic for enabling/disabling the Target textarea
+                    const isFirstIteration = (parseInt(iterationId, 10) === user.firstIterationId);
+                    const canEditTarget = user.isRootManager && isFirstIteration;
+
+                    targetTextarea.readOnly = !canEditTarget;
+                    saveTargetButton.disabled = !canEditTarget;
+                    if (!canEditTarget && isFirstIteration === false) {
+                        targetTextarea.placeholder = "The Target is locked after the first iteration.";
+                    }
 
                 } catch(error) {
                      userContextDisplay.innerHTML = `<span class="text-red-500">Could not load user context. App functions disabled.</span>`;
@@ -294,12 +302,17 @@
 
         async function loadInitialCoreData() {
             try {
-                const [voxelResponse, questionsResponse] = await Promise.all([ fetch(`${baseUrl}/api/voxel-data`), fetch(`${baseUrl}/api/questions`) ]);
+                if (!iterationId) throw new Error("Iteration ID is missing from URL.");
+                const [voxelResponse, questionsResponse] = await Promise.all([
+                    fetch(`${baseUrl}/api/voxel-data`),
+                    fetch(`${baseUrl}/api/questions/${iterationId}`)
+                ]);
                 if (!voxelResponse.ok || !questionsResponse.ok) throw new Error('Failed to fetch initial data.');
-                return { voxelCsvData: await voxelResponse.text(), questionStrings: await questionsResponse.json() };
+                const loadedQuestionStrings = await questionsResponse.json();
+                return { voxelCsvData: await voxelResponse.text(), questionStrings: loadedQuestionStrings };
             } catch (error) {
                 console.error("Failed to load initial data:", error);
-                document.body.innerHTML = `<div class="text-red-500 text-center p-8">Error: Could not load application data.</div>`;
+                document.body.innerHTML = `<div class="text-red-500 text-center p-8">Error: Could not load application data. ${error.message}</div>`;
                 return null;
             }
         }
@@ -430,11 +443,18 @@
             }
         }
         function updateAllVisuals() {
-            const knowledgeDensity = surveyValues.slice(0, 40), familiarity = surveyValues.slice(40, 80), cognitiveLoad = surveyValues.slice(80, 120);
+            const totalQuestions = surveyValues.length;
+            if (totalQuestions === 0) return;
+            
+            const questionsPerGroup = totalQuestions / 3;
+            const knowledgeDensity = surveyValues.slice(0, questionsPerGroup);
+            const familiarity = surveyValues.slice(questionsPerGroup, questionsPerGroup * 2);
+            const cognitiveLoad = surveyValues.slice(questionsPerGroup * 2, totalQuestions);
+
             const mean = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
             const meanX = mean(knowledgeDensity), meanY = mean(familiarity), meanZ = mean(cognitiveLoad);
             const roundedMeanX = Math.round(Math.min(Math.max(meanX, 1), 8)), roundedMeanY = Math.round(Math.min(Math.max(meanY, 1), 8)), roundedMeanZ = Math.round(Math.min(Math.max(meanZ, 1), 8));
-            const data = { timestamp: new Date().toISOString(), survey_results: surveyValues, analysis: { voxel: { mean: { x: +meanX.toFixed(2), y: +meanY.toFixed(2), z: +meanZ.toFixed(2) }, mode: { x: getMode(knowledgeDensity), y: getMode(familiarity), z: getMode(cognitiveLoad) }, roundedMean: { x: roundedMeanX, y: roundedMeanY, z: roundedMeanZ } }, graphs: { knowledge_density: { mean: +meanX.toFixed(2), distribution_data: getGaussianData(meanX, 1) }, familiarity: { mean: +meanY.toFixed(2), distribution_data: getGaussianData(meanY, 1) }, cognitive_load: { mean: +meanZ.toFixed(2), distribution_data: getGaussianData(meanZ, 1) } } } };
+            const data = { timestamp: new Date().toISOString(), survey_results: surveyValues, analysis: { voxel: { mean: { x: +meanX.toFixed(2), y: +meanY.toFixed(2), z: +meanZ.toFixed(2) }, mode: { x: getMode(knowledgeDensity.map(Math.round)), y: getMode(familiarity.map(Math.round)), z: getMode(cognitiveLoad.map(Math.round)) }, roundedMean: { x: roundedMeanX, y: roundedMeanY, z: roundedMeanZ } }, graphs: { knowledge_density: { mean: +meanX.toFixed(2), distribution_data: getGaussianData(meanX, 1) }, familiarity: { mean: +meanY.toFixed(2), distribution_data: getGaussianData(meanY, 1) }, cognitive_load: { mean: +meanZ.toFixed(2), distribution_data: getGaussianData(meanZ, 1) } } } };
             
             jsonOutput.value = JSON.stringify(data, null, 2);
             renderMainCharts(data.analysis.graphs);
@@ -447,7 +467,7 @@
              setTimeout(() => { messageArea.textContent = '' }, 4000);
         }
         function updateUIWithLoadedData(data) {
-            if (data.survey_results && Array.isArray(data.survey_results) && data.survey_results.length === NUM_QUESTIONS) {
+            if (data.survey_results && Array.isArray(data.survey_results) && data.survey_results.length === questionStrings.length) {
                 data.survey_results.forEach((v, i) => {
                     const val = Math.min(Math.max(v, 1), 8);
                     document.getElementById(`slider-${i + 1}`).value = val;
@@ -456,11 +476,14 @@
                 });
                 updateAllVisuals();
                 showMessage('Personal survey data loaded.');
-            } else { showMessage('Invalid survey data format.', 'red'); }
+            } else { showMessage('Saved survey data has a different number of questions. Resetting to default.', 'red'); }
         }
         
-        function setupEventListeners(initialData) {
-            const { questionStrings } = initialData;
+        function setupEventListeners(loadedCoreData) {
+            questionStrings = loadedCoreData.questionStrings;
+            surveyValues = Array(questionStrings.length).fill(4); 
+            surveyIntroText.textContent = `Enter ${questionStrings.length} values to compute the mean, mode, and visualize the data in 3D and 2D.`;
+
             questionStrings.forEach((qText, i) => {
                 const item = document.createElement('div');
                 item.className = 'slider-item';
@@ -597,12 +620,12 @@
         
         // --- INITIALIZATION ---
         await loadIterationContext();
-        await handleUserContext();
-        await loadAppData();
         const coreData = await loadInitialCoreData();
         if (coreData) {
-            setupEventListeners(coreData);
+            await handleUserContext(); // Must run after coreData to have iterationId, but before setupEventListeners
+            await loadAppData();
             parseVoxelData(coreData.voxelCsvData);
+            setupEventListeners(coreData);
             initVoxelScene('voxel-canvas', mainSceneState);
             initVoxelScene('avg-voxel-canvas', avgSceneState);
             await loadInitialSurveys();
@@ -613,5 +636,3 @@
 
 </body>
 </html>
-
-
