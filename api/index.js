@@ -1,5 +1,7 @@
+// Forcing a new deployment to read the latest environment variables
 const express = require('express');
 const path = require('path');
+// ... rest of the file is the same
 const { Pool } = require('pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
