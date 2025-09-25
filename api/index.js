@@ -8,25 +8,17 @@ const app = express();
 
 // --- DATABASE CONNECTION ---
 // Using a direct connection string is more reliable for serverless environments.
+// The problematic pool.connect() block has been removed.
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-});
-
-pool.connect((err, client, release) => {
-    if (err) return console.error('DATABASE CONNECTION FAILED:', err.stack);
-    client.query('SELECT NOW()', (err, result) => {
-        release();
-        if (err) return console.error('Error executing connection test query:', err.stack);
-        console.log('Database connection successful. Current time from DB:', result.rows[0].now);
-    });
 });
 
 // --- GOOGLE AI SETUP ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
-// Corrected path to the data directory inside the 'public' folder
-const dataDir = path.join(process.cwd(), 'public', 'data');
+// The path to the data directory is no longer needed in this file
+// as Vercel serves the public folder directly.
 app.use(express.json({ limit: '10mb' }));
 
 
@@ -664,8 +656,10 @@ app.put('/api/role-description', async (req, res) => {
     }
 });
 
-// These endpoints still need to read from the data directory
-app.get('/api/voxel-data', (req, res) => res.sendFile(path.join(dataDir, 'voxel_data.csv')));
+// The endpoints that serve static files from the /data directory are no longer needed,
+// as Vercel will serve them directly from the /public/data directory.
+// For example, a request to /data/voxel_data.csv will be served by Vercel.
+// We are keeping the /api/questions/:iterationId endpoint as it contains logic.
 app.get('/api/questions/:iterationId', async (req, res) => {
     try {
         const { iterationId } = req.params;
@@ -686,13 +680,10 @@ app.get('/api/questions/:iterationId', async (req, res) => {
             return res.status(403).json({ message: 'Invalid or forbidden question set.' });
         }
 
-        const filePath = path.join(dataDir, filename);
-        res.sendFile(filePath, (err) => {
-            if (err) {
-                console.error(`Error sending file ${filePath}:`, err);
-                res.status(404).json({ message: 'Question file not found on server.' });
-            }
-        });
+        // Vercel copies the entire project structure, so we can read from the file system.
+        const filePath = path.join(process.cwd(), 'public', 'data', filename);
+        
+        return res.sendFile(filePath);
 
     } catch (error) {
         console.error('Error fetching questions:', error);
