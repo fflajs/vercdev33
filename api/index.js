@@ -3,6 +3,20 @@ const path = require('path');
 const { Pool } = require('pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+// --- START DEBUG LOGGING ---
+console.log('--- VERCEL ENVIRONMENT DEBUG ---');
+console.log('Is DATABASE_URL set:', !!process.env.DATABASE_URL);
+if (process.env.DATABASE_URL) {
+    // Safely log the host without showing the password
+    try {
+        const dbUrl = new URL(process.env.DATABASE_URL);
+        console.log('DATABASE_URL host:', dbUrl.hostname);
+    } catch (e) {
+        console.log('Could not parse DATABASE_URL');
+    }
+}
+// --- END DEBUG LOGGING ---
+
 const app = express();
 
 // --- DATABASE CONNECTION ---
@@ -16,8 +30,10 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
 app.use(express.json({ limit: '10mb' }));
 
-// --- API ENDPOINTS ---
+
+// --- ALL API ENDPOINTS ARE DEFINED FIRST ---
 app.get('/api/all-tables-data', async (req, res) => {
+    console.log('Entering /api/all-tables-data endpoint...'); // Added for debugging
     try {
         const queries = {
             iterations: pool.query('SELECT * FROM iterations ORDER BY id'),
@@ -27,8 +43,10 @@ app.get('/api/all-tables-data', async (req, res) => {
             surveys: pool.query('SELECT * FROM surveys ORDER BY id'),
             app_data: pool.query('SELECT * FROM app_data ORDER BY key')
         };
+
         const results = await Promise.all(Object.values(queries));
         const [iterationsResult, orgUnitsResult, peopleResult, rolesResult, surveysResult, appDataResult] = results;
+
         res.json({
             iterations: iterationsResult.rows,
             organization_units: orgUnitsResult.rows,
@@ -37,27 +55,15 @@ app.get('/api/all-tables-data', async (req, res) => {
             surveys: surveysResult.rows,
             app_data: appDataResult.rows
         });
+
     } catch (error) {
         console.error('Error fetching all table data:', error);
         res.status(500).json({ message: 'Error fetching all table data.' });
     }
 });
 
-app.get('/api/active-iteration', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, name, start_date, end_date, question_set FROM iterations WHERE end_date IS NULL LIMIT 1');
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'No active iteration found.' });
-        }
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error fetching active iteration:', error);
-        res.status(500).json({ message: 'Error fetching active iteration.' });
-    }
-});
-
 // ... the rest of your API endpoints remain the same ...
-// (The full file content is omitted here for brevity, only the top part needs to change)
+// (The full file content is omitted here for brevity)
 
 
 // --- MODULE EXPORT FOR VERCEL ---
