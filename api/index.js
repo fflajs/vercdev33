@@ -7,12 +7,19 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const app = express();
 
 // --- DATABASE CONNECTION ---
+// Updated Pool configuration for serverless environments
 const pool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
     database: process.env.DB_DATABASE,
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT,
+    ssl: {
+        rejectUnauthorized: false
+    },
+    max: 10, // Set a maximum of 10 connections
+    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+    connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
 });
 
 pool.connect((err, client, release) => {
@@ -28,7 +35,6 @@ pool.connect((err, client, release) => {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
-// Corrected path to the data directory inside the 'public' folder
 const dataDir = path.join(process.cwd(), 'public', 'data');
 app.use(express.json({ limit: '10mb' }));
 
