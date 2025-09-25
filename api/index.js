@@ -5,7 +5,7 @@ const { Pool } = require('pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
-const port = process.env.PORT || 3000;
+// Vercel sets the port, so we don't need the 'port' variable anymore.
 
 // --- DATABASE CONNECTION ---
 const pool = new Pool({
@@ -30,7 +30,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
 
-const dataDir = path.join(__dirname, 'data');
+const dataDir = path.join(__dirname, '..', 'data'); // Adjusted path for Vercel
 app.use(express.json({ limit: '10mb' }));
 
 
@@ -101,7 +101,7 @@ app.post('/api/iterations', async (req, res) => {
             ? 'INSERT INTO iterations(name, question_set) VALUES($1, $2) RETURNING *'
             : 'INSERT INTO iterations(name) VALUES($1) RETURNING *';
         const values = question_set ? [name, question_set] : [name];
-        
+
         const result = await pool.query(query, values);
         res.status(201).json(result.rows[0]);
     } catch (error) {
@@ -150,7 +150,7 @@ app.post('/api/iterations/next', async (req, res) => {
                 await copyUnitsRecursive(child.id, newUnitId);
             }
         };
-        
+
         await copyUnitsRecursive(null, null);
 
         const oldRoles = await client.query('SELECT * FROM person_roles WHERE iteration_id = $1', [sourceIterationId]);
@@ -196,7 +196,7 @@ app.delete('/api/iterations/:id', async (req, res) => {
 
     try {
         await client.query('BEGIN');
-        
+
         const minIdResult = await client.query('SELECT MIN(id) as min_id FROM iterations');
         const isDeletingFirstIteration = minIdResult.rows.length > 0 && minIdResult.rows[0].min_id === targetId;
 
@@ -245,7 +245,7 @@ app.get('/api/aggregate-texts', async (req, res) => {
         let aggregatedText = "--- ORGANIZATIONAL TARGET ---\n";
         aggregatedText += (targetResult.rows.length > 0 ? targetResult.rows[0].value : "Not defined.") + "\n\n";
         aggregatedText += "--- AGGREGATED ROLE DESCRIPTIONS ---\n";
-        
+
         if (descriptionsResult.rows.length > 0) {
             descriptionsResult.rows.forEach(row => {
                 aggregatedText += `- ${row.description}\n`;
@@ -274,7 +274,7 @@ app.post('/api/analyze-text', async (req, res) => {
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const analysis = response.text();
-        
+
         res.json({ analysis });
 
     } catch (error) {
@@ -283,7 +283,7 @@ app.post('/api/analyze-text', async (req, res) => {
     }
 });
 
-// --- (The rest of the file remains the same) ---
+// --- REGULAR APP ENDPOINTS ---
 app.post('/api/check-person', async (req, res) => {
     try {
         const { name } = req.body;
@@ -357,7 +357,7 @@ app.get('/api/organization-stats/:personRoleId', async (req, res) => {
         if (managerCheck.rows.length === 0 || !managerCheck.rows[0].is_manager) {
             return res.status(403).json({ message: 'Permission denied.' });
         }
-        
+
         const activeIterationResult = await pool.query('SELECT id FROM iterations WHERE end_date IS NULL LIMIT 1');
         if (activeIterationResult.rows.length === 0) {
             return res.json({ targetEntered: 0, totalRoles: 0, descriptionsEntered: 0, cognitiveDataEntered: 0, totalUnits: 0, calculatedUnits: 0 });
@@ -384,7 +384,7 @@ app.get('/api/organization-stats/:personRoleId', async (req, res) => {
             totalUnits: parseInt(totalUnitsResult.rows[0].count, 10),
             calculatedUnits: parseInt(calculatedUnitsResult.rows[0].count, 10)
         };
-        
+
         res.json(stats);
 
     } catch (error) {
@@ -396,10 +396,10 @@ app.get('/api/organization-stats/:personRoleId', async (req, res) => {
 app.post('/api/saved-files', async (req, res) => {
     try {
         const { survey_results, analysis, personRoleId, orgUnitId, iterationId } = req.body;
-        
+
         const roleResult = await pool.query('SELECT p.name, pr.is_manager FROM person_roles pr JOIN people p ON pr.person_id = p.id WHERE pr.id = $1', [personRoleId]);
         if (roleResult.rows.length === 0) return res.status(404).json({ message: "User role not found." });
-        
+
         const { name, is_manager } = roleResult.rows[0];
         const role = is_manager ? 'manager' : 'coworker';
         const filename = `cognitive_data_${orgUnitId}_${name}_${role}.json`;
@@ -417,7 +417,7 @@ app.post('/api/saved-files', async (req, res) => {
                 iteration_id = EXCLUDED.iteration_id;
         `;
         const values = [personRoleId, filename, JSON.stringify(survey_results), JSON.stringify(analysis.voxel), JSON.stringify(analysis.graphs), orgUnitId, iterationId];
-        
+
         await pool.query(query, values);
         res.status(201).json({ message: 'Survey saved successfully', filename });
     } catch (error) { 
@@ -429,12 +429,12 @@ app.post('/api/saved-files', async (req, res) => {
 app.post('/api/calculate', async (req, res) => {
     try {
         const { personRoleId, orgUnitId, iterationId } = req.body;
-        
+
         const userResult = await pool.query('SELECT * FROM person_roles WHERE id = $1', [personRoleId]);
         if (userResult.rows.length === 0 || !userResult.rows[0].is_manager) {
             return res.status(403).json({ message: 'Permission denied: Only managers can perform calculations.' });
         }
-        
+
         const subordinateDataQuery = `
             WITH RECURSIVE subordinate_units AS (
                 SELECT id FROM organization_units WHERE id = $1 AND iteration_id = $2
@@ -444,18 +444,18 @@ app.post('/api/calculate', async (req, res) => {
             SELECT filename, survey_results, analysis_voxel FROM surveys
             WHERE org_unit_id IN (SELECT id FROM subordinate_units) AND survey_type = 'individual' AND iteration_id = $2;
         `;
-        
+
         const sourceSurveysResult = await pool.query(subordinateDataQuery, [orgUnitId, iterationId]);
         if (sourceSurveysResult.rows.length === 0) {
             return res.status(404).json({ message: 'No individual surveys found in this unit or its subordinates to calculate.' });
         }
-        
+
         const allSurveyResults = sourceSurveysResult.rows.map(row => row.survey_results);
         const sourceFilesData = sourceSurveysResult.rows.map(row => ({
             filename: row.filename,
             data: { analysis: { voxel: row.analysis_voxel } }
         }));
-        
+
         const numFiles = allSurveyResults.length;
         const totalQuestions = allSurveyResults[0].length; 
         const questionsPerGroup = totalQuestions / 3;
@@ -464,17 +464,17 @@ app.post('/api/calculate', async (req, res) => {
         for (const resultSet of allSurveyResults) {
             for (let i = 0; i < totalQuestions; i++) { averagedSurveyResults[i] += resultSet[i] / numFiles; }
         }
-        
+
         const getMode = (arr) => { if (!arr || arr.length === 0) return null; const counts = {}; let maxCount = 0, mode = null; for (const value of arr) { counts[value] = (counts[value] || 0) + 1; if (counts[value] > maxCount) { maxCount = counts[value]; mode = value; } } return mode; };
         const getGaussianData = (mean, stdDev = 1) => { const gaussian = (x, m, s) => Math.exp(-0.5 * Math.pow((x - m) / s, 2)) / (s * Math.sqrt(2 * Math.PI)); return Array.from({length: 71}, (_, i) => parseFloat(gaussian(1 + i * 0.1, mean, stdDev).toFixed(4))); };
-        
+
         const knowledgeAvg = averagedSurveyResults.slice(0, questionsPerGroup).reduce((a, b) => a + b, 0) / questionsPerGroup;
         const familiarityAvg = averagedSurveyResults.slice(questionsPerGroup, questionsPerGroup * 2).reduce((a, b) => a + b, 0) / questionsPerGroup;
         const cognitiveLoadAvg = averagedSurveyResults.slice(questionsPerGroup * 2, totalQuestions).reduce((a, b) => a + b, 0) / questionsPerGroup;
 
         const averagedData = { timestamp: new Date().toISOString(), survey_results: averagedSurveyResults.map(v => Math.ceil(v)), analysis: { voxel: { mean: { x: +knowledgeAvg.toFixed(2), y: +familiarityAvg.toFixed(2), z: +cognitiveLoadAvg.toFixed(2) }, mode: { x: getMode(averagedSurveyResults.slice(0, questionsPerGroup).map(Math.round)), y: getMode(averagedSurveyResults.slice(questionsPerGroup, questionsPerGroup * 2).map(Math.round)), z: getMode(averagedSurveyResults.slice(questionsPerGroup * 2, totalQuestions).map(Math.round)) }, roundedMean: { x: Math.round(Math.min(Math.max(knowledgeAvg, 1), 8)), y: Math.round(Math.min(Math.max(familiarityAvg, 1), 8)), z: Math.round(Math.min(Math.max(cognitiveLoadAvg, 1), 8)) } }, graphs: { knowledge_density: { mean: +knowledgeAvg.toFixed(2), distribution_data: getGaussianData(knowledgeAvg) }, familiarity: { mean: +familiarityAvg.toFixed(2), distribution_data: getGaussianData(familiarityAvg) }, cognitive_load: { mean: +cognitiveLoadAvg.toFixed(2), distribution_data: getGaussianData(cognitiveLoadAvg) } } } };
         const newFilename = `calc_${orgUnitId}.json`;
-        
+
         const insertQuery = `
             INSERT INTO surveys (org_unit_id, survey_type, filename, survey_results, analysis_voxel, analysis_graphs, iteration_id)
             VALUES ($1, 'calculated', $2, $3, $4, $5, $6)
@@ -541,7 +541,7 @@ app.post('/api/people', async (req, res) => {
         const result = await pool.query('INSERT INTO people(name) VALUES($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING *', [name]);
         res.status(201).json(result.rows[0]);
     } catch(e){ 
-        console.error('Error in POST /api/people:', e); // Added logging
+        console.error('Error in POST /api/people:', e);
         res.status(500).json({ message: 'Error creating person.' }); 
     }
 });
@@ -582,7 +582,7 @@ app.get('/api/person-context/:personRoleId', async (req, res) => {
         `;
         const result = await pool.query(query, [personRoleId]);
         if (result.rows.length === 0) return res.status(404).json({ message: 'Person role not found.' });
-        
+
         const user = result.rows[0];
         user.isRootManager = user.isRootUnit && user.is_manager;
         res.json(user);
@@ -682,7 +682,7 @@ app.get('/api/questions/:iterationId', async (req, res) => {
         }
 
         const filename = result.rows[0].question_set;
-        
+
         const allowedFiles = ['Deep_Analysis_120.json', 'Normal_Analysis_60.json', 'Pulse_Check_12.json'];
         if (!allowedFiles.includes(filename)) {
             console.error(`Forbidden file access attempt: ${filename}`);
@@ -704,10 +704,26 @@ app.get('/api/questions/:iterationId', async (req, res) => {
 });
 
 
-// --- SERVE STATIC FILES LAST (Correct Position) ---
-app.use(express.static(path.join(__dirname)));
-
-
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+// --- SERVE STATIC FILES (Express way, for reference, but Vercel handles this) ---
+// Note: Vercel serves files from the root automatically. This code block is for
+// completeness but might not be strictly necessary depending on final config.
+const staticDir = path.join(__dirname, '..');
+app.use(express.static(staticDir));
+app.get('*', (req, res) => {
+    // This is a catch-all for any request that doesn't match an API route.
+    // It helps with client-side routing if you were using a framework like React.
+    // For your simple HTML files, Vercel's default behavior is often enough.
+    // We check if the requested path corresponds to one of our known HTML files.
+    const knownHtmlFiles = ['index.html', 'admin.html', 'login.html', 'register.html', 'portal.html', 'cognitive-tool.html', 'iteration-manager.html', 'org-chart.html', 'table-viewer.html', 'analysis.html'];
+    const requestedFile = req.path.substring(1); // remove leading '/'
+    if (knownHtmlFiles.includes(requestedFile)) {
+         res.sendFile(path.join(staticDir, requestedFile));
+    } else {
+         // Let Vercel handle 404s for unknown files
+         res.status(404).send('Not Found');
+    }
 });
+
+
+// --- MODULE EXPORT FOR VERCEL ---
+module.exports = app;
