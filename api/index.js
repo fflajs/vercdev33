@@ -7,9 +7,6 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // --- START DEBUG LOGGING ---
 console.log('--- VERCEL ENVIRONMENT DEBUG ---');
-console.log('Is FLA:', process.env.FLA);
-console.log('Is DB_PORT:', process.env.DB_PORT);
-console.log('Is DB_USER:', process.env.DB_USER);
 console.log('Is DATABASE_URL set:', !!process.env.DATABASE_URL);
 if (process.env.DATABASE_URL) {
     // Safely log the host without showing the password
