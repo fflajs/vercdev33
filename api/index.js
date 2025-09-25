@@ -5,7 +5,6 @@ const { Pool } = require('pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
-// Vercel sets the port, so we don't need the 'port' variable anymore.
 
 // --- DATABASE CONNECTION ---
 const pool = new Pool({
@@ -29,8 +28,8 @@ pool.connect((err, client, release) => {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
-
-const dataDir = path.join(__dirname, '..', 'data'); // Adjusted path for Vercel
+// Corrected path to the data directory inside the 'public' folder
+const dataDir = path.join(process.cwd(), 'public', 'data');
 app.use(express.json({ limit: '10mb' }));
 
 
@@ -228,7 +227,7 @@ app.delete('/api/iterations/:id', async (req, res) => {
     }
 });
 
-// --- NEW ENDPOINTS FOR TEXT ANALYSIS ---
+// --- TEXT ANALYSIS ENDPOINTS ---
 app.get('/api/aggregate-texts', async (req, res) => {
     try {
         const activeIterationResult = await pool.query('SELECT id FROM iterations WHERE end_date IS NULL LIMIT 1');
@@ -552,6 +551,7 @@ app.post('/api/roles', async (req, res) => {
         const result = await pool.query('INSERT INTO person_roles(person_id, org_unit_id, is_manager, iteration_id) VALUES($1, $2, $3, $4) RETURNING *', [personId, orgUnitId, isManager, iterationId]);
         res.status(201).json(result.rows[0]);
     } catch (error) {
+        console.error('Error in POST /api/roles:', error);
         if (error.code === '23505') return res.status(409).json({ message: 'Error: This person already has this exact role in this unit for this iteration.' });
         res.status(500).json({ message: 'Error adding role.' });
     }
@@ -667,8 +667,8 @@ app.put('/api/role-description', async (req, res) => {
     }
 });
 
+// These endpoints still need to read from the data directory
 app.get('/api/voxel-data', (req, res) => res.sendFile(path.join(dataDir, 'voxel_data.csv')));
-
 app.get('/api/questions/:iterationId', async (req, res) => {
     try {
         const { iterationId } = req.params;
@@ -700,27 +700,6 @@ app.get('/api/questions/:iterationId', async (req, res) => {
     } catch (error) {
         console.error('Error fetching questions:', error);
         res.status(500).json({ message: 'Error fetching questions.' });
-    }
-});
-
-
-// --- SERVE STATIC FILES (Express way, for reference, but Vercel handles this) ---
-// Note: Vercel serves files from the root automatically. This code block is for
-// completeness but might not be strictly necessary depending on final config.
-const staticDir = path.join(__dirname, '..');
-app.use(express.static(staticDir));
-app.get('*', (req, res) => {
-    // This is a catch-all for any request that doesn't match an API route.
-    // It helps with client-side routing if you were using a framework like React.
-    // For your simple HTML files, Vercel's default behavior is often enough.
-    // We check if the requested path corresponds to one of our known HTML files.
-    const knownHtmlFiles = ['index.html', 'admin.html', 'login.html', 'register.html', 'portal.html', 'cognitive-tool.html', 'iteration-manager.html', 'org-chart.html', 'table-viewer.html', 'analysis.html'];
-    const requestedFile = req.path.substring(1); // remove leading '/'
-    if (knownHtmlFiles.includes(requestedFile)) {
-         res.sendFile(path.join(staticDir, requestedFile));
-    } else {
-         // Let Vercel handle 404s for unknown files
-         res.status(404).send('Not Found');
     }
 });
 
