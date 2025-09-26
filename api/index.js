@@ -74,8 +74,15 @@ const poolff = new Pool({
   }
 });
 
-const result = await poolff.query('SELECT 1');
-res.json({ success: true, result: result.rows });
+app.get('/api/db-test', async (req, res) => {
+  try {
+    const result = await poolff.query('SELECT 1');
+    res.json({ success: true, result: result.rows });
+  } catch (err) {
+    console.error('DB test failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // --- MODULE EXPORT FOR VERCEL ---
 // Problem with environment variables un Vercel
