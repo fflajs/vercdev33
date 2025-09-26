@@ -1,4 +1,5 @@
 // Forcing a redeploy to use the latest environment variables
+// Forcing a redeploy to use the latest environment variables
 const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
@@ -81,7 +82,7 @@ router.get('/all-tables-data', async (req, res) => {
 });
 
 // ✅ Mount router at /api to match Vercel rewrite
-app.use('/api', router);
+app.use('/', router);
 
 // --- MODULE EXPORT FOR VERCEL ---
 module.exports = serverless(app);
