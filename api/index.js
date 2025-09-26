@@ -7,7 +7,7 @@ console.log('Is DATABASE_URL set:', !!process.env.DATABASE_URL);
 
 if (process.env.DATABASE_URL) {
 // Define a simple route
-app.get('/api/people', (req, res) => {
+app.get('/', (req, res) => {
   res.send('Hello, Vercel!');
 });
 
