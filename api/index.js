@@ -1,3 +1,4 @@
+// Triggering redeploy to refresh routing and env vars
 // Forcing a new deployment to read the latest environment variables
 const express = require('express');
 const path = require('path');
@@ -76,6 +77,7 @@ const supabase = createClient(
 );
 
 app.get('/api/db-test', async (req, res) => {
+  console.log('Entering /api/db-test endpoint. Connect string is HARDCODED...'); // Added for debugging
   const { data, error } = await supabase.from('people').select('*');
   if (error) {
     console.error('Supabase error:', error);
