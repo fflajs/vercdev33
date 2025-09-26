@@ -1,8 +1,9 @@
 {
   "rewrites": [
     {
-      "source": "/api/(.*)",
+      "source": "/api/db-test",
       "destination": "/api/index.js"
     }
   ]
 }
+
