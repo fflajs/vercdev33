@@ -1,17 +1,17 @@
-// ff
 const express = require('express');
+const serverless = require('serverless-http');
+
 const app = express();
 
-// --- START DEBUG LOGGING ---
-console.log('--- VERCEL ENVIRONMENT DEBUG ---');
-console.log('Is DATABASE_URL set:', !!process.env.DATABASE_URL);
-
-if (process.env.DATABASE_URL) {
-// Define a simple route
-app.get('/', (req, res) => {
-  res.send('Hello, Vercel!');
+app.use((req, res, next) => {
+  console.log(`✅ Received request: ${req.method} ${req.originalUrl}`);
+  next();
 });
 
-// Export the app as a serverless function
-module.exports = app;
+app.get('/', (req, res) => {
+  console.log('✅ Root route hit');
+  res.json({ message: 'Minimal route working!' });
+});
+
+module.exports = serverless(app);
 
