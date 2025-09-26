@@ -36,8 +36,8 @@ app.use(express.json({ limit: '10mb' }));
 
 
 // --- ALL API ENDPOINTS ARE DEFINED FIRST ---
-app.get('/api/all-tables-data', async (req, res) => {
-    console.log('Entering /api/all-tables-data endpoint...'); // Added for debugging
+app.get('/all-tables-data', async (req, res) => {
+    console.log('Entering /all-tables-data endpoint...'); // Added for debugging
     try {
         const queries = {
             iterations: pool.query('SELECT * FROM iterations ORDER BY id'),
@@ -95,7 +95,7 @@ const supabase = createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0ZmVjYnF0ZWFqd3RjbXF1ZHBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3Mjc0MzksImV4cCI6MjA3NDMwMzQzOX0.tY8R92LdJuGMDI3kVA2nN3ALugSRP3LJKCMBuVm7vRY'
 );
 
-app.get('/api/db-test', async (req, res) => {
+app.get('/db-test', async (req, res) => {
   const { data, error } = await supabase.from('people').select('*');
   if (error) {
     console.error('Supabase error:', error);
