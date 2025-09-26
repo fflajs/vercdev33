@@ -1,4 +1,3 @@
-// Triggering redeploy to refresh routing and env vars
 const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
@@ -22,9 +21,9 @@ if (process.env.DATABASE_URL) {
 const app = express();
 const router = express.Router();
 
-// ✅ Log every incoming request
+// ✅ Log every incoming request with full path
 app.use((req, res, next) => {
-  console.log(`✅ Received request: ${req.method} ${req.url}`);
+  console.log(`✅ Received request: ${req.method} ${req.originalUrl}`);
   next();
 });
 
@@ -78,6 +77,12 @@ router.get('/all-tables-data', async (req, res) => {
     console.error('Error fetching all table data:', error);
     res.status(500).json({ message: 'Error fetching all table data.' });
   }
+});
+
+// ✅ Catch-all route to confirm root execution
+router.get('/', (req, res) => {
+  console.log('✅ Root route executed');
+  res.json({ message: 'Root route is working!' });
 });
 
 // ✅ Mount router at root
