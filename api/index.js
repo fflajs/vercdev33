@@ -67,7 +67,7 @@ app.get('/api/all-tables-data', async (req, res) => {
 // ... the rest of your API endpoints remain the same ...
 // (The full file content is omitted here for brevity)
 
-const { Pool } = require('pg');
+// const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: 'postgresql://postgres.dtfecbqteajwtcmqudpd:Vener99.Vener99@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require'
