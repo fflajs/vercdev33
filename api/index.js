@@ -68,7 +68,7 @@ app.get('/api/all-tables-data', async (req, res) => {
 // (The full file content is omitted here for brevity)
 
 const poolff = new Pool({
-  connectionString: 'postgresql://postgres.dtfecbqteajwtcmqudpd:Vener99.Vener99@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require'
+  connectionString: 'postgresql://postgres.dtfecbqteajwtcmqudpd:Vener99.Vener99@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require',
   ssl: {
     rejectUnauthorized: false
   }
