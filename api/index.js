@@ -22,6 +22,11 @@ if (process.env.DATABASE_URL) {
 // --- END DEBUG LOGGING ---
 
 const app = express();
+// ✅ Log every incoming request
+app.use((req, res, next) => {
+  console.log(`✅ Received request: ${req.method} ${req.url}`);
+  next();
+});
 
 // --- DATABASE CONNECTION ---
 const pool = new Pool({
@@ -95,15 +100,19 @@ const supabase = createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0ZmVjYnF0ZWFqd3RjbXF1ZHBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3Mjc0MzksImV4cCI6MjA3NDMwMzQzOX0.tY8R92LdJuGMDI3kVA2nN3ALugSRP3LJKCMBuVm7vRY'
 );
 
-app.get('/db-test', async (req, res) => {
-  const { data, error } = await supabase.from('people').select('*');
-  if (error) {
-    console.error('Supabase error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-  res.json({ data });
-});
+//app.get('/db-test', async (req, res) => {
+//  const { data, error } = await supabase.from('people').select('*');
+//  if (error) {
+//    console.error('Supabase error:', error);
+//    return res.status(500).json({ error: error.message });
+//  }
+//  res.json({ data });
+//});
 
+app.get('/db-test', async (req, res) => {
+  console.log('✅ /db-test route is executing');
+  res.json({ message: 'Hello from Vercel!' });
+});
 // --- MODULE EXPORT FOR VERCEL ---
 // Problem with environment variables un Vercel
 // module.exports = app;
