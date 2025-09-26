@@ -67,21 +67,21 @@ app.get('/api/all-tables-data', async (req, res) => {
 // ... the rest of your API endpoints remain the same ...
 // (The full file content is omitted here for brevity)
 
-const poolff = new Pool({
-  connectionString: 'postgresql://postgres.dtfecbqteajwtcmqudpd:Vener99.Vener99@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require',
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
+// ########################################################
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  'https://dtfecbqteajwtcmqudpd.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0ZmVjYnF0ZWFqd3RjbXF1ZHBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3Mjc0MzksImV4cCI6MjA3NDMwMzQzOX0.tY8R92LdJuGMDI3kVA2nN3ALugSRP3LJKCMBuVm7vRY'
+);
 
 app.get('/api/db-test', async (req, res) => {
-  try {
-    const result = await poolff.query('SELECT 1');
-    res.json({ success: true, result: result.rows });
-  } catch (err) {
-    console.error('DB test failed:', err);
-    res.status(500).json({ success: false, error: err.message });
+  const { data, error } = await supabase.from('people').select('*');
+  if (error) {
+    console.error('Supabase error:', error);
+    return res.status(500).json({ error: error.message });
   }
+  res.json({ data });
 });
 
 // --- MODULE EXPORT FOR VERCEL ---
