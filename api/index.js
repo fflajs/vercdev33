@@ -1,4 +1,4 @@
-// ff
+// Forcing a redeploy to use the latest environment variables
 const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
@@ -80,14 +80,8 @@ router.get('/all-tables-data', async (req, res) => {
   }
 });
 
-// ✅ Catch-all route to confirm root execution
-router.get('/', (req, res) => {
-  console.log('✅ Root route executed');
-  res.json({ message: 'Root route is working!' });
-});
-
-// ✅ Mount router at root
-app.use('/', router);
+// ✅ Mount router at /api to match Vercel rewrite
+app.use('/api', router);
 
 // --- MODULE EXPORT FOR VERCEL ---
 module.exports = serverless(app);
