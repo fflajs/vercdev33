@@ -67,6 +67,21 @@ app.get('/api/all-tables-data', async (req, res) => {
 // ... the rest of your API endpoints remain the same ...
 // (The full file content is omitted here for brevity)
 
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  connectionString: 'postgresql://postgres.dtfecbqteajwtcmqudpd:Vener99.Vener99@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require'
+});
+
+app.get('/api/db-test', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT 1');
+    res.json({ success: true, result: result.rows });
+  } catch (err) {
+    console.error('DB test failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // --- MODULE EXPORT FOR VERCEL ---
 // Problem with environment variables un Vercel
