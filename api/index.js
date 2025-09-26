@@ -69,4 +69,7 @@ app.get('/api/all-tables-data', async (req, res) => {
 
 
 // --- MODULE EXPORT FOR VERCEL ---
-module.exports = app;
+// Problem with environment variables un Vercel
+// module.exports = app;
+const serverless = require('serverless-http');
+module.exports = serverless(app);
