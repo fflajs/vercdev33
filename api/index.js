@@ -82,7 +82,7 @@ router.get('/all-tables-data', async (req, res) => {
 });
 
 // ✅ Mount router at /api to match Vercel rewrite
-app.use('/', router);
+app.use('/api', router);
 
 // --- MODULE EXPORT FOR VERCEL ---
 module.exports = serverless(app);
