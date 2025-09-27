@@ -7,10 +7,10 @@
   <h1>Frontend Page</h1>
   <script>
     console.log("👋 Hello from browser console");
-    fetch('/api/index')
+    fetch('/api/index/')
       .then(res => res.json())
-      .then(data => console.log("📦 API response:", data));
+      .then(data => console.log("📦 API response:", data))
+      .catch(err => console.error("❌ API error:", err));
   </script>
 </body>
 </html>
-
