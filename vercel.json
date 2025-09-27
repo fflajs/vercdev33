@@ -1,7 +1,16 @@
-"functions": {
-  "api/*.js": {
-    "runtime": "nodejs@20.x",
-    "maxDuration": 300
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "functions": {
+    "api/*.js": {
+      "runtime": "nodejs@20.x",
+      "maxDuration": 300
+    }
   }
 }
 
