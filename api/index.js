@@ -1,5 +1,6 @@
 // api/index.js
 
+// ff
 // Correct runtime declaration
 export const config = {
   runtime: 'nodejs',
@@ -17,6 +18,7 @@ export default function handler(req, res) {
     message: 'Hello from Vercel!',
     flaExists,
     flaValue,
+    vercelEnv: process.env.VERCEL_ENV // shows "production" or "preview"
   });
 }
 
