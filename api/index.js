@@ -699,5 +699,13 @@ app.get('/api/questions/:iterationId', async (req, res) => {
     }
 });
 
-// This is the one line that Vercel needs to run the Express app
-module.exports = app;
+//ff // This is the one line that Vercel needs to run the Express app
+//ff module.exports = app;
+// ✅ Keep all your existing middleware, routes, etc. above this line
+
+// Wrap Express with serverless-http for Vercel
+const serverless = require("serverless-http");
+
+// Instead of `module.exports = app;`
+module.exports = serverless(app);
+
