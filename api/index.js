@@ -1,26 +1,15 @@
-const express = require('express');
-const serverless = require('serverless-http');
+import express from 'express';
+import { createServer } from 'http';
+import { parse } from 'url';
 
 const app = express();
-app.use(express.json());
 
-// ✅ Log incoming requests
-app.use((req, res, next) => {
-  console.log(`✅ Received request: ${req.method} ${req.originalUrl}`);
-  next();
+app.get('/', (req, res) => {
+  console.log("✅ Express route hit"); // Vercel logs
+  res.sendFile('index.html', { root: 'public' });
 });
 
-// ✅ Minimal POST route for /people
-app.post('/people', (req, res) => {
-  console.log('✅ /people POST route hit');
-  res.json({ message: 'People endpoint received your POST!' });
-});
-
-// ✅ Minimal GET route for testing
-app.get('/db-test', (req, res) => {
-  console.log('✅ /db-test route hit');
-  res.json({ message: 'Minimal route working!' });
-});
-
-module.exports = serverless(app);
-
+export default async function handler(req, res) {
+  const parsedUrl = parse(req.url, true);
+  await app(req, res);
+}
