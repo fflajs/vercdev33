@@ -1,17 +1,22 @@
 // api/index.js
+import express from 'express';
+import serverless from 'serverless-http';
 
-export default function handler(req, res) {
+const app = express();
+
+app.get('/', (req, res) => {
   const flaValue = process.env.FLA;
   const flaExists = typeof flaValue !== 'undefined';
 
   console.log("🔍 FLA exists:", flaExists);
   console.log("📦 FLA value:", flaValue);
 
-  res.status(200).json({
-    message: 'Hello from Vercel!',
+  res.json({
+    message: 'Hello from Express on Vercel!',
     flaExists,
-    flaValue,
-    vercelEnv: process.env.VERCEL_ENV
+    flaValue
   });
-}
+});
+
+export default serverless(app);
 
