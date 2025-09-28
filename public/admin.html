@@ -1,50 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Application Administration</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <title>Admin Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-    <div class="text-center bg-white p-12 rounded-lg shadow-lg">
-        <h1 class="text-4xl font-bold mb-2">Administration Portal</h1>
-        <p id="iteration-display" class="text-blue-600 font-semibold mb-8">Loading active iteration...</p>
-        <p class="text-gray-600 mb-8">Welcome, Admin. Please select a tool.</p>
-        <div class="space-y-4">
-            <a href="/iteration-manager.html" class="block w-full bg-blue-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-blue-600 transition-colors duration-200">
-                Launch Iteration Manager
-            </a>
-            <a href="/org-chart.html" class="block w-full bg-red-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-red-600 transition-colors duration-200">
-                Launch Organization Manager
-            </a>
-            <a href="/table-viewer.html" class="block w-full bg-gray-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-gray-600 transition-colors duration-200">
-                Launch Table Viewer
-            </a>
-        </div>
-         <a href="/index.html" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800 mt-6">
-            Logout
-        </a>
-    </div>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-4xl bg-white p-8 rounded-lg shadow-lg">
+    <h1 class="text-3xl font-bold mb-6 text-center">Admin Dashboard</h1>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const iterationDisplay = document.getElementById('iteration-display');
-            try {
-                const response = await fetch('/api/active-iteration');
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message);
-                }
-                const activeIteration = await response.json();
-                iterationDisplay.textContent = `Current Active Iteration: ${activeIteration.name} (ID: ${activeIteration.id})`;
-            } catch (error) {
-                iterationDisplay.textContent = `Error: ${error.message}`;
-                iterationDisplay.classList.remove('text-blue-600');
-                iterationDisplay.classList.add('text-red-600');
-            }
-        });
-    </script>
+    <!-- People Table -->
+    <section class="mb-10">
+      <h2 class="text-2xl font-semibold mb-4">Registered People</h2>
+      <table class="min-w-full border border-gray-300">
+        <thead>
+          <tr class="bg-gray-200 text-left">
+            <th class="px-4 py-2 border">ID</th>
+            <th class="px-4 py-2 border">Name</th>
+            <th class="px-4 py-2 border">Created At</th>
+          </tr>
+        </thead>
+        <tbody id="people-table" class="divide-y divide-gray-200">
+          <tr><td colspan="3" class="px-4 py-2 text-center text-gray-500">Loading...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Iterations Table -->
+    <section>
+      <h2 class="text-2xl font-semibold mb-4">Iterations</h2>
+      <table class="min-w-full border border-gray-300">
+        <thead>
+          <tr class="bg-gray-200 text-left">
+            <th class="px-4 py-2 border">ID</th>
+            <th class="px-4 py-2 border">Name</th>
+            <th class="px-4 py-2 border">Start Date</th>
+            <th class="px-4 py-2 border">End Date</th>
+            <th class="px-4 py-2 border">Question Set</th>
+          </tr>
+        </thead>
+        <tbody id="iterations-table" class="divide-y divide-gray-200">
+          <tr><td colspan="5" class="px-4 py-2 text-center text-gray-500">Loading...</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    async function loadPeople() {
+      try {
+        const res = await fetch('/api/admin/people');
+        const data = await res.json();
+        const table = document.getElementById('people-table');
+        table.innerHTML = '';
+
+        if (data.success && data.people.length > 0) {
+          data.people.forEach(person => {
+            const row = `<tr>
+              <td class="px-4 py-2 border">${person.id}</td>
+              <td class="px-4 py-2 border">${person.name}</td>
+              <td class="px-4 py-2 border">${new Date(person.created_at).toLocaleString()}</td>
+            </tr>`;
+            table.innerHTML += row;
+          });
+        } else {
+          table.innerHTML = '<tr><td colspan="3" class="px-4 py-2 text-center text-gray-500">No people found</td></tr>';
+        }
+      } catch (err) {
+        console.error('Error loading people:', err);
+      }
+    }
+
+    async function loadIterations() {
+      try {
+        const res = await fetch('/api/admin/iterations');
+        const data = await res.json();
+        const table = document.getElementById('iterations-table');
+        table.innerHTML = '';
+
+        if (data.success && data.iterations.length > 0) {
+          data.iterations.forEach(iter => {
+            const row = `<tr>
+              <td class="px-4 py-2 border">${iter.id}</td>
+              <td class="px-4 py-2 border">${iter.name}</td>
+              <td class="px-4 py-2 border">${new Date(iter.start_date).toLocaleString()}</td>
+              <td class="px-4 py-2 border">${iter.end_date ? new Date(iter.end_date).toLocaleString() : 'Active'}</td>
+              <td class="px-4 py-2 border">${iter.question_set}</td>
+            </tr>`;
+            table.innerHTML += row;
+          });
+        } else {
+          table.innerHTML = '<tr><td colspan="5" class="px-4 py-2 text-center text-gray-500">No iterations found</td></tr>';
+        }
+      } catch (err) {
+        console.error('Error loading iterations:', err);
+      }
+    }
+
+    loadPeople();
+    loadIterations();
+  </script>
 </body>
 </html>
-
 
