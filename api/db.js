@@ -2,10 +2,14 @@
 import pkg from 'pg';
 const { Pool } = pkg;
 
+const connectionString = process.env.DATABASE_URL;
+
+// force SSL ignore for self-signed certs
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   ssl: {
-    rejectUnauthorized: false, // accept self-signed certs (needed for Supabase + Vercel)
+    require: true,
+    rejectUnauthorized: false,
   },
 });
 
