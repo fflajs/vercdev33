@@ -46,60 +46,27 @@
     </section>
   </div>
 
-  <script>
-    async function loadPeople() {
-      try {
-        const res = await fetch('/api/admin/people');
-        const data = await res.json();
-        const table = document.getElementById('people-table');
-        table.innerHTML = '';
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const iterationDisplay = document.getElementById('iteration-display');
+    try {
+      const response = await fetch('/api/active-iteration');
+      const data = await response.json();
 
-        if (data.success && data.people.length > 0) {
-          data.people.forEach(person => {
-            const row = `<tr>
-              <td class="px-4 py-2 border">${person.id}</td>
-              <td class="px-4 py-2 border">${person.name}</td>
-              <td class="px-4 py-2 border">${new Date(person.created_at).toLocaleString()}</td>
-            </tr>`;
-            table.innerHTML += row;
-          });
-        } else {
-          table.innerHTML = '<tr><td colspan="3" class="px-4 py-2 text-center text-gray-500">No people found</td></tr>';
-        }
-      } catch (err) {
-        console.error('Error loading people:', err);
+      if (!response.ok || !data.success || !data.iteration) {
+        throw new Error(data.message || 'No active iteration found');
       }
+
+      iterationDisplay.textContent =
+        `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
+    } catch (error) {
+      iterationDisplay.textContent = `Error: ${error.message}`;
+      iterationDisplay.classList.remove('text-blue-600');
+      iterationDisplay.classList.add('text-red-600');
     }
+  });
+</script>
 
-    async function loadIterations() {
-      try {
-        const res = await fetch('/api/admin/iterations');
-        const data = await res.json();
-        const table = document.getElementById('iterations-table');
-        table.innerHTML = '';
-
-        if (data.success && data.iterations.length > 0) {
-          data.iterations.forEach(iter => {
-            const row = `<tr>
-              <td class="px-4 py-2 border">${iter.id}</td>
-              <td class="px-4 py-2 border">${iter.name}</td>
-              <td class="px-4 py-2 border">${new Date(iter.start_date).toLocaleString()}</td>
-              <td class="px-4 py-2 border">${iter.end_date ? new Date(iter.end_date).toLocaleString() : 'Active'}</td>
-              <td class="px-4 py-2 border">${iter.question_set}</td>
-            </tr>`;
-            table.innerHTML += row;
-          });
-        } else {
-          table.innerHTML = '<tr><td colspan="5" class="px-4 py-2 text-center text-gray-500">No iterations found</td></tr>';
-        }
-      } catch (err) {
-        console.error('Error loading iterations:', err);
-      }
-    }
-
-    loadPeople();
-    loadIterations();
-  </script>
 </body>
 </html>
 
