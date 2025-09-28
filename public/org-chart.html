@@ -1,279 +1,94 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organization Chart Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .tree ul { padding-left: 20px; position: relative; }
-        .tree li { list-style-type: none; margin: 10px 0; position: relative; }
-        .tree li::before { content: ''; position: absolute; top: -5px; left: -20px; border-left: 1px solid #ccc; border-bottom: 1px solid #ccc; width: 20px; height: 1.1em; }
-        .tree li:last-child::before { height: 1.2em; }
-        .manager-icon { color: #facc15; }
-        .modal { display: flex; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Organization Chart</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-8">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-4xl bg-white p-8 rounded-lg shadow-lg">
+    <h1 class="text-3xl font-bold mb-6 text-center">Organization Manager</h1>
+    <p id="iteration-display" class="text-blue-600 font-semibold mb-4">
+      Loading iteration...
+    </p>
 
-    <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
-        <div class="flex justify-between items-center mb-2">
-            <h1 class="text-3xl font-bold">Organization Chart Manager</h1>
-            <a href="/admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
-        </div>
-        <div id="iteration-context" class="text-center mb-6 p-2 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
-            Loading active iteration...
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-                <h2 class="text-xl font-semibold mb-2">Add New Top-Level Unit</h2>
-                <div class="flex">
-                    <input type="text" id="new-unit-name" class="flex-grow p-2 border rounded-l-md" placeholder="Enter new unit name...">
-                    <button id="add-top-level-button" class="bg-blue-500 text-white p-2 rounded-r-md hover:bg-blue-600">Add Unit</button>
-                </div>
-            </div>
-            <div>
-                <h2 class="text-xl font-semibold mb-2">Create New Person</h2>
-                <div class="flex">
-                    <input type="text" id="new-person-name" class="flex-grow p-2 border rounded-l-md" placeholder="Enter new person's full name...">
-                    <button id="add-person-button" class="bg-green-500 text-white p-2 rounded-r-md hover:bg-green-600">Create Person</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="org-chart-container" class="tree"></div>
+    <div id="org-container" class="space-y-4">
+      <!-- Org chart will be rendered here -->
     </div>
 
-    <!-- Modal for assigning a role -->
-    <div id="role-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center modal">
-        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
-            <input type="hidden" id="modal-unit-id">
-            <div class="space-y-4">
-                <div>
-                    <label for="modal-person-select" class="block text-sm font-medium text-gray-700">Select Person</label>
-                    <select id="modal-person-select" class="mt-1 block w-full p-2 border border-gray-300 rounded-md"></select>
-                </div>
-                <div class="flex items-center">
-                    <input type="checkbox" id="modal-is-manager" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
-                    <label for="modal-is-manager" class="ml-2 block text-sm text-gray-900">Is Manager of this Unit?</label>
-                </div>
-            </div>
-            <div class="mt-6 flex justify-end space-x-3">
-                <button id="modal-cancel-button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>
-                <button id="modal-save-button" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Add Role</button>
-            </div>
-        </div>
+    <div class="mt-6 text-center">
+      <a href="/admin.html" class="text-blue-500 hover:underline">← Back to Admin Portal</a>
     </div>
+  </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const chartContainer = document.getElementById('org-chart-container');
-            const newUnitNameInput = document.getElementById('new-unit-name');
-            const addTopLevelButton = document.getElementById('add-top-level-button');
-            const newPersonNameInput = document.getElementById('new-person-name');
-            const addPersonButton = document.getElementById('add-person-button');
-            const iterationContextDiv = document.getElementById('iteration-context');
-            
-            const roleModal = document.getElementById('role-modal');
-            const modalTitle = document.getElementById('modal-title');
-            const modalUnitIdInput = document.getElementById('modal-unit-id');
-            const modalPersonSelect = document.getElementById('modal-person-select');
-            const modalIsManagerCheckbox = document.getElementById('modal-is-manager');
-            const modalSaveButton = document.getElementById('modal-save-button');
-            const modalCancelButton = document.getElementById('modal-cancel-button');
-            
-            const baseUrl = window.location.origin;
-            let units = [], people = [], roles = [];
-            let activeIterationId = null;
+  <script>
+    async function loadOrg() {
+      const container = document.getElementById('org-container');
+      const iterDisplay = document.getElementById('iteration-display');
+      container.innerHTML = 'Loading...';
 
-            async function apiRequest(endpoint, method = 'GET', body = null) {
-                try {
-                    const options = { method, headers: { 'Content-Type': 'application/json' } };
-                    if (body) options.body = JSON.stringify(body);
-                    const response = await fetch(`${baseUrl}${endpoint}`, options);
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-                    }
-                    return response.status === 204 ? null : await response.json();
-                } catch (error) {
-                    alert(`An API error occurred: ${error.message}`);
-                    throw error;
-                }
-            }
-            
-            function buildTree(parentId = null) {
-                const children = units.filter(unit => unit.parent_id === parentId);
-                if (children.length === 0) return '';
-                let html = '<ul>';
-                children.forEach(unit => {
-                    const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
-                    const managerRole = unitRoles.find(r => r.is_manager);
-                    const coworkerRoles = unitRoles.filter(r => !r.is_manager);
-                    const sortedRoles = [managerRole, ...coworkerRoles].filter(Boolean);
+      try {
+        const res = await fetch('/api/admin/org/snapshot');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load');
 
-                    html += `
-                        <li data-id="${unit.id}">
-                            <span class="font-semibold text-lg">${unit.name}</span>
-                            <div class="inline-block ml-4">
-                                <a href="#" class="add-child-unit text-green-600 hover:underline text-sm font-semibold" data-id="${unit.id}">+ Add Sub-Unit</a>
-                                <a href="#" class="add-person-role text-purple-600 hover:underline text-sm font-semibold ml-2" data-id="${unit.id}" data-unit-name="${unit.name}">+ Assign Person</a>
-                                <a href="#" class="edit-unit text-blue-600 hover:underline text-sm font-semibold ml-2" data-id="${unit.id}" data-name="${unit.name}">Edit</a>
-                                <a href="#" class="delete-unit text-red-600 hover:underline text-sm font-semibold ml-2" data-id="${unit.id}">Delete</a>
-                            </div>`;
+        // Show iteration info
+        iterDisplay.textContent = `Current Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
 
-                    const renderRole = (role, index) => {
-                        const person = people.find(p => p.id === role.person_id);
-                        if (!person) return '';
-                        const roleText = role.is_manager ? '(Manager)' : '(Coworker)';
-                        const icon = role.is_manager ? '<span class="manager-icon">★</span>' : '';
-                        const bgColor = index % 2 === 0 ? 'bg-gray-50' : 'bg-transparent';
-                        return `
-                            <div class="flex justify-between items-center py-1 px-2 rounded ${bgColor}">
-                                <span class="font-medium">${icon} ${person.name} ${roleText}</span>
-                                <div class="flex-shrink-0">
-                                    <a href="#" class="launch-tool-btn bg-gray-200 text-gray-800 text-xs font-bold py-1 px-2 rounded-full hover:bg-gray-300 ml-4" data-role-id="${role.id}">Launch Tool</a>
-                                    <a href="#" class="delete-role text-red-500 text-xs ml-2" data-role-id="${role.id}">Remove</a>
-                                </div>
-                            </div>`;
-                    };
+        // Build map for units and roles
+        const units = data.units;
+        const roles = data.roles;
+        const people = Object.fromEntries(data.people.map(p => [p.id, p.name]));
 
-                    sortedRoles.forEach((role, index) => { html += renderRole(role, index); });
-                    html += buildTree(unit.id);
-                    html += '</li>';
-                });
-                html += '</ul>';
-                return html;
-            }
-
-            async function renderTree() {
-                try {
-                    const data = await apiRequest(`/api/org-data/${activeIterationId}`);
-                    units = data.units;
-                    people = data.people;
-                    roles = data.roles;
-                    chartContainer.innerHTML = buildTree();
-                } catch (error) { chartContainer.innerHTML = `<p class="text-red-500">Could not render the organization tree.</p>`; }
-            }
-
-            function showRoleModal(config) {
-                modalTitle.textContent = config.title;
-                modalUnitIdInput.value = config.unitId || '';
-                modalPersonSelect.innerHTML = '<option value="">Select a person...</option>';
-                people.forEach(p => {
-                    modalPersonSelect.innerHTML += `<option value="${p.id}">${p.name}</option>`;
-                });
-                modalIsManagerCheckbox.checked = false;
-                roleModal.classList.remove('hidden');
-            }
-
-            function hideRoleModal() {
-                roleModal.classList.add('hidden');
-            }
-            
-            async function initialize() {
-                 try {
-                    const activeIteration = await apiRequest('/api/active-iteration');
-                    activeIterationId = activeIteration.id;
-                    iterationContextDiv.innerHTML = `Managing Organizational Chart for Active Iteration: <span class="font-bold">${activeIteration.name} (ID: ${activeIteration.id})</span>`;
-                    await renderTree();
-                } catch (error) {
-                    iterationContextDiv.innerHTML = `<span class="font-bold text-red-600">${error.message}. Please create an active iteration in the Iteration Manager.</span>`;
-                    document.querySelectorAll('input, button').forEach(el => el.disabled = true);
-                }
-            }
-
-            addTopLevelButton.addEventListener('click', async () => {
-                const name = newUnitNameInput.value.trim();
-                if (name && activeIterationId) {
-                    await apiRequest('/api/org-tree', 'POST', { name, parentId: null, iterationId: activeIterationId });
-                    newUnitNameInput.value = '';
-                    await renderTree();
-                }
-            });
-
-            addPersonButton.addEventListener('click', async () => {
-                const name = newPersonNameInput.value.trim();
-                if (name) {
-                    try {
-                        await apiRequest('/api/people', 'POST', { name });
-                        newPersonNameInput.value = '';
-                        await renderTree(); // Re-render to update the person list for the modal
-                        alert(`Person "${name}" created. You can now assign them to units.`);
-                    } catch (error) {
-                         console.error("Failed to create person", error);
-                    }
-                }
-            });
-
-            chartContainer.addEventListener('click', async (e) => {
-                const target = e.target;
-                const unitId = parseInt(target.closest('li')?.dataset.id);
-                
-                if (target.classList.contains('launch-tool-btn')) {
-                    e.preventDefault();
-                    const roleId = parseInt(target.dataset.roleId);
-                    const role = roles.find(r => r.id === roleId);
-                    const person = people.find(p => p.id === role.person_id);
-                    const unit = units.find(u => u.id === role.org_unit_id);
-                    if (person && unit) {
-                        const url = new URL('/cognitive-tool.html', window.location.origin);
-                        url.searchParams.set('personRoleId', role.id);
-                        url.searchParams.set('iterationId', activeIterationId);
-                        url.searchParams.set('userUnitId', unit.id);
-                        window.location.href = url.href;
-                    }
-                } else if (target.classList.contains('add-child-unit')) {
-                    e.preventDefault();
-                    const name = prompt('Enter name for the new sub-unit:');
-                    if(name && activeIterationId) await apiRequest('/api/org-tree', 'POST', { name, parentId: unitId, iterationId: activeIterationId });
-                } else if (target.classList.contains('edit-unit')) {
-                    e.preventDefault();
-                    const newName = prompt('Enter new name for the unit:', target.dataset.name);
-                    if(newName) await apiRequest(`/api/org-tree/${unitId}`, 'PUT', { name: newName });
-                } else if (target.classList.contains('delete-unit')) {
-                    e.preventDefault();
-                    if (confirm('Are you sure you want to delete this unit and all its sub-units and roles?')) {
-                        await apiRequest(`/api/org-tree/${unitId}`, 'DELETE');
-                    }
-                } else if (target.classList.contains('add-person-role')) {
-                    e.preventDefault();
-                    showRoleModal({ title: `Assign Person to "${target.dataset.unitName}"`, unitId: unitId });
-                } else if (target.classList.contains('delete-role')) {
-                    e.preventDefault();
-                    const roleId = parseInt(target.dataset.roleId);
-                    if (confirm('Are you sure you want to remove this person from this role?')) {
-                        await apiRequest(`/api/roles/${roleId}`, 'DELETE');
-                    }
-                }
-
-                if (target.closest('a')) await renderTree();
-            });
-
-            modalSaveButton.addEventListener('click', async () => {
-                const personId = parseInt(modalPersonSelect.value);
-                const unitId = parseInt(modalUnitIdInput.value);
-                const isManager = modalIsManagerCheckbox.checked;
-
-                if (!personId || !activeIterationId) {
-                    alert('Please select a person and ensure an iteration is active.');
-                    return;
-                }
-                
-                await apiRequest('/api/roles', 'POST', { personId, orgUnitId: unitId, isManager, iterationId: activeIterationId });
-                hideRoleModal();
-                await renderTree();
-            });
-            
-            modalCancelButton.addEventListener('click', hideRoleModal);
-            roleModal.addEventListener('click', (e) => { if (e.target === roleModal) hideRoleModal(); });
-
-            await initialize();
+        const byParent = {};
+        units.forEach(u => {
+          const parent = u.parent_id || 0;
+          if (!byParent[parent]) byParent[parent] = [];
+          byParent[parent].push(u);
         });
-    </script>
+
+        function renderUnit(unit, depth = 0) {
+          const div = document.createElement('div');
+          div.className = 'border-l-2 pl-4 ml-' + depth*2 + ' border-gray-300';
+          div.innerHTML = `<p class="font-semibold text-lg">${unit.name}</p>`;
+
+          // Roles under this unit
+          const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
+          if (unitRoles.length > 0) {
+            const ul = document.createElement('ul');
+            ul.className = 'ml-4 list-disc';
+            unitRoles.forEach(r => {
+              const li = document.createElement('li');
+              li.textContent = (people[r.person_id] || 'Unknown') +
+                (r.is_manager ? ' (Manager)' : '') +
+                (r.description ? ` — ${r.description}` : '');
+              ul.appendChild(li);
+            });
+            div.appendChild(ul);
+          }
+
+          // Children
+          const children = byParent[unit.id] || [];
+          children.forEach(c => div.appendChild(renderUnit(c, depth + 1)));
+
+          return div;
+        }
+
+        container.innerHTML = '';
+        (byParent[0] || []).forEach(root => {
+          container.appendChild(renderUnit(root));
+        });
+
+        if (units.length === 0) {
+          container.innerHTML = '<p class="text-gray-500">No organization units defined yet.</p>';
+        }
+      } catch (err) {
+        container.innerHTML = `<p class="text-red-600">Error: ${err.message}</p>`;
+      }
+    }
+
+    loadOrg();
+  </script>
 </body>
 </html>
-
 
