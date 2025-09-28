@@ -28,48 +28,50 @@
         <p id="error-message" class="text-red-500 text-xs italic mt-4"></p>
     </div>
 
-    <script>
-        document.getElementById('login-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const nameInput = document.getElementById('name-input');
-            const errorMessage = document.getElementById('error-message');
-            const name = nameInput.value.trim();
-            errorMessage.textContent = '';
+<script>
+  document.getElementById('login-form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    const nameInput = document.getElementById('name-input');
+    const errorMessage = document.getElementById('error-message');
+    const name = nameInput.value.trim();
 
-            if (!name) {
-                errorMessage.textContent = 'Please enter a name.';
-                return;
-            }
+    errorMessage.textContent = '';
+    if (!name) {
+      errorMessage.textContent = 'Please enter a name.';
+      return;
+    }
 
-            // Handle Admin login
-            if (name.toLowerCase() === 'admin') {
-                window.location.href = '/admin.html';
-                return;
-            }
+    // Admin shortcut
+    if (name.toLowerCase() === 'admin') {
+      window.location.href = '/admin.html';
+      return;
+    }
 
-            // Handle regular user login
-            try {
-                const response = await fetch('/api/check-person', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name })
-                });
+    // ⬇️ REPLACE the original try/catch with this
+    try {
+      const response = await fetch('/api/check-person', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
 
-                const data = await response.json();
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed.');
+      }
 
-                if (!response.ok) {
-                    throw new Error(data.message);
-                }
+      // ✅ Save both id and name for later pages
+      sessionStorage.setItem('personId', String(data.person.id));
+      sessionStorage.setItem('personName', data.person.name);
 
-                // If person exists, redirect to the user portal
-                sessionStorage.setItem('loggedInUser', name); // Store name for the next page
-                window.location.href = '/portal.html';
+      // Go to the portal
+      window.location.href = '/portal.html';
+    } catch (error) {
+      errorMessage.textContent = error.message;
+    }
+  });
+</script>
 
-            } catch (error) {
-                errorMessage.textContent = error.message;
-            }
-        });
-    </script>
 </body>
 </html>
 
