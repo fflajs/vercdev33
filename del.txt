@@ -1,0 +1,1 @@
+rm    api/admin/active-iteration.js api/admin/close-iteration.js api/admin/create-iteration.js api/admin/iterations.js api/admin/org-units.js api/admin/org-data.js
