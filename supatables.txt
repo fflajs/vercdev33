@@ -1,0 +1,73 @@
+create table public.app_data (
+  key character varying(255) not null,
+  value text null,
+  updated_by_person_id integer null,
+  updated_at timestamp with time zone null default now(),
+  constraint app_data_pkey primary key (key),
+  constraint app_data_updated_by_person_id_fkey foreign KEY (updated_by_person_id) references people (id)
+) TABLESPACE pg_default;
+
+create table public.iterations (
+  id serial not null,
+  name character varying(255) not null,
+  start_date timestamp with time zone not null default now(),
+  end_date timestamp with time zone null,
+  question_set character varying(255) not null default 'Deep_Analysis_120.json'::character varying,
+  constraint iterations_pkey primary key (id)
+) TABLESPACE pg_default;
+
+create table public.organization_units (
+  id serial not null,
+  name character varying(255) not null,
+  parent_id integer null,
+  iteration_id integer not null,
+  constraint organization_units_pkey primary key (id),
+  constraint organization_units_iteration_id_fkey foreign KEY (iteration_id) references iterations (id) on delete CASCADE,
+  constraint organization_units_parent_id_fkey foreign KEY (parent_id) references organization_units (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create table public.people (
+  id serial not null,
+  name character varying(255) not null,
+  created_at timestamp with time zone null default now(),
+  constraint people_pkey primary key (id),
+  constraint people_name_key unique (name)
+) TABLESPACE pg_default;
+
+create table public.person_roles (
+  id serial not null,
+  person_id integer not null,
+  org_unit_id integer not null,
+  is_manager boolean not null default false,
+  description text null,
+  iteration_id integer not null,
+  constraint person_roles_pkey primary key (id),
+  constraint person_roles_person_id_org_unit_id_is_manager_iteration_id_key unique (person_id, org_unit_id, is_manager, iteration_id),
+  constraint person_roles_iteration_id_fkey foreign KEY (iteration_id) references iterations (id) on delete CASCADE,
+  constraint person_roles_org_unit_id_fkey foreign KEY (org_unit_id) references organization_units (id) on delete CASCADE,
+  constraint person_roles_person_id_fkey foreign KEY (person_id) references people (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create table public.surveys (
+  id serial not null,
+  person_role_id integer null,
+  org_unit_id integer null,
+  survey_type character varying(50) null,
+  filename character varying(255) null,
+  survey_results jsonb null,
+  analysis_voxel jsonb null,
+  analysis_graphs jsonb null,
+  iteration_id integer not null,
+  constraint surveys_pkey primary key (id),
+  constraint surveys_iteration_id_fkey foreign KEY (iteration_id) references iterations (id) on delete CASCADE,
+  constraint surveys_org_unit_id_fkey foreign KEY (org_unit_id) references organization_units (id) on delete CASCADE,
+  constraint surveys_person_role_id_fkey foreign KEY (person_role_id) references person_roles (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create unique INDEX IF not exists surveys_org_unit_id_calculated_idx on public.surveys using btree (org_unit_id) TABLESPACE pg_default
+where
+  ((survey_type)::text = 'calculated'::text);
+
+create unique INDEX IF not exists surveys_person_role_id_individual_idx on public.surveys using btree (person_role_id) TABLESPACE pg_default
+where
+  ((survey_type)::text = 'individual'::text);
