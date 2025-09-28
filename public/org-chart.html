@@ -6,94 +6,86 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-8">
-  <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-info" class="mb-6 text-blue-600 font-semibold">Loading iteration...</p>
-
-    <div id="org-units" class="space-y-4"></div>
-
-    <a href="/admin.html"
-       class="inline-block mt-6 text-blue-500 hover:text-blue-800 font-bold text-sm">
-      ← Back to Admin Portal
-    </a>
+  <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-8">
+    <h1 class="text-3xl font-bold mb-4 text-center">Organization Manager</h1>
+    <p id="iteration-info" class="text-blue-600 font-semibold mb-6 text-center">Loading iteration...</p>
+    <div id="org-tree" class="space-y-4"></div>
+    <div class="text-center mt-6">
+      <a href="/admin.html" class="text-blue-500 hover:underline">← Back to Admin Portal</a>
+    </div>
   </div>
 
   <script>
-    let currentIterationId = null;
+    async function loadOrgData() {
+      const infoEl = document.getElementById('iteration-info');
+      const treeEl = document.getElementById('org-tree');
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      await loadIterationAndUnits();
-    });
-
-    async function loadIterationAndUnits() {
-      const info = document.getElementById('iteration-info');
       try {
-        const res = await fetch('/api/admin/active-iteration');
-        if (!res.ok) throw new Error('Failed to load iteration');
-        const data = await res.json();
-
-        if (!data.success || !data.iteration) {
-          info.textContent = 'No active iteration found.';
+        // 1. Get active iteration
+        const iterRes = await fetch('/api/admin/active-iteration');
+        if (!iterRes.ok) throw new Error('Failed to load iteration');
+        const iterData = await iterRes.json();
+        if (!iterData.success || !iterData.iteration) {
+          infoEl.textContent = 'No active iteration found.';
           return;
         }
+        const iteration = iterData.iteration;
+        infoEl.textContent = `Current Iteration: ${iteration.name} (ID: ${iteration.id})`;
 
-        currentIterationId = data.iteration.id;
-        info.textContent = `Current Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
+        // 2. Get org data
+        const orgRes = await fetch(`/api/admin/org-data?iteration_id=${iteration.id}`);
+        if (!orgRes.ok) throw new Error('Failed to load org data');
+        const orgData = await orgRes.json();
 
-        await renderOrgUnits(currentIterationId);
+        // 3. Build lookup tables
+        const peopleMap = {};
+        orgData.people.forEach(p => { peopleMap[p.id] = p; });
+
+        const rolesByUnit = {};
+        orgData.roles.forEach(r => {
+          if (!rolesByUnit[r.org_unit_id]) rolesByUnit[r.org_unit_id] = [];
+          rolesByUnit[r.org_unit_id].push(r);
+        });
+
+        // 4. Build unit hierarchy
+        const unitsById = {};
+        orgData.units.forEach(u => { unitsById[u.id] = {...u, children: []}; });
+        orgData.units.forEach(u => {
+          if (u.parent_id && unitsById[u.parent_id]) {
+            unitsById[u.parent_id].children.push(unitsById[u.id]);
+          }
+        });
+        const roots = orgData.units.filter(u => !u.parent_id).map(u => unitsById[u.id]);
+
+        // 5. Render
+        function renderUnit(unit, level=0) {
+          const roles = rolesByUnit[unit.id] || [];
+          const indent = '&nbsp;'.repeat(level * 4);
+          let html = `
+            <div class="ml-${level*4} border-l pl-4">
+              <p class="font-bold text-gray-800">${indent}${unit.name}</p>
+          `;
+          roles.forEach(r => {
+            const person = peopleMap[r.person_id];
+            const role = r.is_manager ? 'Manager' : 'Member';
+            html += `<p class="ml-4 text-sm text-gray-600">- ${person?.name || 'Unknown'} (${role}) — ${r.description || ''}</p>`;
+          });
+          if (unit.children.length > 0) {
+            unit.children.forEach(child => { html += renderUnit(child, level+1); });
+          }
+          html += `</div>`;
+          return html;
+        }
+
+        treeEl.innerHTML = roots.map(u => renderUnit(u)).join('');
       } catch (err) {
-        info.textContent = `Error: ${err.message}`;
-        info.classList.remove('text-blue-600');
-        info.classList.add('text-red-600');
+        console.error(err);
+        infoEl.textContent = `Error: ${err.message}`;
+        infoEl.classList.replace('text-blue-600', 'text-red-600');
       }
     }
 
-    async function renderOrgUnits(iterationId) {
-      const res = await fetch(`/api/admin/org-data?iteration_id=${iterationId}`);
-      const { units } = await res.json();
-
-      const container = document.getElementById('org-units');
-      container.innerHTML = '';
-
-      if (!units || units.length === 0) {
-        container.innerHTML = '<p class="text-gray-600">No organization units defined yet.</p>';
-        return;
-      }
-
-      units.forEach(unit => {
-        const div = document.createElement('div');
-        div.className = 'p-4 border rounded mb-2';
-
-        div.innerHTML = `
-          <h3 class="font-bold">${unit.name}</h3>
-          <button onclick="addSubOrg(${iterationId}, ${unit.id})"
-                  class="bg-blue-500 text-white px-2 py-1 rounded mt-2">
-            ➕ Add Sub-Org
-          </button>
-        `;
-
-        container.appendChild(div);
-      });
-    }
-
-    async function addSubOrg(iterationId, parentId) {
-      const name = prompt('Enter name for sub-organization:');
-      if (!name) return;
-
-      const res = await fetch('/api/admin/org-units', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, parent_id: parentId, iteration_id: iterationId })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        alert(`Sub-organization "${data.unit.name}" added.`);
-        renderOrgUnits(iterationId); // refresh
-      } else {
-        alert('Error: ' + data.message);
-      }
-    }
+    loadOrgData();
   </script>
 </body>
 </html>
