@@ -1,5 +1,5 @@
 // api/admin/[action].js
-import { supabase } from '../dbClient.js';
+import { supabase } from '../db.js';
 
 export default async function handler(req, res) {
   const { action } = req.query;
