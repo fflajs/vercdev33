@@ -5,7 +5,7 @@ const { Pool } = pkg;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false, // required for Supabase
+    rejectUnauthorized: false, // accept self-signed certs (needed for Supabase + Vercel)
   },
 });
 
