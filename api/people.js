@@ -24,11 +24,17 @@ export default async function handler(req, res) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // duplicate constraint
+      if (error.code === '23505') {
+        return res.status(409).json({ success: false, message: `Name "${name}" already exists.` });
+      }
+      throw error;
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Person created',
+      message: `Person "${name}" created successfully.`,
       person: data
     });
   } catch (err) {
