@@ -6,84 +6,35 @@ export default async function handler(req, res) {
 
   try {
     switch (action) {
-      /**
-       * ------------------------
-       * ITERATION MANAGEMENT
-       * ------------------------
-       */
       case 'active-iteration': {
         const { data, error } = await supabase
           .from('iterations')
           .select('*')
           .is('end_date', null)
-          .single();
-
+          .maybeSingle();
         if (error) throw error;
-        return res.status(200).json({ success: true, iteration: data });
+        if (!data) {
+          return res.status(404).json({ success: false, message: 'No active iteration found' });
+        }
+        return res.json({ success: true, iteration: data });
       }
 
       case 'iterations': {
-        const { data, error } = await supabase
-          .from('iterations')
-          .select('*')
-          .order('id', { ascending: false });
-
+        const { data, error } = await supabase.from('iterations').select('*');
         if (error) throw error;
-        return res.status(200).json({ success: true, iterations: data });
+        return res.json({ success: true, iterations: data });
       }
 
-      case 'create-iteration': {
-        if (req.method !== 'POST') {
-          return res.status(405).json({ success: false, message: 'Method not allowed' });
-        }
-
-        const { name, question_set } = req.body;
-
-        // close any currently active iteration
-        await supabase
-          .from('iterations')
-          .update({ end_date: new Date().toISOString() })
-          .is('end_date', null);
-
-        const { data, error } = await supabase
-          .from('iterations')
-          .insert([{ name, question_set }])
-          .select()
-          .single();
-
-        if (error) throw error;
-        return res.status(200).json({ success: true, iteration: data });
-      }
-
-      case 'close-iteration': {
-        if (req.method !== 'POST') {
-          return res.status(405).json({ success: false, message: 'Method not allowed' });
-        }
-
-        const { id } = req.body;
-        const { data, error } = await supabase
-          .from('iterations')
-          .update({ end_date: new Date().toISOString() })
-          .eq('id', id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        return res.status(200).json({ success: true, iteration: data });
-      }
-
-      /**
-       * ------------------------
-       * ORG DATA & UNITS
-       * ------------------------
-       */
       case 'org-data': {
         const { iteration_id } = req.query;
+        if (!iteration_id) {
+          return res.status(400).json({ success: false, message: 'iteration_id is required' });
+        }
 
         const [iteration, units, roles, people] = await Promise.all([
-          supabase.from('iterations').select('*').eq('id', iteration_id).single(),
+          supabase.from('iterations').select('*').eq('id', iteration_id).maybeSingle(),
           supabase.from('organization_units').select('*').eq('iteration_id', iteration_id),
-          supabase.from('person_roles').select('*').eq('iteration_id', iteration_id),
+          supabase.from('roles').select('*').eq('iteration_id', iteration_id),
           supabase.from('people').select('*'),
         ]);
 
@@ -92,7 +43,7 @@ export default async function handler(req, res) {
         if (roles.error) throw roles.error;
         if (people.error) throw people.error;
 
-        return res.status(200).json({
+        return res.json({
           success: true,
           iteration: iteration.data,
           units: units.data,
@@ -102,71 +53,53 @@ export default async function handler(req, res) {
       }
 
       case 'create-org-unit': {
-        if (req.method !== 'POST') {
-          return res.status(405).json({ success: false, message: 'Method not allowed' });
-        }
-
+        if (req.method !== 'POST') return res.status(405).end();
         const { name, parent_id, iteration_id } = req.body;
-
+        if (!name || !iteration_id) {
+          return res.status(400).json({ success: false, message: 'Missing fields' });
+        }
         const { data, error } = await supabase
           .from('organization_units')
           .insert([{ name, parent_id, iteration_id }])
           .select()
           .single();
-
         if (error) throw error;
-        return res.status(200).json({ success: true, unit: data });
+        return res.json({ success: true, unit: data });
       }
 
-      /**
-       * ------------------------
-       * ROLE MANAGEMENT
-       * ------------------------
-       */
       case 'assign-role': {
-        if (req.method !== 'POST') {
-          return res.status(405).json({ success: false, message: 'Method not allowed' });
+        if (req.method !== 'POST') return res.status(405).end();
+        const { person_id, org_unit_id, iteration_id, is_manager } = req.body;
+        if (!person_id || !org_unit_id || !iteration_id) {
+          return res.status(400).json({ success: false, message: 'Missing fields' });
         }
-
-        const { person_id, org_unit_id, is_manager, iteration_id } = req.body;
-
         const { data, error } = await supabase
-          .from('person_roles')
-          .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
+          .from('roles')
+          .insert([{ person_id, org_unit_id, iteration_id, is_manager }])
           .select()
           .single();
-
         if (error) {
-          // unique violation
           if (error.code === '23505') {
-            return res.status(409).json({ success: false, message: 'This person already has that role in this org unit.' });
+            return res.status(409).json({ success: false, message: 'Duplicate role not allowed' });
           }
           throw error;
         }
-
-        return res.status(200).json({ success: true, role: data });
+        return res.json({ success: true, role: data });
       }
 
       case 'delete-role': {
-        if (req.method !== 'DELETE') {
-          return res.status(405).json({ success: false, message: 'Method not allowed' });
-        }
-
+        if (req.method !== 'POST') return res.status(405).end();
         const { role_id } = req.body;
-
-        const { error } = await supabase.from('person_roles').delete().eq('id', role_id);
+        if (!role_id) {
+          return res.status(400).json({ success: false, message: 'role_id is required' });
+        }
+        const { error } = await supabase.from('roles').delete().eq('id', role_id);
         if (error) throw error;
-
-        return res.status(200).json({ success: true });
+        return res.json({ success: true });
       }
 
-      /**
-       * ------------------------
-       * DEFAULT
-       * ------------------------
-       */
       default:
-        return res.status(404).json({ success: false, message: 'Unknown action' });
+        return res.status(400).json({ success: false, message: `Unknown action: ${action}` });
     }
   } catch (err) {
     console.error('Admin API error:', err);
