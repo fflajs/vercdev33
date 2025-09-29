@@ -5,102 +5,151 @@ export default async function handler(req, res) {
   const { action } = req.query;
 
   try {
-    switch (action) {
-      case 'active-iteration': {
+    if (req.method === 'GET') {
+      // --- Get active iteration ---
+      if (action === 'active-iteration') {
         const { data, error } = await supabase
           .from('iterations')
           .select('*')
           .is('end_date', null)
-          .maybeSingle();
+          .single();
+
         if (error) throw error;
-        if (!data) {
-          return res.status(404).json({ success: false, message: 'No active iteration found' });
-        }
-        return res.json({ success: true, iteration: data });
+        return res.status(200).json({ success: true, iteration: data });
       }
 
-      case 'iterations': {
-        const { data, error } = await supabase.from('iterations').select('*');
+      // --- List all iterations ---
+      if (action === 'iterations') {
+        const { data, error } = await supabase
+          .from('iterations')
+          .select('*')
+          .order('id', { ascending: false });
+
         if (error) throw error;
-        return res.json({ success: true, iterations: data });
+        return res.status(200).json({ success: true, iterations: data });
       }
 
-      case 'org-data': {
+      // --- Load org-data (units, roles, people) ---
+      if (action === 'org-data') {
         const { iteration_id } = req.query;
-        if (!iteration_id) {
-          return res.status(400).json({ success: false, message: 'iteration_id is required' });
-        }
 
-        const [iteration, units, roles, people] = await Promise.all([
-          supabase.from('iterations').select('*').eq('id', iteration_id).maybeSingle(),
-          supabase.from('organization_units').select('*').eq('iteration_id', iteration_id),
-          supabase.from('roles').select('*').eq('iteration_id', iteration_id),
-          supabase.from('people').select('*'),
-        ]);
+        const { data: iteration, error: iterErr } = await supabase
+          .from('iterations')
+          .select('*')
+          .eq('id', iteration_id)
+          .single();
+        if (iterErr) throw iterErr;
 
-        if (iteration.error) throw iteration.error;
-        if (units.error) throw units.error;
-        if (roles.error) throw roles.error;
-        if (people.error) throw people.error;
+        const { data: units, error: unitErr } = await supabase
+          .from('organization_units')
+          .select('*')
+          .eq('iteration_id', iteration_id);
+        if (unitErr) throw unitErr;
 
-        return res.json({
+        const { data: roles, error: roleErr } = await supabase
+          .from('person_roles') // ✅ FIXED
+          .select('*')
+          .eq('iteration_id', iteration_id);
+        if (roleErr) throw roleErr;
+
+        const { data: people, error: peopleErr } = await supabase
+          .from('people')
+          .select('*');
+        if (peopleErr) throw peopleErr;
+
+        return res.status(200).json({
           success: true,
-          iteration: iteration.data,
-          units: units.data,
-          roles: roles.data,
-          people: people.data,
+          iteration,
+          units,
+          roles,
+          people,
         });
       }
 
-      case 'create-org-unit': {
-        if (req.method !== 'POST') return res.status(405).end();
+      // --- List all people ---
+      if (action === 'people') {
+        const { data, error } = await supabase
+          .from('people')
+          .select('*')
+          .order('id');
+        if (error) throw error;
+        return res.status(200).json({ success: true, people: data });
+      }
+    }
+
+    if (req.method === 'POST') {
+      // --- Create iteration ---
+      if (action === 'create-iteration') {
+        const { name, question_set } = req.body;
+
+        const { data, error } = await supabase
+          .from('iterations')
+          .insert([{ name, question_set }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.status(200).json({ success: true, iteration: data });
+      }
+
+      // --- Close iteration ---
+      if (action === 'close-iteration') {
+        const { id } = req.body;
+
+        const { data, error } = await supabase
+          .from('iterations')
+          .update({ end_date: new Date().toISOString() })
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.status(200).json({ success: true, iteration: data });
+      }
+
+      // --- Create org unit ---
+      if (action === 'create-org-unit') {
         const { name, parent_id, iteration_id } = req.body;
-        if (!name || !iteration_id) {
-          return res.status(400).json({ success: false, message: 'Missing fields' });
-        }
+
         const { data, error } = await supabase
           .from('organization_units')
           .insert([{ name, parent_id, iteration_id }])
           .select()
           .single();
+
         if (error) throw error;
-        return res.json({ success: true, unit: data });
+        return res.status(200).json({ success: true, unit: data });
       }
 
-      case 'assign-role': {
-        if (req.method !== 'POST') return res.status(405).end();
-        const { person_id, org_unit_id, iteration_id, is_manager } = req.body;
-        if (!person_id || !org_unit_id || !iteration_id) {
-          return res.status(400).json({ success: false, message: 'Missing fields' });
-        }
+      // --- Assign role ---
+      if (action === 'assign-role') {
+        const { person_id, org_unit_id, is_manager, iteration_id } = req.body;
+
         const { data, error } = await supabase
-          .from('roles')
-          .insert([{ person_id, org_unit_id, iteration_id, is_manager }])
+          .from('person_roles') // ✅ FIXED
+          .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
           .select()
           .single();
-        if (error) {
-          if (error.code === '23505') {
-            return res.status(409).json({ success: false, message: 'Duplicate role not allowed' });
-          }
-          throw error;
-        }
-        return res.json({ success: true, role: data });
-      }
 
-      case 'delete-role': {
-        if (req.method !== 'POST') return res.status(405).end();
-        const { role_id } = req.body;
-        if (!role_id) {
-          return res.status(400).json({ success: false, message: 'role_id is required' });
-        }
-        const { error } = await supabase.from('roles').delete().eq('id', role_id);
         if (error) throw error;
-        return res.json({ success: true });
+        return res.status(200).json({ success: true, role: data });
       }
 
-      default:
-        return res.status(400).json({ success: false, message: `Unknown action: ${action}` });
+      // --- Delete role ---
+      if (action === 'delete-role') {
+        const { id } = req.body;
+
+        const { error } = await supabase
+          .from('person_roles') // ✅ FIXED
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        return res.status(200).json({ success: true });
+      }
     }
+
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
     return res.status(500).json({ success: false, message: err.message });
