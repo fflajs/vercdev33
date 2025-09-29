@@ -6,129 +6,163 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen p-8">
-  <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
+  <div class="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-6">
     <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
     <p id="iteration-info" class="text-gray-600 mb-6">Loading...</p>
     <div id="org-tree"></div>
-    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:text-blue-700">← Back to Admin Portal</a>
+    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:text-blue-700">
+      ← Back to Admin Portal
+    </a>
   </div>
 
   <script>
     let currentIteration = null;
-    let activeForm = null;
+    let activeForm = null; // only one inline form open at a time
 
     async function loadIterationAndUnits() {
-      const treeDiv = document.getElementById('org-tree');
-      const iterationInfo = document.getElementById('iteration-info');
-      treeDiv.innerHTML = 'Loading...';
+      const info = document.getElementById('iteration-info');
+      const tree = document.getElementById('org-tree');
+      info.textContent = "Loading...";
+      tree.innerHTML = "";
 
       try {
-        const res = await fetch('/api/admin/org-data?iteration_id=11'); // TODO: dynamic iteration later
-        const data = await res.json();
+        // 1) Get current active iteration
+        const iterRes = await fetch('/api/admin/[action]?action=active-iteration');
+        const iterData = await iterRes.json();
+        if (!iterRes.ok || !iterData.success || !iterData.iteration) {
+          throw new Error(iterData.message || "No active iteration found");
+        }
+        currentIteration = iterData.iteration;
+        info.textContent = `Current Iteration: ${currentIteration.name} (ID: ${currentIteration.id})`;
 
-        if (!data.success) {
-          iterationInfo.textContent = 'Error: ' + data.message;
-          return;
+        // 2) Get org data for this iteration
+        const res = await fetch(`/api/admin/[action]?action=org-data&iteration_id=${currentIteration.id}`);
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to load org data");
         }
 
-        currentIteration = data.iteration;
-        iterationInfo.textContent = `Current Iteration: ${currentIteration.name} (ID: ${currentIteration.id})`;
+        const { units, roles, people } = data;
 
-        treeDiv.innerHTML = '';
-        const rootUnits = data.units.filter(u => !u.parent_id);
-        rootUnits.forEach(unit => renderUnit(unit, data.units, data.roles, data.people, treeDiv));
+        // Build tree structure
+        const unitMap = {};
+        units.forEach(u => unitMap[u.id] = { ...u, children: [] });
+        units.forEach(u => {
+          if (u.parent_id && unitMap[u.parent_id]) {
+            unitMap[u.parent_id].children.push(unitMap[u.id]);
+          }
+        });
+        const roots = units.filter(u => !u.parent_id).map(u => unitMap[u.id]);
+
+        // Render
+        roots.forEach(root => renderUnit(root, roles, people, tree));
       } catch (err) {
-        treeDiv.innerHTML = `<p class="text-red-500">Error loading data: ${err.message}</p>`;
+        info.textContent = `Error: ${err.message}`;
+        info.classList.remove('text-gray-600');
+        info.classList.add('text-red-600');
       }
     }
 
-    function renderUnit(unit, allUnits, allRoles, allPeople, container) {
+    function renderUnit(unit, roles, people, container) {
       const unitDiv = document.createElement('div');
-      unitDiv.className = 'ml-4 mt-2';
+      unitDiv.className = 'ml-4 mt-3';
 
-      const title = document.createElement('div');
-      title.className = 'font-semibold text-lg flex items-center';
-      title.textContent = unit.name;
+      // Title row
+      const titleRow = document.createElement('div');
+      titleRow.className = 'font-semibold text-lg flex items-center space-x-2';
+      titleRow.textContent = unit.name;
 
       const addLink = document.createElement('a');
       addLink.href = '#';
-      addLink.textContent = ' [Add Subunit]';
-      addLink.className = 'text-sm text-blue-500 ml-2 hover:underline';
+      addLink.className = 'text-blue-500 text-sm ml-2 hover:underline';
+      addLink.textContent = '[Add Subunit]';
+      titleRow.appendChild(addLink);
+
+      unitDiv.appendChild(titleRow);
+
+      // Roles list
+      const roleList = document.createElement('ul');
+      roleList.className = 'ml-6 list-disc';
+      roles.filter(r => r.org_unit_id === unit.id).forEach(r => {
+        const person = people.find(p => p.id === r.person_id);
+        const li = document.createElement('li');
+        li.textContent = `${person ? person.name : 'Unknown'} (${r.is_manager ? 'Manager' : 'Member'})`;
+        roleList.appendChild(li);
+      });
+      unitDiv.appendChild(roleList);
+
+      // 🔹 Inline form slot goes HERE (right under the unit, above its children)
+      const formSlot = document.createElement('div');
+      formSlot.className = 'ml-6';
+      unitDiv.appendChild(formSlot);
+
+      // Children container (subunits)
+      const childrenContainer = document.createElement('div');
+      unit.children.forEach(child => renderUnit(child, roles, people, childrenContainer));
+      unitDiv.appendChild(childrenContainer);
+
+      // Wire up Add Subunit to use this unit's dedicated slot
       addLink.onclick = (e) => {
         e.preventDefault();
-        showInlineSubunitForm(unit.id, unitDiv);
+        showInlineSubunitForm(unit.id, formSlot);
       };
-      title.appendChild(addLink);
-
-      unitDiv.appendChild(title);
-
-      // Show roles
-      const rolesHere = allRoles.filter(r => r.org_unit_id === unit.id);
-      rolesHere.forEach(role => {
-        const person = allPeople.find(p => p.id === role.person_id);
-        const roleLine = document.createElement('div');
-        roleLine.className = 'ml-6 text-gray-700';
-        roleLine.textContent = `- ${person ? person.name : 'Unknown'} (${role.is_manager ? 'Manager' : 'Member'})`;
-        unitDiv.appendChild(roleLine);
-      });
-
-      // Render children
-      const children = allUnits.filter(u => u.parent_id === unit.id);
-      children.forEach(child => renderUnit(child, allUnits, allRoles, allPeople, unitDiv));
 
       container.appendChild(unitDiv);
     }
 
-    function showInlineSubunitForm(parentId, unitDiv) {
-      // Close previous
+    function showInlineSubunitForm(parentId, slotEl) {
+      // Close any previous form
       if (activeForm) {
         activeForm.remove();
         activeForm = null;
       }
 
       const form = document.createElement('div');
-      form.className = 'ml-6 mt-2 p-2 border rounded bg-gray-50';
+      form.className = 'mt-2 p-2 border rounded bg-gray-50 flex items-center space-x-2';
 
       const input = document.createElement('input');
       input.type = 'text';
       input.placeholder = 'Subunit name';
-      input.className = 'border rounded px-2 py-1 mr-2';
+      input.className = 'border rounded px-2 py-1 flex-1';
 
-      const submitBtn = document.createElement('button');
-      submitBtn.textContent = 'Create';
-      submitBtn.className = 'bg-green-500 text-white px-2 py-1 rounded';
-      submitBtn.onclick = async () => {
+      const createBtn = document.createElement('button');
+      createBtn.textContent = 'Create';
+      createBtn.className = 'bg-green-500 text-white px-3 py-1 rounded';
+      createBtn.onclick = async () => {
         const name = input.value.trim();
-        if (!name) return alert('Please enter a name.');
+        if (!name) {
+          alert('Please enter a name.');
+          return;
+        }
 
-        const res = await fetch('/api/admin/create-org-unit', {
+        const res = await fetch('/api/admin/[action]?action=create-org-unit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, parent_id: parentId, iteration_id: currentIteration.id })
         });
-
         const data = await res.json();
-        if (data.success) {
+
+        if (res.ok && data.success) {
           loadIterationAndUnits();
         } else {
-          alert('Error: ' + data.message);
+          alert('Error: ' + (data.message || 'Failed to create subunit'));
         }
       };
 
       const cancelBtn = document.createElement('button');
       cancelBtn.textContent = 'Cancel';
-      cancelBtn.className = 'ml-2 bg-gray-400 text-white px-2 py-1 rounded';
+      cancelBtn.className = 'bg-gray-400 text-white px-3 py-1 rounded';
       cancelBtn.onclick = () => {
         form.remove();
         activeForm = null;
       };
 
       form.appendChild(input);
-      form.appendChild(submitBtn);
+      form.appendChild(createBtn);
       form.appendChild(cancelBtn);
 
-      // Attach just below the unit
-      unitDiv.appendChild(form);
+      slotEl.innerHTML = '';    // ensure it replaces any old content in this slot
+      slotEl.appendChild(form);
 
       activeForm = form;
       input.focus();
