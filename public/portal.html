@@ -5,80 +5,63 @@
   <title>User Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="w-full max-w-2xl bg-white p-8 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold mb-4 text-center">Welcome to the Portal</h1>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+  <div class="w-full max-w-lg bg-white p-10 rounded-lg shadow-lg text-center">
+    <h1 id="welcome" class="text-3xl font-bold mb-4">Welcome!</h1>
+    <p id="iteration-info" class="text-gray-600 mb-8">Loading active iteration...</p>
 
-    <!-- Greeting -->
-    <p class="text-gray-700 mb-6 text-center">
-      Welcome, <span id="user-name" class="font-semibold">Unknown</span>!
-    </p>
-
-    <!-- Iteration info -->
-    <div class="mb-6 text-center">
-      <p class="text-gray-600">
-        Current Active Iteration:
-        <span id="iteration-name" class="font-semibold">-</span>
-        (ID: <span id="iteration-id">-</span>)
-      </p>
-    </div>
-
-    <!-- Actions -->
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+    <div class="space-y-4">
       <a href="/visualizer.html"
-         class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+         class="block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
         Login to Cognitive Visualizer
       </a>
-      <a href="/analyzer.html"
-         class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+      <a href="/analyze.html"
+         class="block bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
         Analyze Descriptions
       </a>
-      <button id="logout-btn"
-              class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-        Logout
-      </button>
     </div>
+
+    <a href="/index.html" id="logout"
+       class="inline-block font-bold text-sm text-red-500 hover:text-red-800 mt-6">
+      Logout
+    </a>
   </div>
 
   <script>
-    // show logged-in user
-    const userName = sessionStorage.getItem('personName');
-    const personId = sessionStorage.getItem('personId');
+    async function loadPortal() {
+      const user = sessionStorage.getItem('loggedInUser');
+      const welcome = document.getElementById('welcome');
+      const iterationInfo = document.getElementById('iteration-info');
 
-    if (!userName || !personId) {
-      // not logged in -> redirect
-      window.location.href = '/index.html';
-    } else {
-      document.getElementById('user-name').textContent = userName;
-    }
+      if (!user) {
+        window.location.href = '/index.html';
+        return;
+      }
 
-    // fetch active iteration
-    async function loadIteration() {
+      welcome.textContent = `Welcome, ${user}!`;
+
       try {
         const response = await fetch('/api/active-iteration');
         const data = await response.json();
 
-        if (data.success && data.iteration) {
-          document.getElementById('iteration-name').textContent = data.iteration.name;
-          document.getElementById('iteration-id').textContent = data.iteration.id;
-        } else {
-          document.getElementById('iteration-name').textContent = 'No active iteration';
-          document.getElementById('iteration-id').textContent = '-';
+        if (!response.ok || !data.success || !data.iteration) {
+          iterationInfo.textContent = 'No active iteration found.';
+          return;
         }
+
+        const iter = data.iteration;
+        iterationInfo.textContent = `Current Active Iteration: ${iter.name} (ID: ${iter.id})`;
       } catch (err) {
-        console.error('Failed to load iteration:', err);
-        document.getElementById('iteration-name').textContent = 'Error';
-        document.getElementById('iteration-id').textContent = '-';
+        iterationInfo.textContent = `Error loading iteration: ${err.message}`;
+        iterationInfo.classList.add('text-red-500');
       }
     }
 
-    loadIteration();
-
-    // logout clears sessionStorage
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      sessionStorage.clear();
-      window.location.href = '/index.html';
+    document.getElementById('logout').addEventListener('click', () => {
+      sessionStorage.removeItem('loggedInUser');
     });
+
+    loadPortal();
   </script>
 </body>
 </html>

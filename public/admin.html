@@ -6,22 +6,34 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="text-center bg-white p-12 rounded-lg shadow-lg">
+  <div class="text-center bg-white p-12 rounded-lg shadow-lg w-full max-w-xl">
     <h1 class="text-4xl font-bold mb-2">Administration Portal</h1>
-    <p id="iteration-display" class="text-blue-600 font-semibold mb-8">Loading active iteration...</p>
-    <p class="text-gray-600 mb-8">Welcome, Admin. Please select a tool.</p>
+    <p id="iteration-display" class="text-blue-600 font-semibold mb-8">
+      Loading active iteration...
+    </p>
+    <p class="text-gray-600 mb-8">
+      Welcome, Admin. Please select a tool.
+    </p>
 
     <div class="space-y-4">
-      <a href="/iteration-manager.html"
-         class="block w-full bg-blue-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-blue-600 transition-colors duration-200">
+      <a id="iteration-manager-link"
+         href="/iteration-manager.html"
+         class="block w-full bg-blue-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+         title="Loading iteration status...">
         Launch Iteration Manager
       </a>
-      <a href="/org-chart.html"
-         class="block w-full bg-red-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-red-600 transition-colors duration-200">
+
+      <a id="org-chart-link"
+         href="/org-chart.html"
+         class="block w-full bg-red-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+         title="Loading iteration status...">
         Launch Organization Manager
       </a>
-      <a href="/table-viewer.html"
-         class="block w-full bg-gray-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-gray-600 transition-colors duration-200">
+
+      <a id="table-viewer-link"
+         href="/table-viewer.html"
+         class="block w-full bg-gray-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+         title="Loading iteration status...">
         Launch Table Viewer
       </a>
     </div>
@@ -33,25 +45,54 @@
   </div>
 
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const iterationDisplay = document.getElementById("iteration-display");
+    async function loadActiveIteration() {
+      const iterationDisplay = document.getElementById('iteration-display');
+      const links = [
+        document.getElementById('iteration-manager-link'),
+        document.getElementById('org-chart-link'),
+        document.getElementById('table-viewer-link'),
+      ];
 
       try {
-        const res = await fetch("/api/admin/[action]?action=active-iteration");
+        const res = await fetch('/api/admin/active-iteration');
         const data = await res.json();
 
-        if (!res.ok || !data.success || !data.iteration) {
-          throw new Error(data.message || "No active iteration found");
-        }
+        if (data.success && data.iteration) {
+          const iter = data.iteration;
+          iterationDisplay.textContent =
+            `Current Active Iteration: ${iter.name} (ID: ${iter.id})`;
+          iterationDisplay.className = "text-blue-600 font-semibold mb-8";
 
-        iterationDisplay.textContent =
-          `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
-      } catch (error) {
-        iterationDisplay.textContent = `Error: ${error.message}`;
-        iterationDisplay.classList.remove("text-blue-600");
-        iterationDisplay.classList.add("text-red-600");
+          // Enable all links
+          links.forEach(link => {
+            link.classList.remove("pointer-events-none");
+            link.removeAttribute("aria-disabled");
+            link.title = "Click to open this tool";
+          });
+        } else {
+          iterationDisplay.textContent = "No active iteration found.";
+          iterationDisplay.className = "text-red-600 font-semibold mb-8";
+
+          // Disable links with tooltip
+          links.forEach(link => {
+            link.classList.add("pointer-events-none");
+            link.setAttribute("aria-disabled", "true");
+            link.title = "Disabled: No active iteration";
+          });
+        }
+      } catch (err) {
+        iterationDisplay.textContent = `Error: ${err.message}`;
+        iterationDisplay.className = "text-red-600 font-semibold mb-8";
+
+        links.forEach(link => {
+          link.classList.add("pointer-events-none");
+          link.setAttribute("aria-disabled", "true");
+          link.title = "Disabled: Error loading iteration";
+        });
       }
-    });
+    }
+
+    loadActiveIteration();
   </script>
 </body>
 </html>

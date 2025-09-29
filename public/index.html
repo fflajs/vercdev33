@@ -1,78 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Cognitive Space Analyzer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <title>Cognitive Space Analyzer - Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
-    <div class="w-full max-w-lg bg-white p-10 rounded-lg shadow-lg text-center">
-        <h1 class="text-4xl font-bold mb-4">Cognitive Space Analyzer</h1>
-        <p class="text-gray-600 mb-8 leading-relaxed">
-            Welcome! This application is a powerful tool designed to help individuals and teams visualize and understand their cognitive landscape. By answering a series of survey questions, you can generate a unique 3D model and a set of analytical charts that represent your knowledge, familiarity, and cognitive load on various topics. This visualization provides valuable insights, helping to identify areas of strength, potential challenges, and opportunities for growth, fostering better communication and strategic development within your organization.
-        </p>
-        
-        <form id="login-form" class="mb-4">
-            <div class="flex items-center border-b border-blue-500 py-2">
-                <input id="name-input" class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" placeholder="Enter Your Full Name to Login" aria-label="Full name">
-                <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 border-blue-500 hover:border-blue-700 text-sm border-4 text-white py-1 px-2 rounded" type="submit">
-                    Login
-                </button>
-            </div>
-        </form>
+  <div class="w-full max-w-lg bg-white p-10 rounded-lg shadow-lg text-center">
+    <h1 class="text-4xl font-bold mb-4">Cognitive Space Analyzer</h1>
+    <p class="text-gray-600 mb-8 leading-relaxed">
+      Welcome! Please log in with your name to continue.
+    </p>
 
-        <a href="/register.html" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline inline-block">
-            Register
-        </a>
+    <form id="login-form" class="mb-4">
+      <div class="flex items-center border-b border-blue-500 py-2">
+        <input id="name-input"
+               class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none"
+               type="text" placeholder="Enter Your Full Name" aria-label="Full name">
+        <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 text-sm text-white py-1 px-2 rounded"
+                type="submit">
+          Login
+        </button>
+      </div>
+    </form>
 
-        <p id="error-message" class="text-red-500 text-xs italic mt-4"></p>
-    </div>
+    <a href="/register.html"
+       class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-block">
+      Register
+    </a>
 
-<script>
-  document.getElementById('login-form').addEventListener('submit', async function(event) {
-    event.preventDefault();
-    const nameInput = document.getElementById('name-input');
-    const errorMessage = document.getElementById('error-message');
-    const name = nameInput.value.trim();
+    <p id="error-message" class="text-red-500 text-xs italic mt-4"></p>
+  </div>
 
-    errorMessage.textContent = '';
-    if (!name) {
-      errorMessage.textContent = 'Please enter a name.';
-      return;
-    }
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const nameInput = document.getElementById('name-input');
+      const errorMessage = document.getElementById('error-message');
+      const name = nameInput.value.trim();
 
-    // Admin shortcut
-    if (name.toLowerCase() === 'admin') {
-      window.location.href = '/admin.html';
-      return;
-    }
+      errorMessage.textContent = '';
 
-    // ⬇️ REPLACE the original try/catch with this
-    try {
-      const response = await fetch('/api/check-person', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed.');
+      if (!name) {
+        errorMessage.textContent = 'Please enter a name.';
+        return;
       }
 
-      // ✅ Save both id and name for later pages
-      sessionStorage.setItem('personId', String(data.person.id));
-      sessionStorage.setItem('personName', data.person.name);
+      // Special case: Admin login
+      if (name.toLowerCase() === 'admin') {
+        window.location.href = '/admin.html';
+        return;
+      }
 
-      // Go to the portal
-      window.location.href = '/portal.html';
-    } catch (error) {
-      errorMessage.textContent = error.message;
-    }
-  });
-</script>
+      try {
+        const response = await fetch('/api/check-person', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        const data = await response.json();
 
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || 'Login failed.');
+        }
+
+        sessionStorage.setItem('loggedInUser', name);
+        window.location.href = '/portal.html';
+      } catch (err) {
+        errorMessage.textContent = err.message;
+      }
+    });
+  </script>
 </body>
 </html>
-
 

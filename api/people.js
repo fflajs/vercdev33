@@ -1,45 +1,31 @@
-// api/people.js
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// api/check-person.js
+import { supabase } from './db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
-
-  const { name } = req.body;
-
-  if (!name) {
-    return res.status(400).json({ message: 'Name is required' });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   try {
-    const { data, error } = await supabase
-      .from('people')
-      .insert([{ name }])
-      .select()
-      .single();
-
-    if (error) {
-      // duplicate constraint
-      if (error.code === '23505') {
-        return res.status(409).json({ success: false, message: `Name "${name}" already exists.` });
-      }
-      throw error;
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Name is required' });
     }
 
-    res.status(201).json({
-      success: true,
-      message: `Person "${name}" created successfully.`,
-      person: data
-    });
+    const { data, error } = await supabase
+      .from('people')
+      .select('*')
+      .eq('name', name)
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ success: false, message: 'Person not found' });
+    }
+
+    res.status(200).json({ success: true, person: data });
   } catch (err) {
-    console.error('Supabase error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('check-person error:', err);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 }
 
