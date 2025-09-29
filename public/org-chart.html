@@ -1,154 +1,34 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Organization Manager</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 p-6">
-  <div class="max-w-4xl mx-auto bg-white shadow rounded-lg p-6">
-    <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-info" class="text-blue-600 font-semibold mb-6">Loading...</p>
-    <div id="org-tree" class="space-y-4"></div>
-    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:text-blue-800">← Back to Admin Portal</a>
-  </div>
+(rolesByUnit[unit.id] || []).forEach(r => {
+  const person = peopleMap[r.person_id];
+  const roleDiv = document.createElement('div');
+  roleDiv.className = 'ml-4 text-sm text-gray-700 flex items-center';
+  roleDiv.textContent =
+    `- ${person ? person.name : 'Unknown'} (${r.is_manager ? 'Manager' : 'Member'})`;
 
-  <script>
-    async function loadOrgData() {
-      const url = new URL(window.location.origin + '/api/admin/org-data');
-      url.searchParams.set('iteration_id', 11); // FIXME: use active iteration dynamically later
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (!data.success) {
-        document.getElementById('iteration-info').textContent = 'Error loading data';
-        return;
-      }
-
-      document.getElementById('iteration-info').textContent =
-        `Current Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
-
-      renderOrgTree(data);
-    }
-
-    function renderOrgTree(data) {
-      const treeDiv = document.getElementById('org-tree');
-      treeDiv.innerHTML = '';
-
-      const peopleMap = {};
-      data.people.forEach(p => peopleMap[p.id] = p);
-
-      const rolesByUnit = {};
-      data.roles.forEach(r => {
-        if (!rolesByUnit[r.org_unit_id]) rolesByUnit[r.org_unit_id] = [];
-        rolesByUnit[r.org_unit_id].push(r);
-      });
-
-      const unitsByParent = {};
-      data.units.forEach(u => {
-        if (!unitsByParent[u.parent_id]) unitsByParent[u.parent_id] = [];
-        unitsByParent[u.parent_id].push(u);
-      });
-
-      function renderUnit(unit, depth = 0) {
-        const container = document.createElement('div');
-        container.className = 'ml-' + depth * 4 + ' border-l pl-4';
-
-        const title = document.createElement('div');
-        title.className = 'font-semibold text-gray-800 flex items-center';
-        title.textContent = unit.name;
-
-        // ➕ Add Subunit button
-        const addBtn = document.createElement('button');
-        addBtn.textContent = '➕ Subunit';
-        addBtn.className = 'ml-2 text-xs text-blue-600 hover:underline';
-        addBtn.onclick = () => showAddSubunitForm(unit.id, container, data.iteration.id);
-
-        // ➕ Add Person button
-        const roleBtn = document.createElement('button');
-        roleBtn.textContent = '➕ Person';
-        roleBtn.className = 'ml-2 text-xs text-green-600 hover:underline';
-        roleBtn.onclick = () => showAddRoleForm(unit.id, container, data.iteration.id, data.people);
-
-        title.appendChild(addBtn);
-        title.appendChild(roleBtn);
-        container.appendChild(title);
-
-        // roles
-        (rolesByUnit[unit.id] || []).forEach(r => {
-          const person = peopleMap[r.person_id];
-          const roleDiv = document.createElement('div');
-          roleDiv.className = 'ml-4 text-sm text-gray-700';
-          roleDiv.textContent =
-            `- ${person ? person.name : 'Unknown'} (${r.is_manager ? 'Manager' : 'Member'}) ${r.description || ''}`;
-          container.appendChild(roleDiv);
-        });
-
-        // children
-        (unitsByParent[unit.id] || []).forEach(child => {
-          container.appendChild(renderUnit(child, depth + 1));
-        });
-
-        return container;
-      }
-
-      (unitsByParent[null] || []).forEach(rootUnit => {
-        treeDiv.appendChild(renderUnit(rootUnit));
-      });
-    }
-
-    function showAddSubunitForm(parentId, container, iterationId) {
-      const form = document.createElement('form');
-      form.className = 'ml-4 mt-2 p-2 border rounded bg-gray-50';
-      form.innerHTML = `
-        <input type="text" placeholder="Subunit name"
-          class="border p-1 text-sm mr-2" required>
-        <button type="submit" class="bg-blue-500 text-white px-2 py-1 text-sm rounded">Save</button>
-      `;
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        const name = form.querySelector('input').value.trim();
-        await fetch('/api/admin/create-org-unit', {
-          method: 'POST',
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '❌';
+  delBtn.className = 'ml-2 text-xs text-red-600 hover:underline';
+  delBtn.onclick = async () => {
+    if (confirm(`Remove ${person?.name} from ${unit.name}?`)) {
+      try {
+        const res = await fetch('/api/admin/delete-role', {
+          method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, parent_id: parentId, iteration_id: iterationId })
+          body: JSON.stringify({ role_id: r.id })
         });
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.message || 'Error deleting role');
+          return;
+        }
         loadOrgData();
-      };
-      container.appendChild(form);
+      } catch (err) {
+        alert('Unexpected error: ' + err.message);
+      }
     }
+  };
 
-    function showAddRoleForm(unitId, container, iterationId, people) {
-      const form = document.createElement('form');
-      form.className = 'ml-4 mt-2 p-2 border rounded bg-green-50';
-      form.innerHTML = `
-        <select class="border p-1 text-sm mr-2" required>
-          ${people.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-        </select>
-        <label class="text-sm mr-2">
-          <input type="checkbox"> Manager
-        </label>
-        <input type="text" placeholder="Description"
-          class="border p-1 text-sm mr-2">
-        <button type="submit" class="bg-green-500 text-white px-2 py-1 text-sm rounded">Assign</button>
-      `;
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        const person_id = form.querySelector('select').value;
-        const is_manager = form.querySelector('input[type=checkbox]').checked;
-        const description = form.querySelector('input[type=text]').value;
-        await fetch('/api/admin/assign-role', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ person_id, org_unit_id: unitId, is_manager, description, iteration_id: iterationId })
-        });
-        loadOrgData();
-      };
-      container.appendChild(form);
-    }
-
-    loadOrgData();
-  </script>
-</body>
-</html>
+  roleDiv.appendChild(delBtn);
+  container.appendChild(roleDiv);
+});
 
