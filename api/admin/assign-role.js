@@ -1,114 +1,29 @@
-<script>
-  async function renderOrgUnits(units, roles, people, parentId = null, container) {
-    const children = units.filter(u => u.parent_id === parentId);
-    children.forEach(unit => {
-      const div = document.createElement('div');
-      div.className = 'ml-6 mt-2';
+// api/admin/assign-role.js
+import { supabase } from '../db.js';
 
-      // Org unit name
-      const header = document.createElement('div');
-      header.className = 'font-bold';
-      header.textContent = unit.name;
-      div.appendChild(header);
-
-      // Show roles/people
-      const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
-      unitRoles.forEach(role => {
-        const person = people.find(p => p.id === role.person_id);
-        const p = document.createElement('p');
-        p.className = 'ml-4 text-sm';
-        p.textContent = `- ${person?.name} ${role.is_manager ? '(Manager)' : ''} ${role.description || ''}`;
-        div.appendChild(p);
-      });
-
-      // Add Person link
-      const addPersonLink = document.createElement('a');
-      addPersonLink.href = '#';
-      addPersonLink.className = 'ml-4 text-blue-500 text-sm hover:underline';
-      addPersonLink.textContent = '➕ Add Person';
-      addPersonLink.onclick = (e) => {
-        e.preventDefault();
-        showAddPersonForm(div, unit.id);
-      };
-      div.appendChild(addPersonLink);
-
-      // Add Subunit link (from Step 1)
-      const addLink = document.createElement('a');
-      addLink.href = '#';
-      addLink.className = 'ml-4 text-blue-500 text-sm hover:underline';
-      addLink.textContent = '➕ Add Subunit';
-      addLink.onclick = (e) => {
-        e.preventDefault();
-        showAddSubunitForm(div, unit.id);
-      };
-      div.appendChild(addLink);
-
-      container.appendChild(div);
-      renderOrgUnits(units, roles, people, unit.id, div);
-    });
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
-  function showAddPersonForm(container, unitId) {
-    const form = document.createElement('div');
-    form.className = 'ml-6 mt-2 p-2 border rounded bg-gray-50';
+  try {
+    const { person_id, org_unit_id, is_manager, description, iteration_id } = req.body;
 
-    const select = document.createElement('select');
-    select.className = 'border p-1 mr-2';
-    orgData.people.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.name;
-      select.appendChild(opt);
-    });
-    form.appendChild(select);
+    if (!person_id || !org_unit_id || !iteration_id) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
 
-    const managerLabel = document.createElement('label');
-    managerLabel.className = 'ml-2 text-sm';
-    const managerCheckbox = document.createElement('input');
-    managerCheckbox.type = 'checkbox';
-    managerLabel.appendChild(managerCheckbox);
-    managerLabel.appendChild(document.createTextNode(' Manager'));
-    form.appendChild(managerLabel);
+    const { data, error } = await supabase
+      .from('person_roles')
+      .insert([{ person_id, org_unit_id, is_manager, description, iteration_id }])
+      .select();
 
-    const desc = document.createElement('input');
-    desc.type = 'text';
-    desc.placeholder = 'Description';
-    desc.className = 'ml-2 border p-1';
-    form.appendChild(desc);
+    if (error) throw error;
 
-    const saveBtn = document.createElement('button');
-    saveBtn.textContent = 'Save';
-    saveBtn.className = 'ml-2 bg-blue-500 text-white px-2 py-1 rounded';
-    saveBtn.onclick = async () => {
-      const body = {
-        person_id: select.value,
-        org_unit_id: unitId,
-        iteration_id: orgData.iteration.id,
-        is_manager: managerCheckbox.checked,
-        description: desc.value.trim()
-      };
-
-      const res = await fetch('/api/admin/assign-role', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (data.success) {
-        await loadIterationAndUnits();
-      } else {
-        alert('Error: ' + data.message);
-      }
-    };
-    form.appendChild(saveBtn);
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.className = 'ml-2 bg-gray-300 px-2 py-1 rounded';
-    cancelBtn.onclick = () => form.remove();
-    form.appendChild(cancelBtn);
-
-    container.appendChild(form);
+    return res.status(200).json({ success: true, role: data[0] });
+  } catch (err) {
+    console.error('Assign role error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
   }
-</script>
+}
 
