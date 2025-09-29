@@ -5,62 +5,54 @@
   <title>Organization Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen p-8">
-  <div class="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-6">
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg">
     <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-info" class="text-gray-600 mb-6">Loading...</p>
-    <div id="org-tree"></div>
-    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:text-blue-700">
-      ← Back to Admin Portal
-    </a>
+    <p id="iteration-display" class="text-blue-600 font-semibold mb-6">Loading...</p>
+    <div id="org-container"></div>
+    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:text-blue-800">← Back to Admin Portal</a>
   </div>
 
   <script>
     let currentIteration = null;
-    let activeForm = null; // only one inline form open at a time
+    let activeForm = null;
 
     async function loadIterationAndUnits() {
-      const info = document.getElementById('iteration-info');
-      const tree = document.getElementById('org-tree');
-      info.textContent = "Loading...";
-      tree.innerHTML = "";
+      const display = document.getElementById('iteration-display');
+      const container = document.getElementById('org-container');
+      container.innerHTML = '';
+      display.textContent = 'Loading...';
 
       try {
-        // 1) Get current active iteration
-        const iterRes = await fetch('/api/admin/[action]?action=active-iteration');
-        const iterData = await iterRes.json();
-        if (!iterRes.ok || !iterData.success || !iterData.iteration) {
-          throw new Error(iterData.message || "No active iteration found");
-        }
-        currentIteration = iterData.iteration;
-        info.textContent = `Current Iteration: ${currentIteration.name} (ID: ${currentIteration.id})`;
-
-        // 2) Get org data for this iteration
-        const res = await fetch(`/api/admin/[action]?action=org-data&iteration_id=${currentIteration.id}`);
+        const res = await fetch('/api/admin/org-data?iteration_id=11');
         const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.message || "Failed to load org data");
-        }
 
-        const { units, roles, people } = data;
+        if (!data.success) throw new Error(data.message);
 
-        // Build tree structure
-        const unitMap = {};
-        units.forEach(u => unitMap[u.id] = { ...u, children: [] });
-        units.forEach(u => {
-          if (u.parent_id && unitMap[u.parent_id]) {
-            unitMap[u.parent_id].children.push(unitMap[u.id]);
-          }
-        });
-        const roots = units.filter(u => !u.parent_id).map(u => unitMap[u.id]);
+        currentIteration = data.iteration;
+        display.textContent = `Current Iteration: ${currentIteration.name} (ID: ${currentIteration.id})`;
 
-        // Render
-        roots.forEach(root => renderUnit(root, roles, people, tree));
+        // Build tree
+        const units = buildTree(data.units);
+        units.forEach(unit => renderUnit(unit, data.roles, data.people, container));
       } catch (err) {
-        info.textContent = `Error: ${err.message}`;
-        info.classList.remove('text-gray-600');
-        info.classList.add('text-red-600');
+        display.textContent = 'Error: ' + err.message;
+        display.classList.replace('text-blue-600', 'text-red-600');
       }
+    }
+
+    function buildTree(units) {
+      const map = {};
+      units.forEach(u => map[u.id] = { ...u, children: [] });
+      const roots = [];
+      units.forEach(u => {
+        if (u.parent_id) {
+          map[u.parent_id].children.push(map[u.id]);
+        } else {
+          roots.push(map[u.id]);
+        }
+      });
+      return roots;
     }
 
     function renderUnit(unit, roles, people, container) {
@@ -80,7 +72,12 @@
 
       unitDiv.appendChild(titleRow);
 
-      // Roles list
+      // 🔹 Form slot directly under title row
+      const formSlot = document.createElement('div');
+      formSlot.className = 'ml-6 mt-1';
+      unitDiv.appendChild(formSlot);
+
+      // Roles
       const roleList = document.createElement('ul');
       roleList.className = 'ml-6 list-disc';
       roles.filter(r => r.org_unit_id === unit.id).forEach(r => {
@@ -91,17 +88,12 @@
       });
       unitDiv.appendChild(roleList);
 
-      // 🔹 Inline form slot goes HERE (right under the unit, above its children)
-      const formSlot = document.createElement('div');
-      formSlot.className = 'ml-6';
-      unitDiv.appendChild(formSlot);
-
-      // Children container (subunits)
+      // Children
       const childrenContainer = document.createElement('div');
       unit.children.forEach(child => renderUnit(child, roles, people, childrenContainer));
       unitDiv.appendChild(childrenContainer);
 
-      // Wire up Add Subunit to use this unit's dedicated slot
+      // Add Subunit link
       addLink.onclick = (e) => {
         e.preventDefault();
         showInlineSubunitForm(unit.id, formSlot);
@@ -110,65 +102,57 @@
       container.appendChild(unitDiv);
     }
 
-    function showInlineSubunitForm(parentId, slotEl) {
-      // Close any previous form
+    function showInlineSubunitForm(parentId, container) {
       if (activeForm) {
         activeForm.remove();
         activeForm = null;
       }
 
       const form = document.createElement('div');
-      form.className = 'mt-2 p-2 border rounded bg-gray-50 flex items-center space-x-2';
+      form.className = 'mt-2 p-2 border rounded bg-gray-50';
 
       const input = document.createElement('input');
       input.type = 'text';
       input.placeholder = 'Subunit name';
-      input.className = 'border rounded px-2 py-1 flex-1';
+      input.className = 'border rounded px-2 py-1 mr-2';
 
-      const createBtn = document.createElement('button');
-      createBtn.textContent = 'Create';
-      createBtn.className = 'bg-green-500 text-white px-3 py-1 rounded';
-      createBtn.onclick = async () => {
+      const submitBtn = document.createElement('button');
+      submitBtn.textContent = 'Create';
+      submitBtn.className = 'bg-green-500 text-white px-2 py-1 rounded';
+      submitBtn.onclick = async () => {
         const name = input.value.trim();
-        if (!name) {
-          alert('Please enter a name.');
-          return;
-        }
-
-        const res = await fetch('/api/admin/[action]?action=create-org-unit', {
+        if (!name) return alert('Please enter a name.');
+        const res = await fetch('/api/admin/create-org-unit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, parent_id: parentId, iteration_id: currentIteration.id })
         });
         const data = await res.json();
-
-        if (res.ok && data.success) {
+        if (data.success) {
           loadIterationAndUnits();
         } else {
-          alert('Error: ' + (data.message || 'Failed to create subunit'));
+          alert('Error: ' + data.message);
         }
       };
 
       const cancelBtn = document.createElement('button');
       cancelBtn.textContent = 'Cancel';
-      cancelBtn.className = 'bg-gray-400 text-white px-3 py-1 rounded';
+      cancelBtn.className = 'ml-2 bg-gray-400 text-white px-2 py-1 rounded';
       cancelBtn.onclick = () => {
         form.remove();
         activeForm = null;
       };
 
       form.appendChild(input);
-      form.appendChild(createBtn);
+      form.appendChild(submitBtn);
       form.appendChild(cancelBtn);
 
-      slotEl.innerHTML = '';    // ensure it replaces any old content in this slot
-      slotEl.appendChild(form);
-
+      container.appendChild(form);
       activeForm = form;
       input.focus();
     }
 
-    document.addEventListener('DOMContentLoaded', loadIterationAndUnits);
+    loadIterationAndUnits();
   </script>
 </body>
 </html>
