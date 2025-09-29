@@ -5,107 +5,135 @@
   <title>Organization Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-8">
-  <div class="max-w-3xl mx-auto bg-white p-6 rounded shadow">
+<body class="bg-gray-100 p-6">
+  <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
     <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-display" class="text-blue-600 font-semibold mb-4"></p>
-    <div id="org-tree" class="mb-8"></div>
+    <p id="iteration-display" class="text-blue-600 font-semibold mb-6">Loading...</p>
 
-    <h2 class="text-xl font-bold mb-2">Add Sub-Organization</h2>
-    <form id="suborg-form" class="space-y-4">
-      <div>
-        <label for="unit-name" class="block text-sm font-medium text-gray-700">Sub-Org Name</label>
-        <input id="unit-name" type="text" required class="mt-1 block w-full border rounded p-2">
-      </div>
-      <div>
-        <label for="parent-id" class="block text-sm font-medium text-gray-700">Parent Unit ID</label>
-        <input id="parent-id" type="number" required class="mt-1 block w-full border rounded p-2">
-      </div>
-      <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded">Create Sub-Org</button>
-    </form>
+    <!-- Create new org unit form -->
+    <div class="mb-6">
+      <h2 class="text-xl font-bold mb-2">Create Sub-Organization</h2>
+      <form id="org-form" class="space-y-4">
+        <div>
+          <label class="block text-gray-700">Name</label>
+          <input type="text" id="org-name" class="border rounded w-full py-2 px-3" required>
+        </div>
+        <div>
+          <label class="block text-gray-700">Parent Org Unit</label>
+          <select id="parent-id" class="border rounded w-full py-2 px-3"></select>
+        </div>
+        <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+          Create
+        </button>
+      </form>
+    </div>
 
-    <p id="message" class="mt-4 text-sm"></p>
+    <!-- Org chart tree -->
+    <div id="org-tree" class="text-gray-800"></div>
 
-    <a href="/admin.html" class="block mt-6 text-blue-500 hover:text-blue-700">← Back to Admin Portal</a>
+    <!-- Back link -->
+    <a href="/admin.html" class="text-blue-500 hover:text-blue-700 mt-6 inline-block">← Back to Admin Portal</a>
   </div>
 
   <script>
     let currentIterationId = null;
+    let orgUnits = [];
 
-    async function loadOrgData() {
+    async function loadIterationAndUnits(iterationId) {
       try {
-        const res = await fetch('/api/admin/org-data?iteration_id=11'); // TODO: make dynamic later
-        if (!res.ok) throw new Error('Failed to load org data');
+        const res = await fetch(`/api/admin/org-data?iteration_id=${iterationId}`);
         const data = await res.json();
-
         if (!data.success) throw new Error(data.message);
 
         currentIterationId = data.iteration.id;
         document.getElementById('iteration-display').textContent =
           `Current Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
 
-        const tree = document.getElementById('org-tree');
-        tree.innerHTML = renderTree(data.units, data.roles, data.people, null);
+        orgUnits = data.units;
+        populateParentDropdown(orgUnits);
+        renderOrgUnits(data.units, data.roles, data.people);
       } catch (err) {
-        document.getElementById('iteration-display').textContent =
-          `Error loading org data: ${err.message}`;
+        document.getElementById('iteration-display').textContent = "Error: " + err.message;
+        document.getElementById('iteration-display').classList.replace("text-blue-600", "text-red-600");
       }
     }
 
-    function renderTree(units, roles, people, parentId) {
-      const children = units.filter(u => u.parent_id === parentId);
-      if (!children.length) return '';
+    function populateParentDropdown(units) {
+      const dropdown = document.getElementById('parent-id');
+      dropdown.innerHTML = '<option value="">(no parent)</option>';
+      units.forEach(unit => {
+        const option = document.createElement('option');
+        option.value = unit.id;
+        option.textContent = unit.name;
+        dropdown.appendChild(option);
+      });
+    }
 
-      let html = '<ul class="ml-6 list-disc">';
-      for (const unit of children) {
-        const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
-        html += `<li><strong>${unit.name}</strong> (ID: ${unit.id})`;
+    function renderOrgUnits(units, roles, people) {
+      const container = document.getElementById('org-tree');
+      container.innerHTML = '';
 
-        if (unitRoles.length) {
-          html += '<ul class="ml-6 list-square">';
-          for (const role of unitRoles) {
+      function buildTree(parentId) {
+        const children = units.filter(u => u.parent_id === parentId);
+        if (!children.length) return '';
+
+        let html = '<ul class="ml-6 list-disc">';
+        for (const child of children) {
+          html += `<li><strong>${child.name}</strong>`;
+          const assignedRoles = roles.filter(r => r.org_unit_id === child.id);
+          assignedRoles.forEach(role => {
             const person = people.find(p => p.id === role.person_id);
-            const roleLabel = role.is_manager ? '(Manager)' : '(Member)';
-            html += `<li>${person ? person.name : 'Unknown'} ${roleLabel} — ${role.description || ''}</li>`;
-          }
-          html += '</ul>';
+            if (person) {
+              html += `<div class="ml-4 text-sm text-gray-700">- ${person.name} (${role.is_manager ? 'Manager' : 'Member'}) ${role.description || ''}</div>`;
+            }
+          });
+          html += buildTree(child.id);
+          html += `</li>`;
         }
-
-        html += renderTree(units, roles, people, unit.id);
-        html += '</li>';
+        html += '</ul>';
+        return html;
       }
-      html += '</ul>';
-      return html;
+
+      container.innerHTML = buildTree(null) || "No organization units defined yet.";
     }
 
-    document.getElementById('suborg-form').addEventListener('submit', async e => {
+    // Handle sub-org creation
+    document.getElementById('org-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = document.getElementById('unit-name').value.trim();
-      const parentId = parseInt(document.getElementById('parent-id').value, 10);
-      const message = document.getElementById('message');
+      const name = document.getElementById('org-name').value.trim();
+      const parentId = document.getElementById('parent-id').value || null;
 
       try {
         const res = await fetch('/api/admin/create-org-unit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, parent_id: parentId, iteration_id: currentIterationId })
+          body: JSON.stringify({ name, parent_id: parentId ? parseInt(parentId) : null, iteration_id: currentIterationId })
         });
         const data = await res.json();
+        if (!data.success) throw new Error(data.message);
 
-        if (!res.ok || !data.success) throw new Error(data.message);
-
-        message.textContent = `✅ Sub-Org "${name}" created under parent ${parentId}`;
-        message.className = 'mt-4 text-green-600';
-
-        document.getElementById('suborg-form').reset();
-        loadOrgData(); // refresh tree
+        alert(`Org unit "${name}" created`);
+        document.getElementById('org-form').reset();
+        await loadIterationAndUnits(currentIterationId); // auto-refresh tree
       } catch (err) {
-        message.textContent = `❌ ${err.message}`;
-        message.className = 'mt-4 text-red-600';
+        alert('Error: ' + err.message);
       }
     });
 
-    loadOrgData();
+    // Load initial iteration/org tree
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/active-iteration');
+        const data = await res.json();
+        if (data.success && data.iteration) {
+          await loadIterationAndUnits(data.iteration.id);
+        } else {
+          document.getElementById('iteration-display').textContent = "No active iteration found.";
+        }
+      } catch {
+        document.getElementById('iteration-display').textContent = "Error loading iteration.";
+      }
+    })();
   </script>
 </body>
 </html>
