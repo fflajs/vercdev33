@@ -8,148 +8,189 @@
 <body class="bg-gray-100 min-h-screen p-6">
   <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-lg">
     <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-display" class="text-blue-600 font-semibold mb-6">Loading...</p>
-    <div id="org-container"></div>
-    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:text-blue-800">← Back to Admin Portal</a>
+    <p id="iteration-info" class="text-gray-600 mb-6">Loading...</p>
+    <div id="org-tree" class="space-y-4"></div>
+    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:text-blue-700">← Back to Admin Portal</a>
   </div>
 
   <script>
     let currentIteration = null;
+    let people = [];
     let activeForm = null;
 
     async function loadIterationAndUnits() {
-      const display = document.getElementById('iteration-display');
-      const container = document.getElementById('org-container');
-      container.innerHTML = '';
-      display.textContent = 'Loading...';
-
-      try {
-        const res = await fetch('/api/admin/org-data?iteration_id=11');
-        const data = await res.json();
-
-        if (!data.success) throw new Error(data.message);
-
-        currentIteration = data.iteration;
-        display.textContent = `Current Iteration: ${currentIteration.name} (ID: ${currentIteration.id})`;
-
-        // Build tree
-        const units = buildTree(data.units);
-        units.forEach(unit => renderUnit(unit, data.roles, data.people, container));
-      } catch (err) {
-        display.textContent = 'Error: ' + err.message;
-        display.classList.replace('text-blue-600', 'text-red-600');
+      const res = await fetch('/api/admin/org-data?iteration_id=11'); // in production, fetch active iteration first
+      const data = await res.json();
+      if (!data.success) {
+        document.getElementById('iteration-info').textContent = 'Error: ' + data.message;
+        return;
       }
+
+      currentIteration = data.iteration;
+      people = data.people;
+
+      document.getElementById('iteration-info').textContent =
+        `Current Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
+
+      const container = document.getElementById('org-tree');
+      container.innerHTML = '';
+      renderOrgUnits(container, data.units, data.roles, null);
     }
 
-    function buildTree(units) {
-      const map = {};
-      units.forEach(u => map[u.id] = { ...u, children: [] });
-      const roots = [];
-      units.forEach(u => {
-        if (u.parent_id) {
-          map[u.parent_id].children.push(map[u.id]);
-        } else {
-          roots.push(map[u.id]);
-        }
+    function renderOrgUnits(container, units, roles, parentId) {
+      const children = units.filter(u => u.parent_id === parentId);
+      children.forEach(unit => {
+        const unitDiv = document.createElement('div');
+        unitDiv.className = 'ml-6 border-l pl-4';
+
+        // header line
+        const header = document.createElement('div');
+        header.className = 'flex items-center space-x-2 font-semibold text-lg';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = unit.name;
+
+        const addSubBtn = document.createElement('button');
+        addSubBtn.textContent = '+ Add Subunit';
+        addSubBtn.className = 'text-sm text-green-600 hover:underline ml-2';
+        addSubBtn.onclick = () => showInlineSubunitForm(unit.id, unitDiv);
+
+        const addRoleBtn = document.createElement('button');
+        addRoleBtn.textContent = '+ Add Role';
+        addRoleBtn.className = 'text-sm text-blue-600 hover:underline ml-2';
+        addRoleBtn.onclick = () => showInlineRoleForm(unit.id, unitDiv);
+
+        header.appendChild(nameSpan);
+        header.appendChild(addSubBtn);
+        header.appendChild(addRoleBtn);
+        unitDiv.appendChild(header);
+
+        // roles
+        const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
+        unitRoles.forEach(role => {
+          const person = people.find(p => p.id === role.person_id);
+          const roleDiv = document.createElement('div');
+          roleDiv.className = 'ml-4 text-gray-700 flex items-center';
+
+          roleDiv.textContent = `- ${person ? person.name : 'Unknown'} (${role.is_manager ? 'Manager' : 'Member'})`;
+
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'Remove';
+          delBtn.className = 'ml-2 text-xs text-red-600 hover:underline';
+          delBtn.onclick = async () => {
+            if (!confirm('Remove this role?')) return;
+            await fetch('/api/admin/delete-role', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: role.id })
+            });
+            loadIterationAndUnits();
+          };
+
+          roleDiv.appendChild(delBtn);
+          unitDiv.appendChild(roleDiv);
+        });
+
+        container.appendChild(unitDiv);
+
+        // recurse
+        renderOrgUnits(unitDiv, units, roles, unit.id);
       });
-      return roots;
-    }
-
-    function renderUnit(unit, roles, people, container) {
-      const unitDiv = document.createElement('div');
-      unitDiv.className = 'ml-4 mt-3';
-
-      // Title row
-      const titleRow = document.createElement('div');
-      titleRow.className = 'font-semibold text-lg flex items-center space-x-2';
-      titleRow.textContent = unit.name;
-
-      const addLink = document.createElement('a');
-      addLink.href = '#';
-      addLink.className = 'text-blue-500 text-sm ml-2 hover:underline';
-      addLink.textContent = '[Add Subunit]';
-      titleRow.appendChild(addLink);
-
-      unitDiv.appendChild(titleRow);
-
-      // 🔹 Form slot directly under title row
-      const formSlot = document.createElement('div');
-      formSlot.className = 'ml-6 mt-1';
-      unitDiv.appendChild(formSlot);
-
-      // Roles
-      const roleList = document.createElement('ul');
-      roleList.className = 'ml-6 list-disc';
-      roles.filter(r => r.org_unit_id === unit.id).forEach(r => {
-        const person = people.find(p => p.id === r.person_id);
-        const li = document.createElement('li');
-        li.textContent = `${person ? person.name : 'Unknown'} (${r.is_manager ? 'Manager' : 'Member'})`;
-        roleList.appendChild(li);
-      });
-      unitDiv.appendChild(roleList);
-
-      // Children
-      const childrenContainer = document.createElement('div');
-      unit.children.forEach(child => renderUnit(child, roles, people, childrenContainer));
-      unitDiv.appendChild(childrenContainer);
-
-      // Add Subunit link
-      addLink.onclick = (e) => {
-        e.preventDefault();
-        showInlineSubunitForm(unit.id, formSlot);
-      };
-
-      container.appendChild(unitDiv);
     }
 
     function showInlineSubunitForm(parentId, container) {
-      if (activeForm) {
-        activeForm.remove();
-        activeForm = null;
-      }
+      if (activeForm) { activeForm.remove(); activeForm = null; }
 
       const form = document.createElement('div');
-      form.className = 'mt-2 p-2 border rounded bg-gray-50';
+      form.className = 'ml-8 mt-2 p-2 border rounded bg-gray-50 flex space-x-2';
 
       const input = document.createElement('input');
       input.type = 'text';
       input.placeholder = 'Subunit name';
-      input.className = 'border rounded px-2 py-1 mr-2';
+      input.className = 'border rounded px-2 py-1 flex-1';
 
-      const submitBtn = document.createElement('button');
-      submitBtn.textContent = 'Create';
-      submitBtn.className = 'bg-green-500 text-white px-2 py-1 rounded';
-      submitBtn.onclick = async () => {
+      const createBtn = document.createElement('button');
+      createBtn.textContent = 'Create';
+      createBtn.className = 'bg-green-500 text-white px-2 py-1 rounded';
+      createBtn.onclick = async () => {
         const name = input.value.trim();
-        if (!name) return alert('Please enter a name.');
-        const res = await fetch('/api/admin/create-org-unit', {
+        if (!name) return alert('Enter a name');
+        await fetch('/api/admin/create-org-unit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, parent_id: parentId, iteration_id: currentIteration.id })
         });
-        const data = await res.json();
-        if (data.success) {
-          loadIterationAndUnits();
-        } else {
-          alert('Error: ' + data.message);
-        }
+        loadIterationAndUnits();
       };
 
       const cancelBtn = document.createElement('button');
       cancelBtn.textContent = 'Cancel';
-      cancelBtn.className = 'ml-2 bg-gray-400 text-white px-2 py-1 rounded';
-      cancelBtn.onclick = () => {
-        form.remove();
-        activeForm = null;
-      };
+      cancelBtn.className = 'bg-gray-400 text-white px-2 py-1 rounded';
+      cancelBtn.onclick = () => { form.remove(); activeForm = null; };
 
       form.appendChild(input);
-      form.appendChild(submitBtn);
+      form.appendChild(createBtn);
       form.appendChild(cancelBtn);
+      container.insertBefore(form, container.children[1]);
 
-      container.appendChild(form);
       activeForm = form;
       input.focus();
+    }
+
+    function showInlineRoleForm(orgUnitId, container) {
+      if (activeForm) { activeForm.remove(); activeForm = null; }
+
+      const form = document.createElement('div');
+      form.className = 'ml-8 mt-2 p-2 border rounded bg-gray-50 flex space-x-2';
+
+      // person dropdown
+      const personSelect = document.createElement('select');
+      personSelect.className = 'border rounded px-2 py-1 flex-1';
+      people.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        personSelect.appendChild(opt);
+      });
+
+      // role type dropdown
+      const roleSelect = document.createElement('select');
+      roleSelect.className = 'border rounded px-2 py-1';
+      [{ val: true, label: 'Manager' }, { val: false, label: 'Member' }].forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.val;
+        opt.textContent = r.label;
+        roleSelect.appendChild(opt);
+      });
+
+      const createBtn = document.createElement('button');
+      createBtn.textContent = 'Assign';
+      createBtn.className = 'bg-blue-500 text-white px-2 py-1 rounded';
+      createBtn.onclick = async () => {
+        const person_id = parseInt(personSelect.value);
+        const is_manager = roleSelect.value === 'true';
+        const res = await fetch('/api/admin/assign-role', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ person_id, org_unit_id: orgUnitId, is_manager, iteration_id: currentIteration.id })
+        });
+        const data = await res.json();
+        if (!data.success) alert('Error: ' + data.message);
+        loadIterationAndUnits();
+      };
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.className = 'bg-gray-400 text-white px-2 py-1 rounded';
+      cancelBtn.onclick = () => { form.remove(); activeForm = null; };
+
+      form.appendChild(personSelect);
+      form.appendChild(roleSelect);
+      form.appendChild(createBtn);
+      form.appendChild(cancelBtn);
+
+      container.insertBefore(form, container.children[1]);
+      activeForm = form;
     }
 
     loadIterationAndUnits();
