@@ -8,12 +8,7 @@
 <body class="bg-gray-100 flex items-center justify-center h-screen">
   <div class="text-center bg-white p-12 rounded-lg shadow-lg">
     <h1 class="text-4xl font-bold mb-2">Administration Portal</h1>
-
-    <!-- Restored iteration display -->
-    <p id="iteration-display" class="text-blue-600 font-semibold mb-8">
-      Loading active iteration...
-    </p>
-
+    <p id="iteration-display" class="text-blue-600 font-semibold mb-8">Loading active iteration...</p>
     <p class="text-gray-600 mb-8">Welcome, Admin. Please select a tool.</p>
 
     <div class="space-y-4">
@@ -38,22 +33,23 @@
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      const iterationDisplay = document.getElementById('iteration-display');
-      try {
-        const response = await fetch('/api/active-iteration');
-        const data = await response.json();
+    document.addEventListener("DOMContentLoaded", async () => {
+      const iterationDisplay = document.getElementById("iteration-display");
 
-        if (!response.ok || !data.success || !data.iteration) {
-          throw new Error(data.message || 'No active iteration found');
+      try {
+        const res = await fetch("/api/admin/[action]?action=active-iteration");
+        const data = await res.json();
+
+        if (!res.ok || !data.success || !data.iteration) {
+          throw new Error(data.message || "No active iteration found");
         }
 
         iterationDisplay.textContent =
           `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
       } catch (error) {
         iterationDisplay.textContent = `Error: ${error.message}`;
-        iterationDisplay.classList.remove('text-blue-600');
-        iterationDisplay.classList.add('text-red-600');
+        iterationDisplay.classList.remove("text-blue-600");
+        iterationDisplay.classList.add("text-red-600");
       }
     });
   </script>
