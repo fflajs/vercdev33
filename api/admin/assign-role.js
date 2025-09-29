@@ -1,40 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Organization Manager</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 p-6">
-  <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-display" class="text-blue-600 font-semibold mb-6">Loading...</p>
-
-    <!-- Create new org unit form -->
-    <div class="mb-6">
-      <h2 class="text-xl font-bold mb-2">Create Sub-Organization</h2>
-      <form id="org-form" class="space-y-4">
-        <div>
-          <label class="block text-gray-700">Name</label>
-          <input type="text" id="org-name" class="border rounded w-full py-2 px-3" required>
-        </div>
-        <div>
-          <label class="block text-gray-700">Parent Org Unit</label>
-          <select id="parent-id" class="border rounded w-full py-2 px-3"></select>
-        </div>
-        <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-          Create
-        </button>
-      </form>
-    </div>
-
-    <!-- Org chart tree -->
-    <div id="org-tree" class="text-gray-800"></div>
-
-    <!-- Back link -->
-    <a href="/admin.html" class="text-blue-500 hover:text-blue-700 mt-6 inline-block">← Back to Admin Portal</a>
-  </div>
-
 <script>
   async function renderOrgUnits(units, roles, people, parentId = null, container) {
     const children = units.filter(u => u.parent_id === parentId);
@@ -148,7 +111,4 @@
     container.appendChild(form);
   }
 </script>
-
-</body>
-</html>
 
