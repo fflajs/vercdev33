@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Register New Person</title>
+  <title>Person Registration</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
@@ -13,19 +14,13 @@
     <form id="register-form">
       <div class="mb-4">
         <label for="name" class="block text-gray-700 text-sm font-bold mb-2">Full Name</label>
-        <input
-          type="text"
-          id="name"
-          name="name"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-          required
-        />
+        <input type="text" id="name" name="name"
+               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+               required>
       </div>
       <div class="flex items-center justify-between">
-        <button
-          type="submit"
-          class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-        >
+        <button type="submit"
+                class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
           Register
         </button>
         <a href="/index.html"
@@ -39,9 +34,8 @@
   </div>
 
   <script>
-    document.getElementById('register-form').addEventListener('submit', async function(event) {
+    document.getElementById('register-form').addEventListener('submit', async function (event) {
       event.preventDefault();
-
       const name = document.getElementById('name').value.trim();
       const message = document.getElementById('message');
       message.textContent = '';
@@ -60,21 +54,23 @@
       }
 
       try {
-        const response = await fetch('/api/admin/people?action=create', {
+        const response = await fetch('/api/people', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
         });
-
         const data = await response.json();
 
-        if (!response.ok || !data.success) {
+        if (response.status === 409) {
+          message.textContent = `Name "${name}" already exists.`;
+          message.classList.add('text-red-500');
+        } else if (!response.ok) {
           throw new Error(data.message || 'Registration failed.');
+        } else {
+          message.textContent = `User "${name}" successfully created! You can now log in.`;
+          message.classList.add('text-green-500');
+          document.getElementById('register-form').reset();
         }
-
-        message.textContent = `User "${name}" successfully created! You can now log in.`;
-        message.classList.add('text-green-500');
-        document.getElementById('register-form').reset();
       } catch (error) {
         message.textContent = error.message;
         message.classList.add('text-red-500');
