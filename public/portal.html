@@ -8,59 +8,75 @@
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
   <div class="w-full max-w-lg bg-white p-8 rounded-lg shadow-lg text-center">
-    <h1 class="text-3xl font-bold mb-4">Welcome to the Portal</h1>
-    <p id="welcome" class="text-lg font-semibold mb-6">Loading...</p>
+    <h1 id="welcome" class="text-3xl font-bold mb-4">Welcome!</h1>
+    <p id="iteration-info" class="text-gray-600 mb-6">Loading active iteration...</p>
 
-    <div id="iteration-info" class="mb-6 text-gray-700"></div>
-
-    <div class="space-y-4">
-      <a href="/visualizer.html" class="block w-full bg-blue-500 text-white py-3 rounded hover:bg-blue-600">
-        Login to Cognitive Visualizer
-      </a>
-      <a href="/analyzer.html" class="block w-full bg-green-500 text-white py-3 rounded hover:bg-green-600">
-        Analyze Descriptions
-      </a>
+    <!-- Admin-only warning banner -->
+    <div id="admin-warning" class="hidden mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
+      ⚠️ The Cognitive Visualizer and Analyzer are placeholders — not implemented yet.
     </div>
 
-    <button id="logout-btn" class="mt-8 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-      Logout
-    </button>
+    <p class="text-gray-700 mb-4">Please select an application to continue.</p>
+
+    <div class="space-y-4">
+      <!-- Buttons shown differently for admin vs regular users -->
+      <a id="visualizer-btn" 
+         href="/visualizer.html" 
+         class="block bg-blue-500 text-white font-bold py-3 px-6 rounded hover:bg-blue-600 transition disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed">
+         Login to Cognitive Visualizer
+      </a>
+      <a id="analyzer-btn" 
+         href="/analyzer.html" 
+         class="block bg-green-500 text-white font-bold py-3 px-6 rounded hover:bg-green-600 transition disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed">
+         Analyze Descriptions
+      </a>
+      <a href="/index.html" 
+         class="block bg-gray-500 text-white font-bold py-3 px-6 rounded hover:bg-gray-600 transition">
+         Logout
+      </a>
+    </div>
   </div>
 
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
-      const welcomeEl = document.getElementById('welcome');
+      const loggedInUser = sessionStorage.getItem('loggedInUser');
+      const welcome = document.getElementById('welcome');
       const iterationInfo = document.getElementById('iteration-info');
-      const name = sessionStorage.getItem('loggedInUser');
+      const visualizerBtn = document.getElementById('visualizer-btn');
+      const analyzerBtn = document.getElementById('analyzer-btn');
+      const adminWarning = document.getElementById('admin-warning');
 
-      if (!name) {
+      if (!loggedInUser) {
         window.location.href = '/index.html';
         return;
       }
 
-      welcomeEl.textContent = `Welcome, ${name}!`;
+      welcome.textContent = `Welcome, ${loggedInUser}!`;
 
       try {
         const res = await fetch('/api/admin/active-iteration');
         const data = await res.json();
 
-        if (res.ok && data.success) {
-          const it = data.iteration;
-          iterationInfo.textContent = `Current Active Iteration: ${it.name} (ID: ${it.id})`;
-          iterationInfo.classList.add('text-blue-600', 'font-semibold');
+        if (res.ok && data.success && data.iteration) {
+          iterationInfo.textContent =
+            `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
         } else {
-          iterationInfo.textContent = data.message || 'No active iteration found';
-          iterationInfo.classList.add('text-red-600', 'font-semibold');
+          iterationInfo.textContent = 'No active iteration found.';
         }
       } catch (err) {
-        iterationInfo.textContent = 'Error loading iteration: ' + err.message;
-        iterationInfo.classList.add('text-red-600', 'font-semibold');
+        iterationInfo.textContent = 'Error loading iteration.';
       }
 
-      document.getElementById('logout-btn').addEventListener('click', () => {
-        sessionStorage.removeItem('loggedInUser');
-        window.location.href = '/index.html';
-      });
+      if (loggedInUser.toLowerCase() !== 'admin') {
+        // Non-admin users: disable the links
+        visualizerBtn.removeAttribute('href');
+        analyzerBtn.removeAttribute('href');
+        visualizerBtn.classList.add('disabled');
+        analyzerBtn.classList.add('disabled');
+      } else {
+        // Admins: show the yellow warning banner
+        adminWarning.classList.remove('hidden');
+      }
     });
   </script>
 </body>

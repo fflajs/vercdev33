@@ -2,67 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>User Portal</title>
+  <title>Cognitive Visualizer</title>
   <link rel="icon" type="image/png" href="/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
   <div class="w-full max-w-lg bg-white p-8 rounded-lg shadow-lg text-center">
-    <h1 class="text-3xl font-bold mb-4">Welcome to the Portal</h1>
-    <p id="welcome" class="text-lg font-semibold mb-6">Loading...</p>
-
-    <div id="iteration-info" class="mb-6 text-gray-700"></div>
-
-    <div class="space-y-4">
-      <a href="/visualizer.html" class="block w-full bg-blue-500 text-white py-3 rounded hover:bg-blue-600">
-        Login to Cognitive Visualizer
-      </a>
-      <a href="/analyzer.html" class="block w-full bg-green-500 text-white py-3 rounded hover:bg-green-600">
-        Analyze Descriptions
-      </a>
+    <div class="bg-yellow-100 text-yellow-800 text-sm font-semibold px-3 py-2 rounded mb-4">
+      ⚠️ Admin Only – Placeholder Page
     </div>
-
-    <button id="logout-btn" class="mt-8 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-      Logout
-    </button>
+    <h1 class="text-3xl font-bold mb-4">Cognitive Visualizer</h1>
+    <p class="text-gray-600 mb-6">
+      This is a placeholder page for the Cognitive Visualizer.  
+      Here we will later add the 3D visualization of survey results and cognitive spaces.
+    </p>
+    <a href="/admin.html" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+      ← Back to Admin Portal
+    </a>
   </div>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      const welcomeEl = document.getElementById('welcome');
-      const iterationInfo = document.getElementById('iteration-info');
-      const name = sessionStorage.getItem('loggedInUser');
-
-      if (!name) {
-        window.location.href = '/index.html';
-        return;
-      }
-
-      welcomeEl.textContent = `Welcome, ${name}!`;
-
-      try {
-        const res = await fetch('/api/admin/active-iteration');
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-          const it = data.iteration;
-          iterationInfo.textContent = `Current Active Iteration: ${it.name} (ID: ${it.id})`;
-          iterationInfo.classList.add('text-blue-600', 'font-semibold');
-        } else {
-          iterationInfo.textContent = data.message || 'No active iteration found';
-          iterationInfo.classList.add('text-red-600', 'font-semibold');
-        }
-      } catch (err) {
-        iterationInfo.textContent = 'Error loading iteration: ' + err.message;
-        iterationInfo.classList.add('text-red-600', 'font-semibold');
-      }
-
-      document.getElementById('logout-btn').addEventListener('click', () => {
-        sessionStorage.removeItem('loggedInUser');
-        window.location.href = '/index.html';
-      });
-    });
-  </script>
 </body>
 </html>
 
