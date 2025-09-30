@@ -11,7 +11,8 @@ export default async function handler(req, res) {
   try {
     switch (action) {
       /**
-       * PEOPLE MANAGEMENT
+       * PEOPLE LIST (admin use)
+       * GET /api/admin/people
        */
       case 'people':
         if (method === 'GET') {
@@ -19,7 +20,14 @@ export default async function handler(req, res) {
           if (error) throw error;
           return res.status(200).json({ success: true, people: data });
         }
+        break;
 
+      /**
+       * PEOPLE CREATE (registration)
+       * POST /api/admin/people-create
+       * Body: { name }
+       */
+      case 'people-create':
         if (method === 'POST') {
           const { name } = body;
           if (!name) {
@@ -36,10 +44,10 @@ export default async function handler(req, res) {
             .eq('name', name)
             .single();
 
+          // PGRST116 means 0 rows (not found) – not an error for our use
           if (checkError && checkError.code !== 'PGRST116') {
-            throw checkError; // unexpected error
+            throw checkError;
           }
-
           if (existing) {
             return res.status(409).json({
               success: false,
@@ -47,7 +55,7 @@ export default async function handler(req, res) {
             });
           }
 
-          // Insert new person
+          // Insert
           const { data, error } = await supabase
             .from('people')
             .insert([{ name }])
@@ -138,7 +146,7 @@ export default async function handler(req, res) {
         break;
 
       /**
-       * ORGANIZATION DATA
+       * ORG DATA
        */
       case 'org-data':
         if (method === 'GET') {
@@ -263,7 +271,6 @@ export default async function handler(req, res) {
           .json({ success: false, message: `Unknown action: ${action}` });
     }
 
-    // If method not handled
     return res
       .status(405)
       .json({ success: false, message: 'Method not allowed' });

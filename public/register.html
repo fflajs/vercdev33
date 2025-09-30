@@ -58,7 +58,7 @@
       }
 
       try {
-        const response = await fetch('/api/admin/people', {
+        const response = await fetch('/api/admin/people-create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
@@ -71,7 +71,8 @@
         console.log("DEBUG → data.success:", data.success);
         console.log("DEBUG → full response:", data);
 
-        if (!response.ok || !data.success) {
+        // Validate server contract strictly
+        if (!response.ok || !data.success || !data.person) {
           throw new Error(data.message || 'Registration failed');
         }
 
