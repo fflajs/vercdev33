@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta charset="UTF-8">
   <title>Cognitive Space Analyzer - Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -10,23 +9,29 @@
   <div class="w-full max-w-lg bg-white p-10 rounded-lg shadow-lg text-center">
     <h1 class="text-4xl font-bold mb-4">Cognitive Space Analyzer</h1>
     <p class="text-gray-600 mb-8 leading-relaxed">
-      Welcome! Please log in with your name to continue.
+      Welcome! Please log in with your full name to continue.
     </p>
 
     <form id="login-form" class="mb-4">
       <div class="flex items-center border-b border-blue-500 py-2">
-        <input id="name-input"
-               class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none"
-               type="text" placeholder="Enter Your Full Name" aria-label="Full name">
-        <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 text-sm text-white py-1 px-2 rounded"
-                type="submit">
+        <input
+          id="name-input"
+          class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none"
+          type="text"
+          placeholder="Enter Your Full Name"
+          aria-label="Full name"
+        />
+        <button
+          class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 border-blue-500 hover:border-blue-700 text-sm border-4 text-white py-1 px-2 rounded"
+          type="submit"
+        >
           Login
         </button>
       </div>
     </form>
 
     <a href="/register.html"
-       class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-block">
+       class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline inline-block">
       Register
     </a>
 
@@ -34,8 +39,9 @@
   </div>
 
   <script>
-    document.getElementById('login-form').addEventListener('submit', async (event) => {
+    document.getElementById('login-form').addEventListener('submit', async function(event) {
       event.preventDefault();
+
       const nameInput = document.getElementById('name-input');
       const errorMessage = document.getElementById('error-message');
       const name = nameInput.value.trim();
@@ -47,28 +53,30 @@
         return;
       }
 
-      // Special case: Admin login
+      // Handle Admin login
       if (name.toLowerCase() === 'admin') {
         window.location.href = '/admin.html';
         return;
       }
 
       try {
-        const response = await fetch('/api/check-person', {
+        const response = await fetch('/api/admin/people?action=check', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
         });
+
         const data = await response.json();
 
         if (!response.ok || !data.success) {
           throw new Error(data.message || 'Login failed.');
         }
 
+        // Save logged in user
         sessionStorage.setItem('loggedInUser', name);
         window.location.href = '/portal.html';
-      } catch (err) {
-        errorMessage.textContent = err.message;
+      } catch (error) {
+        errorMessage.textContent = error.message;
       }
     });
   </script>
