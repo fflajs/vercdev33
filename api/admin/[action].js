@@ -19,6 +19,7 @@ export default async function handler(req, res) {
           if (error) throw error;
           return res.status(200).json({ success: true, people: data });
         }
+
         if (method === 'POST') {
           const { name } = body;
           if (!name) {
@@ -28,22 +29,32 @@ export default async function handler(req, res) {
             });
           }
 
+          // Check if already exists
+          const { data: existing, error: checkError } = await supabase
+            .from('people')
+            .select('*')
+            .eq('name', name)
+            .single();
+
+          if (checkError && checkError.code !== 'PGRST116') {
+            throw checkError; // unexpected error
+          }
+
+          if (existing) {
+            return res.status(409).json({
+              success: false,
+              message: `Name "${name}" already exists.`,
+            });
+          }
+
+          // Insert new person
           const { data, error } = await supabase
             .from('people')
             .insert([{ name }])
             .select()
             .single();
 
-          if (error) {
-            if (error.code === '23505') {
-              // Unique violation
-              return res.status(409).json({
-                success: false,
-                message: `Name "${name}" already exists.`,
-              });
-            }
-            throw error;
-          }
+          if (error) throw error;
 
           return res.status(201).json({ success: true, person: data });
         }
@@ -67,13 +78,16 @@ export default async function handler(req, res) {
             .select('*')
             .is('end_date', null)
             .single();
+
           if (error && error.code !== 'PGRST116') throw error;
+
           if (!data) {
             return res.status(404).json({
               success: false,
               message: 'No active iteration found',
             });
           }
+
           return res.status(200).json({ success: true, iteration: data });
         }
         break;
@@ -87,12 +101,15 @@ export default async function handler(req, res) {
               message: 'Iteration name required',
             });
           }
+
           const { data, error } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
+
           if (error) throw error;
+
           return res.status(201).json({ success: true, iteration: data });
         }
         break;
@@ -106,13 +123,16 @@ export default async function handler(req, res) {
               message: 'Iteration ID required',
             });
           }
+
           const { data, error } = await supabase
             .from('iterations')
             .update({ end_date: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single();
+
           if (error) throw error;
+
           return res.status(200).json({ success: true, iteration: data });
         }
         break;
@@ -129,6 +149,7 @@ export default async function handler(req, res) {
               message: 'iteration_id is required',
             });
           }
+
           const { data: iteration, error: errIter } = await supabase
             .from('iterations')
             .select('*')
@@ -172,12 +193,15 @@ export default async function handler(req, res) {
               message: 'Name and iteration_id required',
             });
           }
+
           const { data, error } = await supabase
             .from('organization_units')
             .insert([{ name, parent_id, iteration_id }])
             .select()
             .single();
+
           if (error) throw error;
+
           return res.status(201).json({ success: true, unit: data });
         }
         break;
@@ -191,6 +215,7 @@ export default async function handler(req, res) {
               message: 'person_id, org_unit_id, iteration_id required',
             });
           }
+
           const { data, error } = await supabase
             .from('person_roles')
             .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
@@ -220,11 +245,14 @@ export default async function handler(req, res) {
               message: 'Role ID required',
             });
           }
+
           const { error } = await supabase
             .from('person_roles')
             .delete()
             .eq('id', id);
+
           if (error) throw error;
+
           return res.status(200).json({ success: true });
         }
         break;
