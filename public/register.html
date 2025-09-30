@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Register New Person</title>
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <title>Person Registration</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
@@ -14,10 +14,17 @@
     <form id="register-form">
       <div class="mb-4">
         <label for="name" class="block text-gray-700 text-sm font-bold mb-2">Full Name</label>
-        <input type="text" id="name" name="name" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+        <input 
+          type="text" 
+          id="name" 
+          name="name" 
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+          required>
       </div>
       <div class="flex items-center justify-between">
-        <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+        <button 
+          type="submit" 
+          class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
           Register
         </button>
         <a href="/index.html" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
@@ -32,7 +39,6 @@
   <script>
     document.getElementById('register-form').addEventListener('submit', async function(event) {
       event.preventDefault();
-
       const name = document.getElementById('name').value.trim();
       const message = document.getElementById('message');
       message.textContent = '';
@@ -51,7 +57,7 @@
       }
 
       try {
-        const response = await fetch('/api/people', {
+        const response = await fetch('/api/admin/people', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
@@ -60,22 +66,14 @@
         const data = await response.json();
 
         if (!response.ok) {
-          // Supabase duplicate key error
-          if (response.status === 409 || (data.error && data.error.includes('duplicate'))) {
-            message.textContent = `The name "${name}" is already registered.`;
-          } else {
-            message.textContent = data.message || 'Registration failed.';
-          }
-          message.classList.add('text-red-500');
-          return;
+          throw new Error(data.message || 'Registration failed.');
         }
 
-        // Success
         message.textContent = `User "${name}" successfully created! You can now log in.`;
         message.classList.add('text-green-500');
         document.getElementById('register-form').reset();
       } catch (error) {
-        message.textContent = 'Unexpected error: ' + error.message;
+        message.textContent = error.message;
         message.classList.add('text-red-500');
       }
     });
