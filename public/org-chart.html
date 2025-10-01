@@ -6,86 +6,160 @@
   <link rel="icon" href="/favicon.ico">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-8">
-  <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
-    <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-info" class="mb-6 text-gray-700">Loading...</p>
-    <div id="org-tree" class="ml-4"></div>
-
-    <div class="mt-6 space-x-4">
-      <a href="/admin.html" class="text-blue-500 font-bold hover:text-blue-700">
-        ← Back to Admin Portal
-      </a>
-      <a href="/portal.html" class="text-green-600 font-bold hover:text-green-800">
-        ← Back to Portal
-      </a>
-    </div>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-4xl mx-auto bg-white shadow-md rounded-lg p-6">
+    <h1 class="text-2xl font-bold mb-4">Organization Manager</h1>
+    <p id="iteration-info" class="mb-4 text-blue-600 font-semibold">Loading...</p>
+    <div id="org-container" class="space-y-2"></div>
+    <a href="/admin.html" class="inline-block mt-6 text-blue-500 hover:underline">← Back to Admin Portal</a>
   </div>
 
   <script>
     let currentIteration = null;
+    let activeForm = null;
+    let enforcingRoot = false;
 
     async function loadIterationAndUnits() {
       const info = document.getElementById('iteration-info');
-      const tree = document.getElementById('org-tree');
-      tree.innerHTML = 'Loading...';
+      const container = document.getElementById('org-container');
+      container.innerHTML = "Loading...";
 
       try {
-        const res = await fetch('/api/admin/active-iteration');
+        const res = await fetch('/api/admin/org-data?iteration_id=15'); // replace with dynamic id
         const data = await res.json();
-        if (!data.success) {
-          info.textContent = 'No active iteration found.';
-          tree.innerHTML = '';
-          return;
-        }
+
+        if (!data.success) throw new Error(data.message);
         currentIteration = data.iteration;
-        info.textContent =
-          `Current Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
 
-        const res2 = await fetch(`/api/admin/org-data?iteration_id=${data.iteration.id}`);
-        const data2 = await res2.json();
-        if (!data2.success) {
-          tree.innerHTML = 'Error loading organization data';
+        info.textContent = `Current Iteration: ${currentIteration.name} (ID: ${currentIteration.id})`;
+
+        // If no org units → enforce root creation
+        if (data.units.length === 0) {
+          container.innerHTML = "";
+          enforceRootCreation(container);
           return;
         }
 
-        renderOrgUnits(tree, data2.units, data2.roles, data2.people, null);
+        // Otherwise, render normal tree
+        enforcingRoot = false;
+        container.innerHTML = "";
+        const tree = buildTree(data.units, null);
+        tree.forEach(node => renderUnit(node, container, data));
+
       } catch (err) {
         info.textContent = `Error loading iteration: ${err.message}`;
+        info.classList.remove('text-blue-600');
+        info.classList.add('text-red-600');
+        document.getElementById('org-container').innerHTML = "";
       }
     }
 
-    function renderOrgUnits(container, units, roles, people, parentId) {
-      const filtered = units.filter(u => u.parent_id === parentId);
-      if (filtered.length === 0) return;
+    function buildTree(units, parentId) {
+      return units
+        .filter(u => u.parent_id === parentId)
+        .map(u => ({ ...u, children: buildTree(units, u.id) }));
+    }
 
-      const ul = document.createElement('ul');
-      ul.className = 'ml-4 list-disc';
+    function renderUnit(unit, container, data) {
+      const div = document.createElement('div');
+      div.className = 'ml-4 border-l pl-4 mb-2';
 
-      filtered.forEach(unit => {
-        const li = document.createElement('li');
-        li.textContent = unit.name;
+      const title = document.createElement('div');
+      title.className = 'font-semibold flex items-center justify-between';
+      title.textContent = unit.name;
 
-        const subRoles = roles.filter(r => r.org_unit_id === unit.id);
-        if (subRoles.length > 0) {
-          const roleList = document.createElement('ul');
-          roleList.className = 'ml-6 list-none';
-          subRoles.forEach(role => {
-            const person = people.find(p => p.id === role.person_id);
-            if (person) {
-              const roleItem = document.createElement('li');
-              roleItem.textContent = `- ${person.name} (${role.is_manager ? 'Manager' : 'Member'})`;
-              roleList.appendChild(roleItem);
-            }
-          });
-          li.appendChild(roleList);
+      const addBtn = document.createElement('button');
+      addBtn.textContent = '+ Add Subunit';
+      addBtn.className = 'ml-2 text-sm bg-green-500 text-white px-2 py-0.5 rounded';
+      addBtn.onclick = () => showInlineSubunitForm(unit.id, div);
+
+      title.appendChild(addBtn);
+      div.appendChild(title);
+
+      const roles = data.roles.filter(r => r.org_unit_id === unit.id);
+      roles.forEach(role => {
+        const person = data.people.find(p => p.id === role.person_id);
+        if (person) {
+          const roleDiv = document.createElement('div');
+          roleDiv.className = 'ml-4 flex items-center text-gray-700';
+          roleDiv.textContent = `- ${person.name} (${role.is_manager ? "Manager" : "Member"})`;
+
+          const delBtn = document.createElement('button');
+          delBtn.textContent = '❌';
+          delBtn.className = 'ml-2 text-xs bg-red-500 text-white rounded px-1';
+          delBtn.onclick = async () => {
+            if (!confirm(`Remove ${person.name}'s role?`)) return;
+            const res = await fetch('/api/admin/delete-role', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: role.id })
+            });
+            const result = await res.json();
+            if (result.success) loadIterationAndUnits();
+            else alert("Error removing role: " + result.message);
+          };
+
+          roleDiv.appendChild(delBtn);
+          div.appendChild(roleDiv);
         }
-
-        ul.appendChild(li);
-        renderOrgUnits(li, units, roles, people, unit.id);
       });
 
-      container.appendChild(ul);
+      unit.children.forEach(child => renderUnit(child, div, data));
+      container.appendChild(div);
+    }
+
+    function showInlineSubunitForm(parentId, container) {
+      if (activeForm) activeForm.remove();
+
+      const form = document.createElement('div');
+      form.className = 'ml-4 mt-2 p-2 border rounded bg-gray-50';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = parentId ? 'Subunit name' : 'Root unit name';
+      input.className = 'border rounded px-2 py-1 mr-2';
+
+      const submitBtn = document.createElement('button');
+      submitBtn.textContent = 'Create';
+      submitBtn.className = 'bg-green-500 text-white px-2 py-1 rounded';
+      submitBtn.onclick = async () => {
+        const name = input.value.trim();
+        if (!name) return alert('Please enter a name.');
+        const res = await fetch('/api/admin/create-org-unit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, parent_id: parentId, iteration_id: currentIteration.id })
+        });
+        const data = await res.json();
+        if (data.success) loadIterationAndUnits();
+        else alert('Error: ' + data.message);
+      };
+
+      form.appendChild(input);
+      form.appendChild(submitBtn);
+
+      // Add cancel button only if not root enforcement
+      if (!enforcingRoot) {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.className = 'ml-2 bg-gray-400 text-white px-2 py-1 rounded';
+        cancelBtn.onclick = () => form.remove();
+        form.appendChild(cancelBtn);
+      }
+
+      container.insertBefore(form, container.firstChild);
+      activeForm = form;
+      input.focus();
+    }
+
+    function enforceRootCreation(container) {
+      enforcingRoot = true;
+      const msg = document.createElement('p');
+      msg.className = 'mb-2 text-gray-700';
+      msg.textContent = "No root organization unit exists. Please create the first one:";
+      container.appendChild(msg);
+
+      showInlineSubunitForm(null, container);
     }
 
     loadIterationAndUnits();
