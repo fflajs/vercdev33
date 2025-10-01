@@ -84,77 +84,79 @@ export default async function handler(req, res) {
             });
           }
 
-          // 1. Create new iteration
-          const { data: newIter, error: errIter } = await supabase
+          // 1. Find latest iteration (if exists)
+          const { data: lastIter, error: errLast } = await supabase
+            .from('iterations')
+            .select('*')
+            .order('id', { ascending: false })
+            .limit(1)
+            .single();
+          if (errLast && errLast.code !== 'PGRST116') throw errLast;
+
+          // 2. Insert new iteration
+          const { data: newIter, error: errNew } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
+          if (errNew) throw errNew;
 
-          if (errIter) throw errIter;
-
-          // 2. Find previous iteration
-          const { data: prevIter } = await supabase
-            .from('iterations')
-            .select('*')
-            .lt('id', newIter.id)
-            .order('id', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (prevIter) {
-            // 3. Copy org units
-            const { data: prevUnits } = await supabase
+          // 3. If last iteration exists, copy org units and roles
+          if (lastIter) {
+            // Map old org units → new org units
+            const { data: oldUnits, error: errUnits } = await supabase
               .from('organization_units')
               .select('*')
-              .eq('iteration_id', prevIter.id);
+              .eq('iteration_id', lastIter.id);
+            if (errUnits) throw errUnits;
 
-            if (prevUnits && prevUnits.length > 0) {
-              const unitIdMap = {};
-              // Insert units with parent_id = null first
-              for (const unit of prevUnits) {
-                const { data: newUnit } = await supabase
+            const idMap = {};
+            for (const u of oldUnits) {
+              const { data: newUnit, error: errInsert } = await supabase
+                .from('organization_units')
+                .insert([
+                  {
+                    name: u.name,
+                    parent_id: null, // temporary
+                    iteration_id: newIter.id,
+                  },
+                ])
+                .select()
+                .single();
+              if (errInsert) throw errInsert;
+              idMap[u.id] = newUnit.id;
+            }
+
+            // Fix parent-child relationships
+            for (const u of oldUnits) {
+              if (u.parent_id) {
+                const { error: errUpdate } = await supabase
                   .from('organization_units')
-                  .insert([
-                    {
-                      name: unit.name,
-                      parent_id: null,
-                      iteration_id: newIter.id,
-                    },
-                  ])
-                  .select()
-                  .single();
-                unitIdMap[unit.id] = newUnit.id;
+                  .update({ parent_id: idMap[u.parent_id] })
+                  .eq('id', idMap[u.id]);
+                if (errUpdate) throw errUpdate;
               }
+            }
 
-              // Second pass: update parent links
-              for (const unit of prevUnits) {
-                if (unit.parent_id) {
-                  await supabase
-                    .from('organization_units')
-                    .update({ parent_id: unitIdMap[unit.parent_id] })
-                    .eq('id', unitIdMap[unit.id]);
-                }
-              }
+            // Copy roles
+            const { data: oldRoles, error: errRoles } = await supabase
+              .from('person_roles')
+              .select('*')
+              .eq('iteration_id', lastIter.id);
+            if (errRoles) throw errRoles;
 
-              // 4. Copy roles
-              const { data: prevRoles } = await supabase
+            for (const r of oldRoles) {
+              const { error: errRoleInsert } = await supabase
                 .from('person_roles')
-                .select('*')
-                .eq('iteration_id', prevIter.id);
-
-              if (prevRoles && prevRoles.length > 0) {
-                for (const role of prevRoles) {
-                  await supabase.from('person_roles').insert([
-                    {
-                      person_id: role.person_id,
-                      org_unit_id: unitIdMap[role.org_unit_id],
-                      is_manager: role.is_manager,
-                      iteration_id: newIter.id,
-                    },
-                  ]);
-                }
-              }
+                .insert([
+                  {
+                    person_id: r.person_id,
+                    org_unit_id: idMap[r.org_unit_id],
+                    is_manager: r.is_manager,
+                    iteration_id: newIter.id,
+                  },
+                ]);
+              if (errRoleInsert) throw errRoleInsert;
             }
           }
 
@@ -298,15 +300,15 @@ export default async function handler(req, res) {
           .json({ success: false, message: `Unknown action: ${action}` });
     }
 
-    // If method not handled
     return res
       .status(405)
       .json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
-    return res
-      .status(500)
-      .json({ success: false, message: err.message || 'Internal server error' });
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Internal server error',
+    });
   }
 }
 
