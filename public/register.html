@@ -1,65 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Register</title>
-  <link rel="icon" type="image/png" href="/favicon.ico">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
   <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
     <h1 class="text-2xl font-bold mb-4">Register New Person</h1>
-    <p class="mb-4 text-gray-600">Enter your full name to create an account.</p>
-    <form id="register-form" class="space-y-4">
-      <div>
-        <label for="name" class="block text-sm font-medium text-gray-700">Full Name</label>
-        <input type="text" id="name" name="name"
-          class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-          required />
-      </div>
-      <button type="submit"
-        class="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
+    <p class="mb-4">Enter your full name to create an account.</p>
+    <form id="registerForm" class="space-y-4">
+      <input
+        type="text"
+        id="name"
+        placeholder="Full Name"
+        class="w-full border rounded px-3 py-2"
+        required
+      />
+      <button
+        type="submit"
+        class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
+      >
         Register
       </button>
     </form>
-    <p id="message" class="mt-4 text-center"></p>
-    <a href="/index.html"
-      class="block mt-4 text-blue-500 hover:text-blue-700 text-center">Back to Login</a>
+    <p id="message" class="mt-4 text-center text-sm"></p>
+    <div class="mt-4 text-center">
+      <a href="/index.html" class="text-blue-500 hover:underline">Back to Login</a>
+    </div>
   </div>
 
   <script>
-    document.getElementById('register-form').addEventListener('submit', async (e) => {
+    const form = document.getElementById("registerForm");
+    const message = document.getElementById("message");
+
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const name = document.getElementById('name').value.trim();
-      const message = document.getElementById('message');
-      message.textContent = '';
-      message.className = 'mt-4 text-center';
+      message.textContent = "Processing...";
+      message.className = "mt-4 text-center text-sm text-gray-500";
+
+      const name = document.getElementById("name").value.trim();
 
       try {
-        const res = await fetch('/api/admin/people?action=people', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
+        const res = await fetch("/api/admin/people?action=people", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
         });
 
         const data = await res.json();
+
         console.log("DEBUG → response.ok:", res.ok);
         console.log("DEBUG → full response:", data);
 
-        if (res.ok && data.success && data.person) {
+        if (!res.ok) {
+          message.textContent = `Registration failed: ${data.message || res.statusText}`;
+          message.className = "mt-4 text-center text-sm text-red-500";
+          return;
+        }
+
+        if (data.success && data.person) {
           message.textContent = `User "${data.person.name}" successfully created! You can now log in.`;
-          message.classList.add('text-green-600');
-        } else if (res.status === 409) {
-          message.textContent = data.message || `Name "${name}" already exists.`;
-          message.classList.add('text-red-600');
+          message.className = "mt-4 text-center text-sm text-green-500";
+        } else if (!data.success && data.message) {
+          message.textContent = `Registration failed: ${data.message}`;
+          message.className = "mt-4 text-center text-sm text-red-500";
         } else {
-          message.textContent = `Registration failed: ${data.message || 'Unknown error'}`;
-          message.classList.add('text-red-600');
+          message.textContent = "Registration failed: Unknown error";
+          message.className = "mt-4 text-center text-sm text-red-500";
         }
       } catch (err) {
-        console.error("Registration error:", err);
-        message.textContent = 'An error occurred. Please try again.';
-        message.classList.add('text-red-600');
+        console.error("DEBUG → Fetch error:", err);
+        message.textContent = "Registration failed: Network error";
+        message.className = "mt-4 text-center text-sm text-red-500";
       }
     });
   </script>

@@ -9,31 +9,38 @@ export default async function handler(req, res) {
   } = req;
 
   try {
+    console.log(`[API DEBUG] action=${action}, method=${method}`);
+
     switch (action) {
       /**
        * PEOPLE MANAGEMENT
        */
       case 'people':
         if (method === 'GET') {
+          console.log("[API DEBUG] Fetching all people");
           const { data, error } = await supabase.from('people').select('*');
           if (error) throw error;
           return res.status(200).json({ success: true, people: data });
         }
 
         if (method === 'POST') {
-          const { name } = body;
+          console.log("[API DEBUG] Creating new person, body:", body);
+          const { name } = body || {};
           if (!name) {
             return res.status(400).json({
               success: false,
               message: 'Name is required',
             });
           }
+
           const { data, error } = await supabase
             .from('people')
             .insert([{ name }])
             .select()
             .single();
+
           if (error) {
+            console.error("[API DEBUG] Error inserting person:", error);
             if (error.code === '23505') {
               // Unique violation
               return res.status(409).json({
@@ -43,7 +50,8 @@ export default async function handler(req, res) {
             }
             throw error;
           }
-          // ✅ Return single "person" instead of "people"
+
+          console.log("[API DEBUG] Person inserted:", data);
           return res.status(201).json({ success: true, person: data });
         }
         break;
@@ -122,6 +130,8 @@ export default async function handler(req, res) {
       case 'org-data':
         if (method === 'GET') {
           const { iteration_id } = req.query;
+          console.log("[API DEBUG] Fetching org-data for iteration:", iteration_id);
+
           if (!iteration_id) {
             return res.status(400).json({
               success: false,
@@ -233,7 +243,7 @@ export default async function handler(req, res) {
           if (!id) {
             return res.status(400).json({
               success: false,
-              message: 'Org unit ID required',
+              message: 'Org Unit ID required',
             });
           }
           const { error } = await supabase
