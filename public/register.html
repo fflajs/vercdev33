@@ -2,40 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Person Registration</title>
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <title>Register</title>
+  <link rel="icon" href="favicon.ico">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="w-full max-w-sm bg-white p-8 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold mb-2 text-center">Register New Person</h1>
-    <p class="text-gray-600 mb-6 text-center">
-      Enter your full name to create an account.
-    </p>
-    <form id="register-form">
-      <div class="mb-4">
-        <label for="name" class="block text-gray-700 text-sm font-bold mb-2">
-          Full Name
-        </label>
-        <input type="text" id="name" name="name"
-          class="shadow appearance-none border rounded w-full py-2 px-3
-                 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-          required>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
+    <h1 class="text-2xl font-bold mb-4 text-center">Register New Person</h1>
+    <p class="text-gray-600 mb-4 text-center">Enter your full name to create an account.</p>
+
+    <form id="register-form" class="space-y-4">
+      <div>
+        <label for="name" class="block text-sm font-medium text-gray-700">Full Name</label>
+        <input id="name" name="name" type="text" required
+          class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
       </div>
-      <div class="flex items-center justify-between">
-        <button type="submit"
-          class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4
-                 rounded focus:outline-none focus:shadow-outline">
-          Register
-        </button>
-        <a href="/index.html"
-          class="inline-block align-baseline font-bold text-sm text-blue-500
-                 hover:text-blue-800">
-          Back to Login
-        </a>
-      </div>
+      <button type="submit"
+        class="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700">
+        Register
+      </button>
     </form>
+
     <p id="message" class="text-center text-sm italic mt-4"></p>
+
+    <div class="mt-4 text-center">
+      <a href="index.html" class="text-indigo-600 hover:underline">Back to Login</a>
+    </div>
   </div>
 
   <script>
@@ -61,7 +53,8 @@
       }
 
       try {
-        const response = await fetch('/api/admin/people', {
+        // ✅ Force POST request to people
+        const response = await fetch('/api/admin/people?action=people', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })

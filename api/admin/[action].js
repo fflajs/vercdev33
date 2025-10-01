@@ -9,6 +9,8 @@ export default async function handler(req, res) {
   } = req;
 
   try {
+    console.log(`[${new Date().toISOString()}] ➡️ Admin API called: action=${action}, method=${method}`);
+
     switch (action) {
       /**
        * PEOPLE MANAGEMENT
@@ -67,10 +69,8 @@ export default async function handler(req, res) {
             .from('iterations')
             .select('*')
             .is('end_date', null)
-            .maybeSingle();
-
-          if (error) throw error;
-
+            .single();
+          if (error && error.code !== 'PGRST116') throw error;
           if (!data) {
             return res.status(404).json({
               success: false,
@@ -91,27 +91,66 @@ export default async function handler(req, res) {
             });
           }
 
-          // Check for an active iteration
-          const { data: activeIter } = await supabase
-            .from('iterations')
-            .select('*')
-            .is('end_date', null)
-            .maybeSingle();
-          if (activeIter) {
-            return res.status(400).json({
-              success: false,
-              message: 'An active iteration already exists. Close it first.',
-            });
-          }
-
-          const { data, error } = await supabase
+          // Create iteration
+          const { data: newIter, error } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
-
           if (error) throw error;
-          return res.status(201).json({ success: true, iteration: data });
+
+          // Clone org units, roles if previous exists
+          const { data: prev } = await supabase
+            .from('iterations')
+            .select('id')
+            .lt('id', newIter.id)
+            .order('id', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (prev) {
+            // Clone org units
+            const { data: prevUnits } = await supabase
+              .from('organization_units')
+              .select('*')
+              .eq('iteration_id', prev.id);
+
+            const idMap = {};
+            for (const u of prevUnits) {
+              const { data: inserted } = await supabase
+                .from('organization_units')
+                .insert([{ name: u.name, parent_id: null, iteration_id: newIter.id }])
+                .select()
+                .single();
+              idMap[u.id] = inserted.id;
+            }
+            // Update parent links
+            for (const u of prevUnits) {
+              if (u.parent_id && idMap[u.parent_id]) {
+                await supabase
+                  .from('organization_units')
+                  .update({ parent_id: idMap[u.parent_id] })
+                  .eq('id', idMap[u.id]);
+              }
+            }
+            // Clone roles
+            const { data: prevRoles } = await supabase
+              .from('person_roles')
+              .select('*')
+              .eq('iteration_id', prev.id);
+            for (const r of prevRoles) {
+              await supabase.from('person_roles').insert([
+                {
+                  person_id: r.person_id,
+                  org_unit_id: idMap[r.org_unit_id],
+                  is_manager: r.is_manager,
+                  iteration_id: newIter.id,
+                },
+              ]);
+            }
+          }
+
+          return res.status(201).json({ success: true, iteration: newIter });
         }
         break;
 
@@ -124,14 +163,12 @@ export default async function handler(req, res) {
               message: 'Iteration ID required',
             });
           }
-
           const { data, error } = await supabase
             .from('iterations')
             .update({ end_date: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single();
-
           if (error) throw error;
           return res.status(200).json({ success: true, iteration: data });
         }
@@ -175,9 +212,7 @@ export default async function handler(req, res) {
             .eq('iteration_id', iteration_id);
           if (errRoles) throw errRoles;
 
-          const { data: people, error: errPeople } = await supabase
-            .from('people')
-            .select('*');
+          const { data: people, error: errPeople } = await supabase.from('people').select('*');
           if (errPeople) throw errPeople;
 
           return res.status(200).json({
@@ -199,13 +234,11 @@ export default async function handler(req, res) {
               message: 'Name and iteration_id required',
             });
           }
-
           const { data, error } = await supabase
             .from('organization_units')
             .insert([{ name, parent_id, iteration_id }])
             .select()
             .single();
-
           if (error) throw error;
           return res.status(201).json({ success: true, unit: data });
         }
@@ -220,13 +253,11 @@ export default async function handler(req, res) {
               message: 'person_id, org_unit_id, iteration_id required',
             });
           }
-
           const { data, error } = await supabase
             .from('person_roles')
             .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
             .select()
             .single();
-
           if (error) {
             if (error.code === '23505') {
               return res.status(409).json({
@@ -236,7 +267,6 @@ export default async function handler(req, res) {
             }
             throw error;
           }
-
           return res.status(201).json({ success: true, role: data });
         }
         break;
@@ -250,12 +280,7 @@ export default async function handler(req, res) {
               message: 'Role ID required',
             });
           }
-
-          const { error } = await supabase
-            .from('person_roles')
-            .delete()
-            .eq('id', id);
-
+          const { error } = await supabase.from('person_roles').delete().eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
@@ -267,36 +292,24 @@ export default async function handler(req, res) {
           if (!id) {
             return res.status(400).json({
               success: false,
-              message: 'Org Unit ID required',
+              message: 'Org unit ID required',
             });
           }
-
-          const { error } = await supabase
-            .from('organization_units')
-            .delete()
-            .eq('id', id);
-
+          const { error } = await supabase.from('organization_units').delete().eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
         break;
 
       default:
-        return res
-          .status(404)
-          .json({ success: false, message: `Unknown action: ${action}` });
+        return res.status(404).json({ success: false, message: `Unknown action: ${action}` });
     }
 
     // If method not handled
-    return res
-      .status(405)
-      .json({ success: false, message: 'Method not allowed' });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Internal server error',
-    });
+    return res.status(500).json({ success: false, message: err.message || 'Internal server error' });
   }
 }
 
