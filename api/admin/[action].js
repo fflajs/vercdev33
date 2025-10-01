@@ -9,8 +9,6 @@ export default async function handler(req, res) {
   } = req;
 
   try {
-    console.log(`[Admin API] action=${action}, method=${method}`);
-
     switch (action) {
       /**
        * PEOPLE MANAGEMENT
@@ -21,7 +19,6 @@ export default async function handler(req, res) {
           if (error) throw error;
           return res.status(200).json({ success: true, people: data });
         }
-
         if (method === 'POST') {
           const { name } = body;
           if (!name) {
@@ -30,15 +27,14 @@ export default async function handler(req, res) {
               message: 'Name is required',
             });
           }
-
           const { data, error } = await supabase
             .from('people')
             .insert([{ name }])
             .select()
             .single();
-
           if (error) {
             if (error.code === '23505') {
+              // Unique violation
               return res.status(409).json({
                 success: false,
                 message: `Name "${name}" already exists.`,
@@ -46,7 +42,6 @@ export default async function handler(req, res) {
             }
             throw error;
           }
-
           return res.status(201).json({ success: true, person: data });
         }
         break;
@@ -69,7 +64,6 @@ export default async function handler(req, res) {
             .select('*')
             .is('end_date', null)
             .single();
-
           if (error && error.code !== 'PGRST116') throw error;
           if (!data) {
             return res.status(404).json({
@@ -77,7 +71,6 @@ export default async function handler(req, res) {
               message: 'No active iteration found',
             });
           }
-
           return res.status(200).json({ success: true, iteration: data });
         }
         break;
@@ -92,94 +85,89 @@ export default async function handler(req, res) {
             });
           }
 
-          // Step 1: create the new iteration
-          const { data: newIter, error: errNew } = await supabase
+          // ✅ Check if active iteration already exists
+          const { data: active, error: errActive } = await supabase
+            .from('iterations')
+            .select('id')
+            .is('end_date', null)
+            .maybeSingle();
+          if (errActive) throw errActive;
+          if (active) {
+            return res.status(400).json({
+              success: false,
+              message: 'An active iteration already exists. Please close it first.',
+            });
+          }
+
+          // ✅ Find the most recent *closed* iteration to clone org structure
+          const { data: prevIter, error: prevErr } = await supabase
+            .from('iterations')
+            .select('*')
+            .not('end_date', 'is', null)
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (prevErr) throw prevErr;
+
+          // ✅ Create new iteration
+          const { data: newIter, error } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
+          if (error) throw error;
 
-          if (errNew) throw errNew;
-
-          // Step 2: find most recent closed iteration
-          const { data: prevIter, error: errPrev } = await supabase
-            .from('iterations')
-            .select('*')
-            .not('end_date', 'is', null)
-            .order('end_date', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (errPrev) throw errPrev;
-
+          // ✅ If previous iteration exists, clone its org structure
           if (prevIter) {
-            console.log(`[Admin API] Cloning org structure from iteration ${prevIter.id}`);
-
-            // fetch org units from previous iteration
-            const { data: oldUnits, error: errUnits } = await supabase
+            const { data: units, error: unitErr } = await supabase
               .from('organization_units')
               .select('*')
               .eq('iteration_id', prevIter.id);
+            if (unitErr) throw unitErr;
 
-            if (errUnits) throw errUnits;
-
-            // map old → new IDs
-            const idMap = {};
-            const newUnits = [];
-
-            for (const u of oldUnits) {
-              newUnits.push({
-                name: u.name,
-                parent_id: null, // fix later
-                iteration_id: newIter.id,
-              });
-            }
-
-            // insert units
-            const { data: insertedUnits, error: errInsertUnits } = await supabase
-              .from('organization_units')
-              .insert(newUnits)
-              .select();
-
-            if (errInsertUnits) throw errInsertUnits;
-
-            // update idMap
-            oldUnits.forEach((oldU, i) => {
-              idMap[oldU.id] = insertedUnits[i].id;
-            });
-
-            // update parent_id links
-            for (const oldU of oldUnits) {
-              if (oldU.parent_id) {
-                await supabase
-                  .from('organization_units')
-                  .update({ parent_id: idMap[oldU.parent_id] })
-                  .eq('id', idMap[oldU.id]);
-              }
-            }
-
-            // fetch roles
-            const { data: oldRoles, error: errRoles } = await supabase
+            const { data: roles, error: roleErr } = await supabase
               .from('person_roles')
               .select('*')
               .eq('iteration_id', prevIter.id);
+            if (roleErr) throw roleErr;
 
-            if (errRoles) throw errRoles;
-
-            if (oldRoles.length > 0) {
-              const newRoles = oldRoles.map((r) => ({
-                person_id: r.person_id,
-                org_unit_id: idMap[r.org_unit_id],
-                is_manager: r.is_manager,
-                description: r.description,
-                iteration_id: newIter.id,
-              }));
-
-              const { error: errInsertRoles } = await supabase
-                .from('person_roles')
-                .insert(newRoles);
-
-              if (errInsertRoles) throw errInsertRoles;
+            if (units.length > 0) {
+              const unitMap = {};
+              for (const u of units) {
+                const { data: newUnit, error: insErr } = await supabase
+                  .from('organization_units')
+                  .insert([
+                    {
+                      name: u.name,
+                      parent_id: null, // fix later
+                      iteration_id: newIter.id,
+                    },
+                  ])
+                  .select()
+                  .single();
+                if (insErr) throw insErr;
+                unitMap[u.id] = newUnit.id;
+              }
+              // Fix parent references
+              for (const u of units) {
+                if (u.parent_id) {
+                  await supabase
+                    .from('organization_units')
+                    .update({ parent_id: unitMap[u.parent_id] })
+                    .eq('id', unitMap[u.id]);
+                }
+              }
+              // Clone roles
+              for (const r of roles) {
+                await supabase.from('person_roles').insert([
+                  {
+                    person_id: r.person_id,
+                    org_unit_id: unitMap[r.org_unit_id],
+                    is_manager: r.is_manager,
+                    iteration_id: newIter.id,
+                  },
+                ]);
+              }
             }
           }
 
@@ -196,14 +184,12 @@ export default async function handler(req, res) {
               message: 'Iteration ID required',
             });
           }
-
           const { data, error } = await supabase
             .from('iterations')
             .update({ end_date: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single();
-
           if (error) throw error;
           return res.status(200).json({ success: true, iteration: data });
         }
@@ -221,13 +207,11 @@ export default async function handler(req, res) {
               message: 'iteration_id is required',
             });
           }
-
           const { data: iteration, error: errIter } = await supabase
             .from('iterations')
             .select('*')
             .eq('id', iteration_id)
             .maybeSingle();
-
           if (errIter) throw errIter;
           if (!iteration) {
             return res.status(404).json({
@@ -235,19 +219,16 @@ export default async function handler(req, res) {
               message: `No iteration found with id ${iteration_id}`,
             });
           }
-
           const { data: units, error: errUnits } = await supabase
             .from('organization_units')
             .select('*')
             .eq('iteration_id', iteration_id);
           if (errUnits) throw errUnits;
-
           const { data: roles, error: errRoles } = await supabase
             .from('person_roles')
             .select('*')
             .eq('iteration_id', iteration_id);
           if (errRoles) throw errRoles;
-
           const { data: people, error: errPeople } = await supabase
             .from('people')
             .select('*');
@@ -272,13 +253,11 @@ export default async function handler(req, res) {
               message: 'Name and iteration_id required',
             });
           }
-
           const { data, error } = await supabase
             .from('organization_units')
             .insert([{ name, parent_id, iteration_id }])
             .select()
             .single();
-
           if (error) throw error;
           return res.status(201).json({ success: true, unit: data });
         }
@@ -293,13 +272,11 @@ export default async function handler(req, res) {
               message: 'person_id, org_unit_id, iteration_id required',
             });
           }
-
           const { data, error } = await supabase
             .from('person_roles')
             .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
             .select()
             .single();
-
           if (error) {
             if (error.code === '23505') {
               return res.status(409).json({
@@ -309,7 +286,6 @@ export default async function handler(req, res) {
             }
             throw error;
           }
-
           return res.status(201).json({ success: true, role: data });
         }
         break;
@@ -323,12 +299,10 @@ export default async function handler(req, res) {
               message: 'Role ID required',
             });
           }
-
           const { error } = await supabase
             .from('person_roles')
             .delete()
             .eq('id', id);
-
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
@@ -340,15 +314,13 @@ export default async function handler(req, res) {
           if (!id) {
             return res.status(400).json({
               success: false,
-              message: 'Org unit ID required',
+              message: 'Org Unit ID required',
             });
           }
-
           const { error } = await supabase
             .from('organization_units')
             .delete()
             .eq('id', id);
-
           if (error) throw error;
           return res.status(200).json({ success: true });
         }

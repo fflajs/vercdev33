@@ -14,7 +14,7 @@
     <div id="activeIteration" class="mb-6 p-4 border rounded bg-gray-50">
       <h2 class="text-xl font-semibold mb-2">Active Iteration</h2>
       <div id="activeIterationContent">Loading...</div>
-      <button id="closeIterationBtn" class="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+      <button id="closeIterationBtn" class="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 hidden">
         Close Active Iteration
       </button>
     </div>
@@ -24,8 +24,12 @@
       <h2 class="text-xl font-semibold mb-2">Create New Iteration</h2>
       <input id="iterationName" type="text" placeholder="Iteration name"
              class="border rounded px-3 py-2 w-full mb-2">
-      <input id="questionSet" type="text" placeholder="Question set (e.g., Pulse_Check_12.json)"
-             class="border rounded px-3 py-2 w-full mb-2">
+      <select id="questionSet" class="border rounded px-3 py-2 w-full mb-2">
+        <option value="">-- Select Question Set --</option>
+        <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
+        <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
+        <option value="Pulse_Check_12.json">Pulse_Check_12.json</option>
+      </select>
       <button id="createIterationBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
         Create Iteration
       </button>
@@ -48,10 +52,23 @@
       const res = await fetch('/api/admin/active-iteration');
       const data = await res.json();
       const container = document.getElementById('activeIterationContent');
+      const closeBtn = document.getElementById('closeIterationBtn');
+      const createForm = document.getElementById('createIteration');
+      const createBtn = document.getElementById('createIterationBtn');
 
       if (data.success) {
         container.textContent = `${data.iteration.name} (ID: ${data.iteration.id}) — Started ${new Date(data.iteration.start_date).toLocaleString()}`;
-        document.getElementById('closeIterationBtn').onclick = async () => {
+        closeBtn.classList.remove('hidden');
+
+        // Disable new iteration creation
+        createForm.classList.add('opacity-50', 'pointer-events-none');
+        createBtn.disabled = true;
+        document.getElementById('createIterationMsg').textContent =
+          'Close the current iteration before creating a new one.';
+        document.getElementById('createIterationMsg').className =
+          'text-red-500 text-sm';
+        
+        closeBtn.onclick = async () => {
           if (!confirm("Close this iteration?")) return;
           const closeRes = await fetch('/api/admin/close-iteration', {
             method: 'POST',
@@ -69,6 +86,12 @@
         };
       } else {
         container.textContent = "No active iteration.";
+        closeBtn.classList.add('hidden');
+
+        // Enable new iteration creation
+        createForm.classList.remove('opacity-50', 'pointer-events-none');
+        createBtn.disabled = false;
+        document.getElementById('createIterationMsg').textContent = '';
       }
     }
 
@@ -94,6 +117,11 @@
 
       if (!name) {
         msg.textContent = 'Iteration name is required.';
+        msg.className = 'text-red-500 text-sm';
+        return;
+      }
+      if (!questionSet) {
+        msg.textContent = 'Please select a question set.';
         msg.className = 'text-red-500 text-sm';
         return;
       }
