@@ -3,79 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <title>User Portal</title>
-  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="w-full max-w-lg bg-white p-8 rounded-lg shadow-lg text-center">
-    <h1 id="welcome" class="text-3xl font-bold mb-4">Welcome!</h1>
-    <p id="iteration-info" class="text-gray-600 mb-6">Loading active iteration...</p>
-
-    <!-- Admin-only warning banner -->
-    <div id="admin-warning" class="hidden mb-4 p-3 bg-yellow-100 border border-yellow-400 text-yellow-700 rounded">
-      ⚠️ The Cognitive Visualizer and Analyzer are placeholders — not implemented yet.
-    </div>
-
-    <p class="text-gray-700 mb-4">Please select an application to continue.</p>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-10 rounded-xl shadow-lg w-full max-w-lg text-center">
+    <h1 class="text-3xl font-bold mb-4">Welcome to the Portal</h1>
+    <p id="welcome" class="text-lg text-gray-700 mb-6">Loading...</p>
+    <p id="iteration" class="text-blue-600 font-semibold mb-8">Checking active iteration...</p>
 
     <div class="space-y-4">
-      <!-- Buttons shown differently for admin vs regular users -->
-      <a id="visualizer-btn" 
-         href="/visualizer.html" 
-         class="block bg-blue-500 text-white font-bold py-3 px-6 rounded hover:bg-blue-600 transition disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed">
-         Login to Cognitive Visualizer
+      <a href="/cognitive.html"
+         class="block w-full bg-green-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-600 transition">
+        Login to Cognitive Visualizer
       </a>
-      <a id="analyzer-btn" 
-         href="/analyzer.html" 
-         class="block bg-green-500 text-white font-bold py-3 px-6 rounded hover:bg-green-600 transition disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed">
-         Analyze Descriptions
+      <a href="/analyze.html"
+         class="block w-full bg-purple-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-600 transition">
+        Analyze Descriptions
       </a>
-      <a href="/index.html" 
-         class="block bg-gray-500 text-white font-bold py-3 px-6 rounded hover:bg-gray-600 transition">
-         Logout
+      <a href="/admin.html"
+         class="block w-full bg-red-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-600 transition">
+        Admin Portal
       </a>
     </div>
+
+    <a href="/index.html"
+       class="inline-block mt-6 text-blue-500 hover:text-blue-700 font-bold text-sm">
+      Logout
+    </a>
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      const loggedInUser = sessionStorage.getItem('loggedInUser');
-      const welcome = document.getElementById('welcome');
-      const iterationInfo = document.getElementById('iteration-info');
-      const visualizerBtn = document.getElementById('visualizer-btn');
-      const analyzerBtn = document.getElementById('analyzer-btn');
-      const adminWarning = document.getElementById('admin-warning');
+    document.addEventListener("DOMContentLoaded", async () => {
+      const welcome = document.getElementById("welcome");
+      const iteration = document.getElementById("iteration");
 
-      if (!loggedInUser) {
-        window.location.href = '/index.html';
-        return;
+      const name = localStorage.getItem("personName");
+      if (name) {
+        welcome.textContent = `Welcome, ${name}!`;
+      } else {
+        welcome.textContent = "Welcome, Guest!";
       }
-
-      welcome.textContent = `Welcome, ${loggedInUser}!`;
 
       try {
-        const res = await fetch('/api/admin/active-iteration');
+        const res = await fetch("/api/admin/active-iteration");
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
-
-        if (res.ok && data.success && data.iteration) {
-          iterationInfo.textContent =
+        if (data.success && data.iteration) {
+          iteration.textContent =
             `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
         } else {
-          iterationInfo.textContent = 'No active iteration found.';
+          iteration.textContent = "No active iteration found.";
+          iteration.classList.replace("text-blue-600", "text-red-600");
         }
       } catch (err) {
-        iterationInfo.textContent = 'Error loading iteration.';
-      }
-
-      if (loggedInUser.toLowerCase() !== 'admin') {
-        // Non-admin users: disable the links
-        visualizerBtn.removeAttribute('href');
-        analyzerBtn.removeAttribute('href');
-        visualizerBtn.classList.add('disabled');
-        analyzerBtn.classList.add('disabled');
-      } else {
-        // Admins: show the yellow warning banner
-        adminWarning.classList.remove('hidden');
+        iteration.textContent = `Error: ${err.message}`;
+        iteration.classList.replace("text-blue-600", "text-red-600");
       }
     });
   </script>

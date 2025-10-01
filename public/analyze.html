@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Analyze Descriptions</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-10 rounded-xl shadow-lg w-full max-w-2xl text-center">
+    <h1 class="text-3xl font-bold mb-4">Analyze Descriptions</h1>
+    <p id="welcome" class="text-lg text-gray-700 mb-4">Loading...</p>
+    <p id="iteration" class="text-blue-600 font-semibold mb-6">Checking active iteration...</p>
+
+    <div class="border rounded p-6 bg-gray-50 text-left mb-6">
+      <p class="text-gray-600">Here will be the analysis tool for cognitive data.</p>
+      <!-- Future: embed analysis UI here -->
+    </div>
+
+    <div class="space-x-4">
+      <a href="/portal.html"
+         class="inline-block bg-blue-500 text-white font-bold py-2 px-6 rounded hover:bg-blue-600 transition">
+        Back to Portal
+      </a>
+      <a href="/index.html"
+         class="inline-block text-blue-500 hover:text-blue-700 font-bold text-sm">
+        Logout
+      </a>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const welcome = document.getElementById("welcome");
+      const iteration = document.getElementById("iteration");
+
+      const name = localStorage.getItem("personName");
+      welcome.textContent = name ? `Welcome, ${name}!` : "Welcome, Guest!";
+
+      try {
+        const res = await fetch("/api/admin/active-iteration");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.success && data.iteration) {
+          iteration.textContent =
+            `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
+        } else {
+          iteration.textContent = "No active iteration found.";
+          iteration.classList.replace("text-blue-600", "text-red-600");
+        }
+      } catch (err) {
+        iteration.textContent = `Error: ${err.message}`;
+        iteration.classList.replace("text-blue-600", "text-red-600");
+      }
+    });
+  </script>
+</body>
+</html>
+
