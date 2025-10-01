@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   } = req;
 
   try {
-    console.log(`[API DEBUG] action=${action}, method=${method}`);
+    console.log(`[Admin API] action=${action}, method=${method}`);
 
     switch (action) {
       /**
@@ -17,41 +17,44 @@ export default async function handler(req, res) {
        */
       case 'people':
         if (method === 'GET') {
-          console.log("[API DEBUG] Fetching all people");
           const { data, error } = await supabase.from('people').select('*');
           if (error) throw error;
           return res.status(200).json({ success: true, people: data });
         }
 
         if (method === 'POST') {
-          console.log("[API DEBUG] Creating new person, body:", body);
-          const { name } = body || {};
+          const { name } = body;
           if (!name) {
-            return res.status(400).json({
+            return res
+              .status(400)
+              .json({ success: false, message: 'Name is required' });
+          }
+
+          // Check if the person already exists
+          const { data: existing, error: errCheck } = await supabase
+            .from('people')
+            .select('*')
+            .eq('name', name)
+            .maybeSingle();
+
+          if (errCheck) throw errCheck;
+
+          if (existing) {
+            return res.status(409).json({
               success: false,
-              message: 'Name is required',
+              message: `Name "${name}" already exists.`,
             });
           }
 
+          // Insert new person
           const { data, error } = await supabase
             .from('people')
             .insert([{ name }])
             .select()
             .single();
 
-          if (error) {
-            console.error("[API DEBUG] Error inserting person:", error);
-            if (error.code === '23505') {
-              // Unique violation
-              return res.status(409).json({
-                success: false,
-                message: `Name "${name}" already exists.`,
-              });
-            }
-            throw error;
-          }
+          if (error) throw error;
 
-          console.log("[API DEBUG] Person inserted:", data);
           return res.status(201).json({ success: true, person: data });
         }
         break;
@@ -73,14 +76,16 @@ export default async function handler(req, res) {
             .from('iterations')
             .select('*')
             .is('end_date', null)
-            .single();
-          if (error && error.code !== 'PGRST116') throw error;
+            .maybeSingle();
+          if (error) throw error;
+
           if (!data) {
             return res.status(404).json({
               success: false,
               message: 'No active iteration found',
             });
           }
+
           return res.status(200).json({ success: true, iteration: data });
         }
         break;
@@ -88,18 +93,33 @@ export default async function handler(req, res) {
       case 'create-iteration':
         if (method === 'POST') {
           const { name, question_set } = body;
-          if (!name) {
+          if (!name || !question_set) {
             return res.status(400).json({
               success: false,
-              message: 'Iteration name required',
+              message: 'Iteration name and question_set required',
             });
           }
+
+          // Ensure only one active iteration
+          const { data: active } = await supabase
+            .from('iterations')
+            .select('*')
+            .is('end_date', null)
+            .maybeSingle();
+          if (active) {
+            return res.status(400).json({
+              success: false,
+              message: 'Close the active iteration before creating a new one.',
+            });
+          }
+
           const { data, error } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
           if (error) throw error;
+
           return res.status(201).json({ success: true, iteration: data });
         }
         break;
@@ -108,10 +128,9 @@ export default async function handler(req, res) {
         if (method === 'POST') {
           const { id } = body;
           if (!id) {
-            return res.status(400).json({
-              success: false,
-              message: 'Iteration ID required',
-            });
+            return res
+              .status(400)
+              .json({ success: false, message: 'Iteration ID required' });
           }
           const { data, error } = await supabase
             .from('iterations')
@@ -130,21 +149,24 @@ export default async function handler(req, res) {
       case 'org-data':
         if (method === 'GET') {
           const { iteration_id } = req.query;
-          console.log("[API DEBUG] Fetching org-data for iteration:", iteration_id);
-
           if (!iteration_id) {
-            return res.status(400).json({
-              success: false,
-              message: 'iteration_id is required',
-            });
+            return res
+              .status(400)
+              .json({ success: false, message: 'iteration_id is required' });
           }
 
           const { data: iteration, error: errIter } = await supabase
             .from('iterations')
             .select('*')
             .eq('id', iteration_id)
-            .single();
+            .maybeSingle();
           if (errIter) throw errIter;
+          if (!iteration) {
+            return res.status(404).json({
+              success: false,
+              message: `No iteration found with id ${iteration_id}`,
+            });
+          }
 
           const { data: units, error: errUnits } = await supabase
             .from('organization_units')
@@ -208,10 +230,9 @@ export default async function handler(req, res) {
             .single();
           if (error) {
             if (error.code === '23505') {
-              return res.status(409).json({
-                success: false,
-                message: 'This role already exists.',
-              });
+              return res
+                .status(409)
+                .json({ success: false, message: 'This role already exists.' });
             }
             throw error;
           }
@@ -223,10 +244,9 @@ export default async function handler(req, res) {
         if (method === 'DELETE') {
           const { id } = body;
           if (!id) {
-            return res.status(400).json({
-              success: false,
-              message: 'Role ID required',
-            });
+            return res
+              .status(400)
+              .json({ success: false, message: 'Role ID required' });
           }
           const { error } = await supabase
             .from('person_roles')
@@ -241,10 +261,9 @@ export default async function handler(req, res) {
         if (method === 'DELETE') {
           const { id } = body;
           if (!id) {
-            return res.status(400).json({
-              success: false,
-              message: 'Org Unit ID required',
-            });
+            return res
+              .status(400)
+              .json({ success: false, message: 'Org Unit ID required' });
           }
           const { error } = await supabase
             .from('organization_units')
@@ -267,9 +286,10 @@ export default async function handler(req, res) {
       .json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
-    return res
-      .status(500)
-      .json({ success: false, message: err.message || 'Internal server error' });
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Internal server error',
+    });
   }
 }
 
