@@ -8,19 +8,27 @@ export default async function handler(req, res) {
     body,
   } = req;
 
+  // 🔎 Top-level trace
+  console.log("FFTRACE → action:", action, "method:", method, "body:", body);
+
   try {
     switch (action) {
       /**
        * PEOPLE MANAGEMENT
        */
       case 'people':
+        console.log("FFTRACE → entered case 'people' with method:", method);
+
         if (method === 'GET') {
+          console.log("FFTRACE → executing GET branch for people");
           const { data, error } = await supabase.from('people').select('*');
           if (error) throw error;
+          console.log("FFTRACE → GET result count:", data?.length || 0);
           return res.status(200).json({ success: true, people: data });
         }
 
         if (method === 'POST') {
+          console.log("FFTRACE → executing POST branch for people with body:", body);
           const { name } = body;
           if (!name) {
             return res.status(400).json({
@@ -35,8 +43,9 @@ export default async function handler(req, res) {
             .select()
             .single();
 
-          console.log("DEBUG → Insert result data:", data);
-          console.log("DEBUG → Insert result error:", error);
+          // 🔎 Trace logs for insert result
+          console.log("FFTRACE → Insert result data:", data);
+          console.log("FFTRACE → Insert result error:", error);
 
           if (error) {
             if (error.code === '23505') {
@@ -133,18 +142,14 @@ export default async function handler(req, res) {
             });
           }
 
+          console.log("FFTRACE → fetching org-data for iteration:", iteration_id);
+
           const { data: iteration, error: errIter } = await supabase
             .from('iterations')
             .select('*')
             .eq('id', iteration_id)
-            .maybeSingle();
+            .single();
           if (errIter) throw errIter;
-          if (!iteration) {
-            return res.status(404).json({
-              success: false,
-              message: `No iteration found with id ${iteration_id}`,
-            });
-          }
 
           const { data: units, error: errUnits } = await supabase
             .from('organization_units')
@@ -228,7 +233,10 @@ export default async function handler(req, res) {
               message: 'Role ID required',
             });
           }
-          const { error } = await supabase.from('person_roles').delete().eq('id', id);
+          const { error } = await supabase
+            .from('person_roles')
+            .delete()
+            .eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
@@ -243,20 +251,29 @@ export default async function handler(req, res) {
               message: 'Org Unit ID required',
             });
           }
-          const { error } = await supabase.from('organization_units').delete().eq('id', id);
+          const { error } = await supabase
+            .from('organization_units')
+            .delete()
+            .eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
         break;
 
       default:
-        return res.status(404).json({ success: false, message: `Unknown action: ${action}` });
+        return res
+          .status(404)
+          .json({ success: false, message: `Unknown action: ${action}` });
     }
 
-    return res.status(405).json({ success: false, message: 'Method not allowed' });
+    return res
+      .status(405)
+      .json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
-    return res.status(500).json({ success: false, message: err.message || 'Internal server error' });
+    return res
+      .status(500)
+      .json({ success: false, message: err.message || 'Internal server error' });
   }
 }
 

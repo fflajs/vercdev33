@@ -3,55 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <title>Register</title>
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="/favicon.ico">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-    <h1 class="text-2xl font-bold text-center mb-6">Register New Person</h1>
-    <p class="text-center text-gray-600 mb-4">Enter your full name to create an account.</p>
-    <input
-      type="text"
-      id="fullname"
-      placeholder="Full Name"
-      class="border rounded w-full px-3 py-2 mb-4"
-    />
-    <button
-      id="registerBtn"
-      class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
-    >
-      Register
-    </button>
+  <div class="bg-white p-8 rounded shadow-md w-96">
+    <h1 class="text-xl font-bold mb-4 text-center">Register New Person</h1>
+    <p class="mb-4 text-sm text-gray-600 text-center">
+      Enter your full name to create an account.
+    </p>
+    <form id="registerForm" class="space-y-4">
+      <input 
+        type="text" 
+        id="name" 
+        placeholder="Full Name" 
+        class="w-full px-3 py-2 border rounded" 
+        required
+      />
+      <button 
+        type="submit" 
+        class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
+      >
+        Register
+      </button>
+    </form>
     <p id="message" class="mt-4 text-center text-sm"></p>
-    <a href="/index.html" class="block text-center text-blue-500 hover:underline mt-4">
-      Back to Login
-    </a>
+    <div class="mt-4 text-center">
+      <a href="/index.html" class="text-blue-500 hover:underline">Back to Login</a>
+    </div>
   </div>
 
   <script>
-    document.getElementById("registerBtn").addEventListener("click", async () => {
-      const name = document.getElementById("fullname").value.trim();
+    document.getElementById("registerForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById("name").value.trim();
       const message = document.getElementById("message");
 
-      if (!name) {
-        message.textContent = "Name is required";
-        message.className = "mt-4 text-center text-sm text-red-500";
-        return;
-      }
+      console.log("FFDEBUG → Sending POST with name:", name);
 
       try {
-        console.log("FFDEBUG → Sending POST with name:", name);
-        const response = await fetch("/api/admin/people", {
+        const res = await fetch("/api/admin/people", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
         });
 
-        const data = await response.json();
-        console.log("FFDEBUG → response.ok:", response.ok);
+        const data = await res.json();
+
+        console.log("FFDEBUG → response.ok:", res.ok);
         console.log("FFDEBUG → full response:", data);
 
-        if (data.success && data.person) {
+        if (res.ok && data.success && data.person) {
+          console.log("FFDEBUG → data.success:", data.success);
+          console.log("FFDEBUG → data.person:", data.person);
           message.textContent = `User "${data.person.name}" successfully created! You can now log in.`;
           message.className = "mt-4 text-center text-sm text-green-500";
         } else if (!data.success && data.message) {
