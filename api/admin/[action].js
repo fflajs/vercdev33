@@ -35,27 +35,20 @@ export default async function handler(req, res) {
             .select()
             .single();
 
-          // 🔎 Return debug info as well
+          console.log("DEBUG → Insert result data:", data);
+          console.log("DEBUG → Insert result error:", error);
+
           if (error) {
             if (error.code === '23505') {
               return res.status(409).json({
                 success: false,
                 message: `Name "${name}" already exists.`,
-                debug: { data, error },
               });
             }
-            return res.status(500).json({
-              success: false,
-              message: error.message,
-              debug: { data, error },
-            });
+            throw error;
           }
 
-          return res.status(201).json({
-            success: true,
-            person: data,
-            debug: { data, error },
-          });
+          return res.status(201).json({ success: true, person: data });
         }
         break;
 
@@ -77,7 +70,6 @@ export default async function handler(req, res) {
             .select('*')
             .is('end_date', null)
             .single();
-
           if (error && error.code !== 'PGRST116') throw error;
           if (!data) {
             return res.status(404).json({
@@ -147,7 +139,6 @@ export default async function handler(req, res) {
             .eq('id', iteration_id)
             .maybeSingle();
           if (errIter) throw errIter;
-
           if (!iteration) {
             return res.status(404).json({
               success: false,
@@ -215,7 +206,6 @@ export default async function handler(req, res) {
             .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
             .select()
             .single();
-
           if (error) {
             if (error.code === '23505') {
               return res.status(409).json({
@@ -225,7 +215,6 @@ export default async function handler(req, res) {
             }
             throw error;
           }
-
           return res.status(201).json({ success: true, role: data });
         }
         break;
@@ -239,10 +228,7 @@ export default async function handler(req, res) {
               message: 'Role ID required',
             });
           }
-          const { error } = await supabase
-            .from('person_roles')
-            .delete()
-            .eq('id', id);
+          const { error } = await supabase.from('person_roles').delete().eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
@@ -257,30 +243,20 @@ export default async function handler(req, res) {
               message: 'Org Unit ID required',
             });
           }
-          const { error } = await supabase
-            .from('organization_units')
-            .delete()
-            .eq('id', id);
+          const { error } = await supabase.from('organization_units').delete().eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
         break;
 
       default:
-        return res
-          .status(404)
-          .json({ success: false, message: `Unknown action: ${action}` });
+        return res.status(404).json({ success: false, message: `Unknown action: ${action}` });
     }
 
-    // If method not handled
-    return res
-      .status(405)
-      .json({ success: false, message: 'Method not allowed' });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
-    return res
-      .status(500)
-      .json({ success: false, message: err.message || 'Internal server error' });
+    return res.status(500).json({ success: false, message: err.message || 'Internal server error' });
   }
 }
 
