@@ -11,8 +11,7 @@ export default async function handler(req, res) {
   try {
     switch (action) {
       /**
-       * PEOPLE LIST (admin use)
-       * GET /api/admin/people
+       * PEOPLE MANAGEMENT
        */
       case 'people':
         if (method === 'GET') {
@@ -20,14 +19,6 @@ export default async function handler(req, res) {
           if (error) throw error;
           return res.status(200).json({ success: true, people: data });
         }
-        break;
-
-      /**
-       * PEOPLE CREATE (registration)
-       * POST /api/admin/people-create
-       * Body: { name }
-       */
-      case 'people-create':
         if (method === 'POST') {
           const { name } = body;
           if (!name) {
@@ -36,34 +27,20 @@ export default async function handler(req, res) {
               message: 'Name is required',
             });
           }
-
-          // Check if already exists
-          const { data: existing, error: checkError } = await supabase
-            .from('people')
-            .select('*')
-            .eq('name', name)
-            .single();
-
-          // PGRST116 means 0 rows (not found) – not an error for our use
-          if (checkError && checkError.code !== 'PGRST116') {
-            throw checkError;
-          }
-          if (existing) {
-            return res.status(409).json({
-              success: false,
-              message: `Name "${name}" already exists.`,
-            });
-          }
-
-          // Insert
           const { data, error } = await supabase
             .from('people')
             .insert([{ name }])
             .select()
             .single();
-
-          if (error) throw error;
-
+          if (error) {
+            if (error.code === '23505') {
+              return res.status(409).json({
+                success: false,
+                message: `Name "${name}" already exists.`,
+              });
+            }
+            throw error;
+          }
           return res.status(201).json({ success: true, person: data });
         }
         break;
@@ -86,16 +63,13 @@ export default async function handler(req, res) {
             .select('*')
             .is('end_date', null)
             .single();
-
           if (error && error.code !== 'PGRST116') throw error;
-
           if (!data) {
             return res.status(404).json({
               success: false,
               message: 'No active iteration found',
             });
           }
-
           return res.status(200).json({ success: true, iteration: data });
         }
         break;
@@ -110,15 +84,81 @@ export default async function handler(req, res) {
             });
           }
 
-          const { data, error } = await supabase
+          // 1. Create new iteration
+          const { data: newIter, error: errIter } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
 
-          if (error) throw error;
+          if (errIter) throw errIter;
 
-          return res.status(201).json({ success: true, iteration: data });
+          // 2. Find previous iteration
+          const { data: prevIter } = await supabase
+            .from('iterations')
+            .select('*')
+            .lt('id', newIter.id)
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (prevIter) {
+            // 3. Copy org units
+            const { data: prevUnits } = await supabase
+              .from('organization_units')
+              .select('*')
+              .eq('iteration_id', prevIter.id);
+
+            if (prevUnits && prevUnits.length > 0) {
+              const unitIdMap = {};
+              // Insert units with parent_id = null first
+              for (const unit of prevUnits) {
+                const { data: newUnit } = await supabase
+                  .from('organization_units')
+                  .insert([
+                    {
+                      name: unit.name,
+                      parent_id: null,
+                      iteration_id: newIter.id,
+                    },
+                  ])
+                  .select()
+                  .single();
+                unitIdMap[unit.id] = newUnit.id;
+              }
+
+              // Second pass: update parent links
+              for (const unit of prevUnits) {
+                if (unit.parent_id) {
+                  await supabase
+                    .from('organization_units')
+                    .update({ parent_id: unitIdMap[unit.parent_id] })
+                    .eq('id', unitIdMap[unit.id]);
+                }
+              }
+
+              // 4. Copy roles
+              const { data: prevRoles } = await supabase
+                .from('person_roles')
+                .select('*')
+                .eq('iteration_id', prevIter.id);
+
+              if (prevRoles && prevRoles.length > 0) {
+                for (const role of prevRoles) {
+                  await supabase.from('person_roles').insert([
+                    {
+                      person_id: role.person_id,
+                      org_unit_id: unitIdMap[role.org_unit_id],
+                      is_manager: role.is_manager,
+                      iteration_id: newIter.id,
+                    },
+                  ]);
+                }
+              }
+            }
+          }
+
+          return res.status(201).json({ success: true, iteration: newIter });
         }
         break;
 
@@ -131,22 +171,19 @@ export default async function handler(req, res) {
               message: 'Iteration ID required',
             });
           }
-
           const { data, error } = await supabase
             .from('iterations')
             .update({ end_date: new Date().toISOString() })
             .eq('id', id)
             .select()
             .single();
-
           if (error) throw error;
-
           return res.status(200).json({ success: true, iteration: data });
         }
         break;
 
       /**
-       * ORG DATA
+       * ORGANIZATION DATA
        */
       case 'org-data':
         if (method === 'GET') {
@@ -157,7 +194,6 @@ export default async function handler(req, res) {
               message: 'iteration_id is required',
             });
           }
-
           const { data: iteration, error: errIter } = await supabase
             .from('iterations')
             .select('*')
@@ -201,15 +237,12 @@ export default async function handler(req, res) {
               message: 'Name and iteration_id required',
             });
           }
-
           const { data, error } = await supabase
             .from('organization_units')
             .insert([{ name, parent_id, iteration_id }])
             .select()
             .single();
-
           if (error) throw error;
-
           return res.status(201).json({ success: true, unit: data });
         }
         break;
@@ -223,13 +256,11 @@ export default async function handler(req, res) {
               message: 'person_id, org_unit_id, iteration_id required',
             });
           }
-
           const { data, error } = await supabase
             .from('person_roles')
             .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
             .select()
             .single();
-
           if (error) {
             if (error.code === '23505') {
               return res.status(409).json({
@@ -239,7 +270,6 @@ export default async function handler(req, res) {
             }
             throw error;
           }
-
           return res.status(201).json({ success: true, role: data });
         }
         break;
@@ -253,14 +283,11 @@ export default async function handler(req, res) {
               message: 'Role ID required',
             });
           }
-
           const { error } = await supabase
             .from('person_roles')
             .delete()
             .eq('id', id);
-
           if (error) throw error;
-
           return res.status(200).json({ success: true });
         }
         break;
@@ -271,6 +298,7 @@ export default async function handler(req, res) {
           .json({ success: false, message: `Unknown action: ${action}` });
     }
 
+    // If method not handled
     return res
       .status(405)
       .json({ success: false, message: 'Method not allowed' });
