@@ -9,8 +9,6 @@ export default async function handler(req, res) {
   } = req;
 
   try {
-    console.log(`[${new Date().toISOString()}] ➡️ Admin API called: action=${action}, method=${method}`);
-
     switch (action) {
       /**
        * PEOPLE MANAGEMENT
@@ -30,13 +28,11 @@ export default async function handler(req, res) {
               message: 'Name is required',
             });
           }
-
           const { data, error } = await supabase
             .from('people')
             .insert([{ name }])
             .select()
             .single();
-
           if (error) {
             if (error.code === '23505') {
               // Unique violation
@@ -47,7 +43,7 @@ export default async function handler(req, res) {
             }
             throw error;
           }
-
+          // ✅ Return single "person" instead of "people"
           return res.status(201).json({ success: true, person: data });
         }
         break;
@@ -90,67 +86,13 @@ export default async function handler(req, res) {
               message: 'Iteration name required',
             });
           }
-
-          // Create iteration
-          const { data: newIter, error } = await supabase
+          const { data, error } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
           if (error) throw error;
-
-          // Clone org units, roles if previous exists
-          const { data: prev } = await supabase
-            .from('iterations')
-            .select('id')
-            .lt('id', newIter.id)
-            .order('id', { ascending: false })
-            .limit(1)
-            .single();
-
-          if (prev) {
-            // Clone org units
-            const { data: prevUnits } = await supabase
-              .from('organization_units')
-              .select('*')
-              .eq('iteration_id', prev.id);
-
-            const idMap = {};
-            for (const u of prevUnits) {
-              const { data: inserted } = await supabase
-                .from('organization_units')
-                .insert([{ name: u.name, parent_id: null, iteration_id: newIter.id }])
-                .select()
-                .single();
-              idMap[u.id] = inserted.id;
-            }
-            // Update parent links
-            for (const u of prevUnits) {
-              if (u.parent_id && idMap[u.parent_id]) {
-                await supabase
-                  .from('organization_units')
-                  .update({ parent_id: idMap[u.parent_id] })
-                  .eq('id', idMap[u.id]);
-              }
-            }
-            // Clone roles
-            const { data: prevRoles } = await supabase
-              .from('person_roles')
-              .select('*')
-              .eq('iteration_id', prev.id);
-            for (const r of prevRoles) {
-              await supabase.from('person_roles').insert([
-                {
-                  person_id: r.person_id,
-                  org_unit_id: idMap[r.org_unit_id],
-                  is_manager: r.is_manager,
-                  iteration_id: newIter.id,
-                },
-              ]);
-            }
-          }
-
-          return res.status(201).json({ success: true, iteration: newIter });
+          return res.status(201).json({ success: true, iteration: data });
         }
         break;
 
@@ -191,14 +133,8 @@ export default async function handler(req, res) {
             .from('iterations')
             .select('*')
             .eq('id', iteration_id)
-            .maybeSingle();
+            .single();
           if (errIter) throw errIter;
-          if (!iteration) {
-            return res.status(404).json({
-              success: false,
-              message: `No iteration found with id ${iteration_id}`,
-            });
-          }
 
           const { data: units, error: errUnits } = await supabase
             .from('organization_units')
@@ -212,7 +148,9 @@ export default async function handler(req, res) {
             .eq('iteration_id', iteration_id);
           if (errRoles) throw errRoles;
 
-          const { data: people, error: errPeople } = await supabase.from('people').select('*');
+          const { data: people, error: errPeople } = await supabase
+            .from('people')
+            .select('*');
           if (errPeople) throw errPeople;
 
           return res.status(200).json({
@@ -280,7 +218,10 @@ export default async function handler(req, res) {
               message: 'Role ID required',
             });
           }
-          const { error } = await supabase.from('person_roles').delete().eq('id', id);
+          const { error } = await supabase
+            .from('person_roles')
+            .delete()
+            .eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
@@ -295,21 +236,30 @@ export default async function handler(req, res) {
               message: 'Org unit ID required',
             });
           }
-          const { error } = await supabase.from('organization_units').delete().eq('id', id);
+          const { error } = await supabase
+            .from('organization_units')
+            .delete()
+            .eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
         break;
 
       default:
-        return res.status(404).json({ success: false, message: `Unknown action: ${action}` });
+        return res
+          .status(404)
+          .json({ success: false, message: `Unknown action: ${action}` });
     }
 
     // If method not handled
-    return res.status(405).json({ success: false, message: 'Method not allowed' });
+    return res
+      .status(405)
+      .json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
-    return res.status(500).json({ success: false, message: err.message || 'Internal server error' });
+    return res
+      .status(500)
+      .json({ success: false, message: err.message || 'Internal server error' });
   }
 }
 
