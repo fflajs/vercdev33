@@ -8,6 +8,8 @@ export default async function handler(req, res) {
     body,
   } = req;
 
+  console.info(`[${new Date().toISOString()}] ➡️ Admin API called: action=${action}, method=${method}`);
+
   try {
     switch (action) {
       /**
@@ -22,26 +24,20 @@ export default async function handler(req, res) {
         if (method === 'POST') {
           const { name } = body;
           if (!name) {
-            return res.status(400).json({
-              success: false,
-              message: 'Name is required',
-            });
+            return res.status(400).json({ success: false, message: 'Name is required' });
           }
-          const { data, error } = await supabase
+          // Check if exists
+          const { data: exists, error: errExists } = await supabase
             .from('people')
-            .insert([{ name }])
-            .select()
-            .single();
-          if (error) {
-            if (error.code === '23505') {
-              // Unique violation
-              return res.status(409).json({
-                success: false,
-                message: `Name "${name}" already exists.`,
-              });
-            }
-            throw error;
+            .select('*')
+            .eq('name', name)
+            .maybeSingle();
+          if (errExists) throw errExists;
+          if (exists) {
+            return res.status(409).json({ success: false, message: `Name "${name}" already exists.` });
           }
+          const { data, error } = await supabase.from('people').insert([{ name }]).select().single();
+          if (error) throw error;
           return res.status(201).json({ success: true, person: data });
         }
         break;
@@ -66,10 +62,7 @@ export default async function handler(req, res) {
             .single();
           if (error && error.code !== 'PGRST116') throw error;
           if (!data) {
-            return res.status(404).json({
-              success: false,
-              message: 'No active iteration found',
-            });
+            return res.status(404).json({ success: false, message: 'No active iteration found' });
           }
           return res.status(200).json({ success: true, iteration: data });
         }
@@ -79,77 +72,58 @@ export default async function handler(req, res) {
         if (method === 'POST') {
           const { name, question_set } = body;
           if (!name) {
-            return res.status(400).json({
-              success: false,
-              message: 'Iteration name required',
-            });
+            return res.status(400).json({ success: false, message: 'Iteration name required' });
           }
 
-          // ✅ Check if active iteration already exists
-          const { data: active, error: errActive } = await supabase
+          // ensure only one active iteration
+          const { data: existing, error: errActive } = await supabase
             .from('iterations')
-            .select('id')
+            .select('*')
             .is('end_date', null)
             .maybeSingle();
           if (errActive) throw errActive;
-          if (active) {
-            return res.status(400).json({
-              success: false,
-              message: 'An active iteration already exists. Please close it first.',
-            });
+          if (existing) {
+            return res.status(400).json({ success: false, message: 'Close the active iteration before creating a new one.' });
           }
 
-          // ✅ Find the most recent *closed* iteration to clone org structure
-          const { data: prevIter, error: prevErr } = await supabase
-            .from('iterations')
-            .select('*')
-            .not('end_date', 'is', null)
-            .order('id', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (prevErr) throw prevErr;
-
-          // ✅ Create new iteration
-          const { data: newIter, error } = await supabase
+          // create new iteration
+          const { data: iteration, error } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
           if (error) throw error;
 
-          // ✅ If previous iteration exists, clone its org structure
+          // clone org units + roles from previous iteration
+          const { data: prevIter } = await supabase
+            .from('iterations')
+            .select('*')
+            .lt('id', iteration.id)
+            .order('id', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
           if (prevIter) {
-            const { data: units, error: unitErr } = await supabase
+            console.info(`Cloning org structure from iteration ${prevIter.id} -> ${iteration.id}`);
+
+            // clone org units
+            const { data: prevUnits } = await supabase
               .from('organization_units')
               .select('*')
               .eq('iteration_id', prevIter.id);
-            if (unitErr) throw unitErr;
 
-            const { data: roles, error: roleErr } = await supabase
-              .from('person_roles')
-              .select('*')
-              .eq('iteration_id', prevIter.id);
-            if (roleErr) throw roleErr;
-
-            if (units.length > 0) {
-              const unitMap = {};
-              for (const u of units) {
-                const { data: newUnit, error: insErr } = await supabase
+            const unitMap = {};
+            if (prevUnits && prevUnits.length > 0) {
+              for (const u of prevUnits) {
+                const { data: newUnit } = await supabase
                   .from('organization_units')
-                  .insert([
-                    {
-                      name: u.name,
-                      parent_id: null, // fix later
-                      iteration_id: newIter.id,
-                    },
-                  ])
+                  .insert([{ name: u.name, parent_id: null, iteration_id: iteration.id }])
                   .select()
                   .single();
-                if (insErr) throw insErr;
                 unitMap[u.id] = newUnit.id;
               }
-              // Fix parent references
-              for (const u of units) {
+              // fix parent_ids
+              for (const u of prevUnits) {
                 if (u.parent_id) {
                   await supabase
                     .from('organization_units')
@@ -157,21 +131,29 @@ export default async function handler(req, res) {
                     .eq('id', unitMap[u.id]);
                 }
               }
-              // Clone roles
-              for (const r of roles) {
+            }
+
+            // clone roles
+            const { data: prevRoles } = await supabase
+              .from('person_roles')
+              .select('*')
+              .eq('iteration_id', prevIter.id);
+
+            if (prevRoles && prevRoles.length > 0) {
+              for (const r of prevRoles) {
                 await supabase.from('person_roles').insert([
                   {
                     person_id: r.person_id,
                     org_unit_id: unitMap[r.org_unit_id],
                     is_manager: r.is_manager,
-                    iteration_id: newIter.id,
+                    iteration_id: iteration.id,
                   },
                 ]);
               }
             }
           }
 
-          return res.status(201).json({ success: true, iteration: newIter });
+          return res.status(201).json({ success: true, iteration });
         }
         break;
 
@@ -179,10 +161,7 @@ export default async function handler(req, res) {
         if (method === 'POST') {
           const { id } = body;
           if (!id) {
-            return res.status(400).json({
-              success: false,
-              message: 'Iteration ID required',
-            });
+            return res.status(400).json({ success: false, message: 'Iteration ID required' });
           }
           const { data, error } = await supabase
             .from('iterations')
@@ -196,17 +175,16 @@ export default async function handler(req, res) {
         break;
 
       /**
-       * ORGANIZATION DATA
+       * ORG DATA
        */
       case 'org-data':
         if (method === 'GET') {
           const { iteration_id } = req.query;
           if (!iteration_id) {
-            return res.status(400).json({
-              success: false,
-              message: 'iteration_id is required',
-            });
+            return res.status(400).json({ success: false, message: 'iteration_id is required' });
           }
+          console.info(`[${new Date().toISOString()}] Fetching org-data for iteration: ${iteration_id}`);
+
           const { data: iteration, error: errIter } = await supabase
             .from('iterations')
             .select('*')
@@ -214,33 +192,25 @@ export default async function handler(req, res) {
             .maybeSingle();
           if (errIter) throw errIter;
           if (!iteration) {
-            return res.status(404).json({
-              success: false,
-              message: `No iteration found with id ${iteration_id}`,
-            });
+            return res.status(404).json({ success: false, message: `No iteration found with id ${iteration_id}` });
           }
+
           const { data: units, error: errUnits } = await supabase
             .from('organization_units')
             .select('*')
             .eq('iteration_id', iteration_id);
           if (errUnits) throw errUnits;
+
           const { data: roles, error: errRoles } = await supabase
             .from('person_roles')
             .select('*')
             .eq('iteration_id', iteration_id);
           if (errRoles) throw errRoles;
-          const { data: people, error: errPeople } = await supabase
-            .from('people')
-            .select('*');
+
+          const { data: people, error: errPeople } = await supabase.from('people').select('*');
           if (errPeople) throw errPeople;
 
-          return res.status(200).json({
-            success: true,
-            iteration,
-            units,
-            roles,
-            people,
-          });
+          return res.status(200).json({ success: true, iteration, units, roles, people });
         }
         break;
 
@@ -248,10 +218,7 @@ export default async function handler(req, res) {
         if (method === 'POST') {
           const { name, parent_id, iteration_id } = body;
           if (!name || !iteration_id) {
-            return res.status(400).json({
-              success: false,
-              message: 'Name and iteration_id required',
-            });
+            return res.status(400).json({ success: false, message: 'Name and iteration_id required' });
           }
           const { data, error } = await supabase
             .from('organization_units')
@@ -263,14 +230,28 @@ export default async function handler(req, res) {
         }
         break;
 
+      case 'delete-org-unit':
+        if (method === 'DELETE') {
+          const { id } = body;
+          if (!id) {
+            return res.status(400).json({ success: false, message: 'Org unit ID required' });
+          }
+          const { error } = await supabase.from('organization_units').delete().eq('id', id);
+          if (error) throw error;
+          return res.status(200).json({ success: true });
+        }
+        break;
+
+      /**
+       * ROLES
+       */
       case 'assign-role':
         if (method === 'POST') {
           const { person_id, org_unit_id, is_manager, iteration_id } = body;
           if (!person_id || !org_unit_id || !iteration_id) {
-            return res.status(400).json({
-              success: false,
-              message: 'person_id, org_unit_id, iteration_id required',
-            });
+            return res
+              .status(400)
+              .json({ success: false, message: 'person_id, org_unit_id, iteration_id required' });
           }
           const { data, error } = await supabase
             .from('person_roles')
@@ -279,10 +260,7 @@ export default async function handler(req, res) {
             .single();
           if (error) {
             if (error.code === '23505') {
-              return res.status(409).json({
-                success: false,
-                message: 'This role already exists.',
-              });
+              return res.status(409).json({ success: false, message: 'This role already exists.' });
             }
             throw error;
           }
@@ -294,48 +272,20 @@ export default async function handler(req, res) {
         if (method === 'DELETE') {
           const { id } = body;
           if (!id) {
-            return res.status(400).json({
-              success: false,
-              message: 'Role ID required',
-            });
+            return res.status(400).json({ success: false, message: 'Role ID required' });
           }
-          const { error } = await supabase
-            .from('person_roles')
-            .delete()
-            .eq('id', id);
-          if (error) throw error;
-          return res.status(200).json({ success: true });
-        }
-        break;
-
-      case 'delete-org-unit':
-        if (method === 'DELETE') {
-          const { id } = body;
-          if (!id) {
-            return res.status(400).json({
-              success: false,
-              message: 'Org Unit ID required',
-            });
-          }
-          const { error } = await supabase
-            .from('organization_units')
-            .delete()
-            .eq('id', id);
+          const { error } = await supabase.from('person_roles').delete().eq('id', id);
           if (error) throw error;
           return res.status(200).json({ success: true });
         }
         break;
 
       default:
-        return res
-          .status(404)
-          .json({ success: false, message: `Unknown action: ${action}` });
+        return res.status(404).json({ success: false, message: `Unknown action: ${action}` });
     }
 
-    // If method not handled
-    return res
-      .status(405)
-      .json({ success: false, message: 'Method not allowed' });
+    // Fallback for methods not handled
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   } catch (err) {
     console.error('Admin API error:', err);
     return res
