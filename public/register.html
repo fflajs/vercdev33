@@ -3,78 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <title>Register</title>
-  <link rel="icon" href="favicon.ico">
+  <link rel="icon" type="image/png" href="/favicon.ico">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+<body class="bg-gray-100 flex items-center justify-center h-screen">
   <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
-    <h1 class="text-2xl font-bold mb-4 text-center">Register New Person</h1>
-    <p class="text-gray-600 mb-4 text-center">Enter your full name to create an account.</p>
-
+    <h1 class="text-2xl font-bold mb-4">Register New Person</h1>
+    <p class="mb-4 text-gray-600">Enter your full name to create an account.</p>
     <form id="register-form" class="space-y-4">
       <div>
         <label for="name" class="block text-sm font-medium text-gray-700">Full Name</label>
-        <input id="name" name="name" type="text" required
-          class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+        <input type="text" id="name" name="name"
+          class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+          required />
       </div>
       <button type="submit"
-        class="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700">
+        class="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
         Register
       </button>
     </form>
-
-    <p id="message" class="text-center text-sm italic mt-4"></p>
-
-    <div class="mt-4 text-center">
-      <a href="index.html" class="text-indigo-600 hover:underline">Back to Login</a>
-    </div>
+    <p id="message" class="mt-4 text-center"></p>
+    <a href="/index.html"
+      class="block mt-4 text-blue-500 hover:text-blue-700 text-center">Back to Login</a>
   </div>
 
   <script>
-    document.getElementById('register-form').addEventListener('submit', async function(event) {
-      event.preventDefault();
-
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       const name = document.getElementById('name').value.trim();
       const message = document.getElementById('message');
-
       message.textContent = '';
-      message.className = 'text-center text-sm italic mt-4';
-
-      if (!name) {
-        message.textContent = 'Please enter a name.';
-        message.classList.add('text-red-500');
-        return;
-      }
-
-      if (name.toLowerCase() === 'admin') {
-        message.textContent = 'This name is reserved and cannot be used.';
-        message.classList.add('text-red-500');
-        return;
-      }
+      message.className = 'mt-4 text-center';
 
       try {
-        // ✅ Force POST request to people
-        const response = await fetch('/api/admin/people?action=people', {
+        const res = await fetch('/api/admin/people?action=people', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
         });
 
-        const data = await response.json();
-
-        console.log("DEBUG → response.ok:", response.ok);
+        const data = await res.json();
+        console.log("DEBUG → response.ok:", res.ok);
         console.log("DEBUG → full response:", data);
 
-        if (!response.ok || !data.success || !data.person) {
-          throw new Error(data.message || 'Registration failed');
+        if (res.ok && data.success && data.person) {
+          message.textContent = `User "${data.person.name}" successfully created! You can now log in.`;
+          message.classList.add('text-green-600');
+        } else if (res.status === 409) {
+          message.textContent = data.message || `Name "${name}" already exists.`;
+          message.classList.add('text-red-600');
+        } else {
+          message.textContent = `Registration failed: ${data.message || 'Unknown error'}`;
+          message.classList.add('text-red-600');
         }
-
-        message.textContent = `User "${data.person.name}" successfully created! You can now log in.`;
-        message.classList.add('text-green-500');
-        document.getElementById('register-form').reset();
-      } catch (error) {
-        message.textContent = error.message;
-        message.classList.add('text-red-500');
+      } catch (err) {
+        console.error("Registration error:", err);
+        message.textContent = 'An error occurred. Please try again.';
+        message.classList.add('text-red-600');
       }
     });
   </script>
