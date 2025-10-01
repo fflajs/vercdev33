@@ -35,22 +35,27 @@ export default async function handler(req, res) {
             .select()
             .single();
 
-          // 🔎 Trace logs
-          console.log("DEBUG → Insert result data:", data);
-          console.log("DEBUG → Insert result error:", error);
-
+          // 🔎 Return debug info as well
           if (error) {
             if (error.code === '23505') {
-              // Unique violation
               return res.status(409).json({
                 success: false,
                 message: `Name "${name}" already exists.`,
+                debug: { data, error },
               });
             }
-            throw error;
+            return res.status(500).json({
+              success: false,
+              message: error.message,
+              debug: { data, error },
+            });
           }
 
-          return res.status(201).json({ success: true, person: data });
+          return res.status(201).json({
+            success: true,
+            person: data,
+            debug: { data, error },
+          });
         }
         break;
 
@@ -72,6 +77,7 @@ export default async function handler(req, res) {
             .select('*')
             .is('end_date', null)
             .single();
+
           if (error && error.code !== 'PGRST116') throw error;
           if (!data) {
             return res.status(404).json({
@@ -92,88 +98,12 @@ export default async function handler(req, res) {
               message: 'Iteration name required',
             });
           }
-
-          // Close any existing active iteration first
-          const { data: active, error: activeErr } = await supabase
-            .from('iterations')
-            .select('*')
-            .is('end_date', null)
-            .maybeSingle();
-          if (activeErr) throw activeErr;
-          if (active) {
-            return res.status(400).json({
-              success: false,
-              message: 'An active iteration already exists. Close it first.',
-            });
-          }
-
           const { data, error } = await supabase
             .from('iterations')
             .insert([{ name, question_set }])
             .select()
             .single();
           if (error) throw error;
-
-          // Copy org structure from last iteration (if any)
-          const { data: prev } = await supabase
-            .from('iterations')
-            .select('id')
-            .lt('id', data.id)
-            .order('id', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (prev) {
-            // Copy org units
-            const { data: units } = await supabase
-              .from('organization_units')
-              .select('*')
-              .eq('iteration_id', prev.id);
-            if (units?.length) {
-              const mapping = {};
-              for (const u of units) {
-                const { data: newUnit } = await supabase
-                  .from('organization_units')
-                  .insert([
-                    {
-                      name: u.name,
-                      parent_id: null,
-                      iteration_id: data.id,
-                    },
-                  ])
-                  .select()
-                  .single();
-                mapping[u.id] = newUnit.id;
-              }
-              // Update parent mapping
-              for (const u of units) {
-                if (u.parent_id) {
-                  await supabase
-                    .from('organization_units')
-                    .update({ parent_id: mapping[u.parent_id] })
-                    .eq('id', mapping[u.id]);
-                }
-              }
-              // Copy roles
-              const { data: roles } = await supabase
-                .from('person_roles')
-                .select('*')
-                .eq('iteration_id', prev.id);
-              if (roles?.length) {
-                for (const r of roles) {
-                  await supabase.from('person_roles').insert([
-                    {
-                      person_id: r.person_id,
-                      org_unit_id: mapping[r.org_unit_id],
-                      is_manager: r.is_manager,
-                      iteration_id: data.id,
-                    },
-                  ]);
-                }
-              }
-            }
-          }
-
           return res.status(201).json({ success: true, iteration: data });
         }
         break;
@@ -217,6 +147,7 @@ export default async function handler(req, res) {
             .eq('id', iteration_id)
             .maybeSingle();
           if (errIter) throw errIter;
+
           if (!iteration) {
             return res.status(404).json({
               success: false,
@@ -284,6 +215,7 @@ export default async function handler(req, res) {
             .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
             .select()
             .single();
+
           if (error) {
             if (error.code === '23505') {
               return res.status(409).json({
@@ -293,6 +225,7 @@ export default async function handler(req, res) {
             }
             throw error;
           }
+
           return res.status(201).json({ success: true, role: data });
         }
         break;
