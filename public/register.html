@@ -2,43 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Register</title>
-  <link rel="icon" href="/favicon.ico">
+  <title>Register New Person</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="bg-white p-8 rounded shadow-md w-96">
-    <h1 class="text-xl font-bold mb-4 text-center">Register New Person</h1>
-    <p class="mb-4 text-sm text-gray-600 text-center">
-      Enter your full name to create an account.
-    </p>
-    <form id="registerForm" class="space-y-4">
-      <input 
-        type="text" 
-        id="name" 
-        placeholder="Full Name" 
-        class="w-full px-3 py-2 border rounded" 
-        required
-      />
-      <button 
-        type="submit" 
-        class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600"
-      >
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+    <h1 class="text-2xl font-bold mb-4 text-center">Register New Person</h1>
+    <p class="text-gray-600 text-center mb-6">Enter your full name to create an account.</p>
+
+    <form id="register-form" class="space-y-4">
+      <input type="text" id="name" placeholder="Full Name"
+        class="w-full border rounded px-3 py-2" required />
+      <button type="submit"
+        class="w-full bg-green-500 text-white py-2 rounded hover:bg-green-600">
         Register
       </button>
     </form>
+
     <p id="message" class="mt-4 text-center text-sm"></p>
-    <div class="mt-4 text-center">
-      <a href="/index.html" class="text-blue-500 hover:underline">Back to Login</a>
-    </div>
+
+    <a href="/index.html"
+       class="block text-center mt-6 text-blue-500 hover:text-blue-700">
+       Back to Login
+    </a>
   </div>
 
   <script>
-    document.getElementById("registerForm").addEventListener("submit", async (e) => {
+    document.getElementById("register-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-
       const name = document.getElementById("name").value.trim();
       const message = document.getElementById("message");
+
+      if (!name) {
+        message.textContent = "Name is required.";
+        message.className = "mt-4 text-center text-sm text-red-500";
+        return;
+      }
 
       console.log("FFDEBUG → Sending POST with name:", name);
 
@@ -50,20 +50,14 @@
         });
 
         const data = await res.json();
-
         console.log("FFDEBUG → response.ok:", res.ok);
         console.log("FFDEBUG → full response:", data);
 
         if (res.ok && data.success && data.person) {
-          console.log("FFDEBUG → data.success:", data.success);
-          console.log("FFDEBUG → data.person:", data.person);
           message.textContent = `User "${data.person.name}" successfully created! You can now log in.`;
           message.className = "mt-4 text-center text-sm text-green-500";
-        } else if (!data.success && data.message) {
-          message.textContent = `Registration failed: ${data.message}`;
-          message.className = "mt-4 text-center text-sm text-red-500";
         } else {
-          message.textContent = "Registration failed: Unknown error";
+          message.textContent = "Registration failed: " + (data.message || "Unknown error");
           message.className = "mt-4 text-center text-sm text-red-500";
         }
       } catch (err) {
