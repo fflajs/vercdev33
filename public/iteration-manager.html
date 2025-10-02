@@ -4,128 +4,111 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Iteration Manager</title>
-  <link rel="icon" href="favicon.ico" />
+  <link rel="icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-start p-6">
-  <div class="bg-white shadow-md rounded p-6 w-full max-w-2xl">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-2xl">
     <h1 class="text-2xl font-bold mb-4">Iteration Manager</h1>
-    <p class="mb-6 text-gray-700">
-      Manage the active iteration and create new ones when none is active.
-    </p>
+    <p class="mb-6 text-gray-600">Manage the active iteration and create new ones when none is active.</p>
 
-    <!-- Current Iteration Status -->
-    <div id="currentStatus" class="mb-6 text-gray-800 font-medium"></div>
+    <div id="status" class="mb-6"></div>
 
-    <!-- Close Iteration Section -->
-    <div id="closeSection" class="mb-6 hidden">
-      <button id="closeBtn" class="bg-red-500 text-white px-4 py-2 rounded">
-        Close Current Iteration
-      </button>
+    <div id="createForm" class="hidden mb-6">
+      <h2 class="text-xl font-semibold mb-2">Create New Iteration</h2>
+      <label class="block mb-2">Iteration Name</label>
+      <input id="iterationName" type="text" class="border rounded w-full px-2 py-1 mb-4" placeholder="e.g. Iteration 7" />
+      
+      <label class="block mb-2">Question Set</label>
+      <select id="questionSet" class="border rounded w-full px-2 py-1 mb-4">
+        <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
+        <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
+        <option value="Pulse_Check_12.json">Pulse_Check_12.json</option>
+      </select>
+
+      <button id="createBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Create Iteration</button>
     </div>
 
-    <!-- Create Iteration Section -->
-    <div id="createSection" class="mb-6">
-      <h2 class="text-lg font-semibold mb-2">Create New Iteration</h2>
-      <div class="mb-2">
-        <label class="block text-sm font-medium">Iteration Name</label>
-        <input id="iterName" type="text" placeholder="e.g. Iteration 7"
-               class="border rounded w-full px-2 py-1" />
-      </div>
-      <div class="mb-2">
-        <label class="block text-sm font-medium">Question Set</label>
-        <select id="questionSet" class="border rounded w-full px-2 py-1">
-          <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
-          <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
-          <option value="Pulse_Check_12.json">Pulse_Check_12.json</option>
-        </select>
-      </div>
-      <button id="createBtn" class="bg-green-500 text-white px-4 py-2 rounded">
-        Create Iteration
-      </button>
-      <p id="createHelper" class="text-sm text-gray-500 mt-2 hidden">
-        Creation disabled while an iteration is active. Close it first.
-      </p>
-    </div>
+    <button onclick="location.href='admin.html'" class="bg-gray-500 text-white px-4 py-2 rounded">← Back to Admin Portal</button>
 
-    <a href="admin.html" class="text-blue-500 underline">← Back to Admin Portal</a>
-
-    <!-- Debug Log -->
     <details class="mt-6">
-      <summary class="cursor-pointer text-gray-600">Debug log (open to view)</summary>
-      <pre id="debugLog" class="text-xs bg-gray-100 p-2 mt-2 rounded h-48 overflow-y-scroll"></pre>
+      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
+      <pre id="debugLog" class="text-xs bg-gray-100 p-2 rounded mt-2"></pre>
     </details>
   </div>
 
   <script>
-    const log = (msg, data) => {
-      const line = `[${new Date().toISOString()}] ${msg}`;
-      console.log(line, data || "");
-      document.getElementById("debugLog").textContent += line + (data ? " " + JSON.stringify(data, null, 2) : "") + "\\n";
-    };
+    const statusDiv = document.getElementById("status");
+    const createForm = document.getElementById("createForm");
+    const createBtn = document.getElementById("createBtn");
+    const iterationName = document.getElementById("iterationName");
+    const questionSet = document.getElementById("questionSet");
+    const debugLog = document.getElementById("debugLog");
+
+    function log(msg, data) {
+      const ts = new Date().toISOString();
+      debugLog.textContent += `[${ts}] ${msg} ${data ? JSON.stringify(data, null, 2) : ""}\n`;
+      console.log(msg, data || "");
+    }
 
     async function loadActive() {
       log("[loadActive] Fetching /api/admin/active-iteration");
       const res = await fetch("/api/admin/active-iteration");
-      log("[loadActive] response.ok: " + res.ok);
       const data = await res.json();
+      log("[loadActive] response.ok:", res.ok);
       log("[loadActive] JSON:", data);
 
-      const currentStatus = document.getElementById("currentStatus");
-      const closeSection = document.getElementById("closeSection");
-      const createBtn = document.getElementById("createBtn");
-      const iterName = document.getElementById("iterName");
-      const questionSet = document.getElementById("questionSet");
-      const createHelper = document.getElementById("createHelper");
+      statusDiv.innerHTML = "";
 
       if (data.success && data.iteration) {
-        currentStatus.textContent = `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
-        closeSection.classList.remove("hidden");
-        // Disable creation
-        createBtn.disabled = true;
-        iterName.disabled = true;
-        questionSet.disabled = true;
-        createHelper.classList.remove("hidden");
+        statusDiv.innerHTML = `
+          <div class="mb-4">
+            <h2 class="text-xl font-semibold">Current Active Iteration</h2>
+            <p><strong>${data.iteration.name}</strong> (ID: ${data.iteration.id})</p>
+          </div>
+          <button id="closeBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Close Current Iteration</button>
+        `;
+        createForm.classList.add("hidden");
+
+        document.getElementById("closeBtn").onclick = async () => {
+          log("[closeBtn] Closing iteration...");
+          const res = await fetch("/api/admin/close-iteration", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: data.iteration.id }),
+          });
+          const result = await res.json();
+          log("[closeBtn] response.ok:", res.ok);
+          log("[closeBtn] JSON:", result);
+          loadActive();
+        };
       } else {
-        currentStatus.textContent = "No active iteration.";
-        closeSection.classList.add("hidden");
-        // Enable creation
-        createBtn.disabled = false;
-        iterName.disabled = false;
-        questionSet.disabled = false;
-        createHelper.classList.add("hidden");
+        statusDiv.innerHTML = `
+          <p class="text-gray-700 mb-2">No active iteration found. You can create a new one below.</p>
+        `;
+        createForm.classList.remove("hidden");
       }
     }
 
-    document.getElementById("closeBtn").onclick = async () => {
-      log("[closeBtn] Closing iteration...");
-      const res = await fetch("/api/admin/close-iteration", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: 1 }) // For demo, assume single active
-      });
-      log("[closeBtn] response.ok: " + res.ok);
-      loadActive();
-    };
-
-    document.getElementById("createBtn").onclick = async () => {
-      const name = document.getElementById("iterName").value.trim();
-      const question_set = document.getElementById("questionSet").value;
-      if (!name) return alert("Please enter iteration name.");
-
-      log("[createBtn] Creating iteration with name=" + name + ", set=" + question_set);
+    createBtn.onclick = async () => {
+      const name = iterationName.value.trim();
+      const set = questionSet.value;
+      if (!name) {
+        alert("Please enter an iteration name.");
+        return;
+      }
+      log("[createBtn] Creating iteration", { name, set });
       const res = await fetch("/api/admin/create-iteration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, question_set })
+        body: JSON.stringify({ name, question_set: set }),
       });
-      log("[createBtn] response.ok: " + res.ok);
       const data = await res.json();
+      log("[createBtn] response.ok:", res.ok);
       log("[createBtn] JSON:", data);
       loadActive();
     };
 
-    // Init
     log("[init] iteration-manager.html loaded.");
     loadActive();
   </script>
