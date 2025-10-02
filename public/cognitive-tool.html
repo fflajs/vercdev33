@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cognitive Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind (CDN is fine for now; can switch to compiled later) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+</head>
+<body class="bg-gray-100 min-h-screen flex items-start justify-center p-6">
+  <div class="w-full max-w-4xl">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <h1 class="text-3xl font-bold mb-2">Cognitive Tool</h1>
+      <p class="text-gray-600">
+        Load a question set for the active iteration and capture answers. This is a first milestone:
+        loading, rendering, and local validation. Saving to the database comes next.
+      </p>
+    </div>
+
+    <!-- Active Iteration -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-2">Active Iteration</h2>
+      <p id="iteration-status" class="text-gray-700">Loading iteration…</p>
+    </div>
+
+    <!-- Loader / Selector -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-4">Load Question Set</h2>
+      <div class="grid md:grid-cols-3 gap-4 items-end">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="question-set">
+            Question Set
+          </label>
+          <select id="question-set" class="w-full border rounded px-3 py-2">
+            <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
+            <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
+            <option value="Pulse_Check_12.json" selected>Pulse_Check_12.json</option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">
+            If <code>/data/&lt;file&gt;</code> is not found, a sample set will be used.
+          </p>
+        </div>
+        <div class="md:col-span-1">
+          <button id="load-btn"
+                  class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded px-4 py-2">
+            Load Questions
+          </button>
+        </div>
+      </div>
+      <p id="loader-msg" class="text-sm mt-3 text-gray-600"></p>
+    </div>
+
+    <!-- Questions Form -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Questions</h2>
+        <div class="space-x-2">
+          <button id="clear-btn"
+                  class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded px-3 py-1"
+                  disabled>
+            Clear
+          </button>
+          <button id="save-btn"
+                  class="bg-green-600 opacity-60 cursor-not-allowed text-white font-semibold rounded px-4 py-2"
+                  disabled
+                  title="Saving to DB will be enabled in the next step">
+            Save (coming next)
+          </button>
+        </div>
+      </div>
+      <div id="questions-container" class="space-y-4">
+        <p class="text-gray-500">No questions loaded yet.</p>
+      </div>
+    </div>
+
+    <!-- Footer actions -->
+    <div class="flex items-center justify-between">
+      <a href="/portal.html" class="text-blue-600 hover:text-blue-800">&larr; Back to Portal</a>
+      <button id="debug-toggle" class="text-sm text-gray-600 hover:text-gray-800 underline">
+        Debug log (open to view)
+      </button>
+    </div>
+
+    <!-- Debug panel -->
+    <pre id="debug-panel"
+         class="mt-4 whitespace-pre-wrap text-sm bg-black text-green-200 rounded-lg p-4 hidden"></pre>
+  </div>
+
+  <script>
+    // ---------- Debug helpers ----------
+    const debugEl = document.getElementById('debug-panel');
+    const toggleBtn = document.getElementById('debug-toggle');
+    let debugOpen = false;
+    function log(...args) {
+      const ts = new Date().toISOString();
+      const line = `[${ts}] ` + args.map(a =>
+        typeof a === 'string' ? a : JSON.stringify(a, null, 2)
+      ).join(' ') + '\\n';
+      debugEl.textContent += line;
+    }
+    toggleBtn.addEventListener('click', () => {
+      debugOpen = !debugOpen;
+      debugEl.classList.toggle('hidden', !debugOpen);
+    });
+
+    // ---------- State ----------
+    let activeIteration = null;
+    let questions = []; // { id, text } minimal model for now
+
+    // ---------- UI refs ----------
+    const iterationStatus = document.getElementById('iteration-status');
+    const loaderMsg = document.getElementById('loader-msg');
+    const setSelect = document.getElementById('question-set');
+    const loadBtn = document.getElementById('load-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const questionsContainer = document.getElementById('questions-container');
+
+    // ---------- Renderers ----------
+    function renderIteration() {
+      if (!activeIteration) {
+        iterationStatus.textContent = 'No active iteration found.';
+        iterationStatus.classList.remove('text-gray-700');
+        iterationStatus.classList.add('text-red-600');
+        loadBtn.disabled = true;
+        loadBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      } else {
+        iterationStatus.textContent = `${activeIteration.name} (ID: ${activeIteration.id})`;
+        iterationStatus.classList.remove('text-red-600');
+        iterationStatus.classList.add('text-gray-700');
+        loadBtn.disabled = false;
+        loadBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+      }
+    }
+
+    function renderQuestions() {
+      questionsContainer.innerHTML = '';
+      if (!questions.length) {
+        questionsContainer.innerHTML = '<p class="text-gray-500">No questions loaded yet.</p>';
+        clearBtn.disabled = true;
+        return;
+      }
+      clearBtn.disabled = false;
+
+      const list = document.createElement('div');
+      list.className = 'space-y-4';
+
+      questions.forEach((q, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'border rounded p-3';
+
+        const label = document.createElement('label');
+        label.className = 'block text-sm font-medium text-gray-700 mb-1';
+        label.textContent = `${idx + 1}. ${q.text}`;
+
+        const input = document.createElement('textarea');
+        input.className = 'w-full border rounded px-3 py-2 text-sm';
+        input.rows = 2;
+        input.placeholder = 'Your answer…';
+        input.dataset.qid = q.id;
+
+        wrap.appendChild(label);
+        wrap.appendChild(input);
+        list.appendChild(wrap);
+      });
+
+      questionsContainer.appendChild(list);
+    }
+
+    // ---------- Data loaders ----------
+    async function loadActiveIteration() {
+      log('[init] cognitive-tool.html loaded.');
+      log('[loadActive] GET /api/admin/active-iteration');
+      try {
+        const res = await fetch('/api/admin/active-iteration');
+        log('[loadActive] response.ok:', String(res.ok));
+        const data = await res.json().catch(() => ({}));
+        log('[loadActive] JSON:', data);
+
+        if (res.ok && data && data.success && data.iteration) {
+          activeIteration = data.iteration;
+        } else {
+          activeIteration = null;
+        }
+        renderIteration();
+      } catch (err) {
+        log('[loadActive] ERROR:', err.message || err);
+        activeIteration = null;
+        renderIteration();
+      }
+    }
+
+    async function fetchQuestionSet(filename) {
+      // Try to fetch from /data/<filename>. If it fails, return a sample.
+      const url = `/data/${filename}`;
+      log('[fetchQuestionSet] trying', url);
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        // Expecting an array of question strings or objects with "text"
+        const normalized = (Array.isArray(json) ? json : []).map((item, i) => {
+          if (typeof item === 'string') return { id: i + 1, text: item };
+          if (item && typeof item.text === 'string') return { id: i + 1, text: item.text };
+          return { id: i + 1, text: String(item) };
+        });
+        if (!normalized.length) throw new Error('Empty or invalid JSON');
+        return normalized;
+      } catch (e) {
+        log('[fetchQuestionSet] fallback sample due to:', e.message || e);
+        // Small built-in sample as fallback
+        return [
+          { id: 1, text: 'What is the primary objective of this iteration?' },
+          { id: 2, text: 'List key risks you anticipate.' },
+          { id: 3, text: 'Name two stakeholders most impacted.' }
+        ];
+      }
+    }
+
+    // ---------- Events ----------
+    loadBtn.addEventListener('click', async () => {
+      if (!activeIteration) {
+        loaderMsg.textContent = 'No active iteration. Close/create from Iteration Manager.';
+        loaderMsg.className = 'text-sm mt-3 text-red-600';
+        return;
+      }
+      const setName = setSelect.value;
+      loaderMsg.textContent = `Loading ${setName}…`;
+      loaderMsg.className = 'text-sm mt-3 text-gray-600';
+      log('[loadBtn] loading set:', setName);
+
+      questions = await fetchQuestionSet(setName);
+      loaderMsg.textContent = `Loaded ${questions.length} questions.`;
+      loaderMsg.className = 'text-sm mt-3 text-green-600';
+      renderQuestions();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      questions = [];
+      renderQuestions();
+      loaderMsg.textContent = 'Cleared questions.';
+      loaderMsg.className = 'text-sm mt-3 text-gray-600';
+      log('[clearBtn] cleared.');
+    });
+
+    // ---------- Init ----------
+    loadActiveIteration();
+  </script>
+</body>
+</html>
+
