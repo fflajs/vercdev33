@@ -1,112 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
-    .container { max-width: 1200px; margin: 2rem auto; padding: 2rem; background: #fff; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .section { margin-bottom: 2rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { padding: 0.5rem; border-bottom: 1px solid #e5e7eb; text-align: left; white-space: nowrap; }
-    th { background: #f3f4f6; font-weight: 600; position: sticky; top: 0; z-index: 1; }
-    .table-container { max-height: 300px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 0.5rem; }
-  </style>
 </head>
-<body>
-  <div class="container">
-    <h1 class="text-2xl font-bold text-center mb-4">Database Table Viewer</h1>
-    <p class="text-center text-gray-600 mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
+<body class="bg-gray-100">
+  <div class="max-w-5xl mx-auto my-10 bg-white p-8 rounded-lg shadow">
+    <h1 class="text-3xl font-bold mb-2">Database Table Viewer</h1>
+    <p class="text-gray-600 mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
 
-    <!-- Tables -->
     <div id="tables"></div>
 
-    <!-- Controls -->
-    <div class="flex justify-between mt-6">
-      <button id="refreshBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Refresh Now</button>
-      <a href="admin.html" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">← Back to Admin Portal</a>
+    <div class="mt-6 flex items-center gap-3">
+      <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Refresh Now</button>
+      <a href="/admin.html" class="text-blue-600 hover:underline">← Back to Admin Portal</a>
     </div>
 
-    <!-- Debug -->
     <details class="mt-6">
-      <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
-      <pre id="debug-log" class="bg-gray-100 p-3 text-sm rounded max-h-64 overflow-auto"></pre>
+      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
+      <pre id="debug" class="text-xs bg-gray-50 border rounded p-3 whitespace-pre-wrap"></pre>
     </details>
   </div>
 
   <script>
-    const tables = ["organization_units", "iterations", "people", "person_roles", "surveys"];
-    const logEl = document.getElementById("debug-log");
-    const tablesDiv = document.getElementById("tables");
-
-    function log(msg, obj) {
+    const dlog = (...args) => {
       const ts = new Date().toISOString();
-      logEl.textContent += `[${ts}] ${msg}` + (obj ? " " + JSON.stringify(obj) : "") + "\\n";
-      logEl.scrollTop = logEl.scrollHeight;
+      const line = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+      console.log(line);
+      const pre = document.getElementById('debug');
+      pre.textContent += line + "\n";
+    };
+
+    const TABLES = [
+      'organization_units',
+      'iterations',
+      'people',
+      'person_roles',
+      'surveys',
+      'app_data',
+    ];
+
+    function renderTable(container, name, rows) {
+      const section = document.createElement('section');
+      section.className = 'mb-8';
+      section.innerHTML = `<h2 class="text-xl font-semibold mb-2">${name}</h2>`;
+
+      if (!rows || rows.length === 0) {
+        section.innerHTML += `<div class="text-gray-500 italic">(No data)</div>`;
+        container.appendChild(section);
+        return;
+      }
+
+      const cols = Object.keys(rows[0]);
+
+      const table = document.createElement('table');
+      table.className = 'w-full border-collapse text-sm';
+      table.innerHTML =
+        `<thead><tr>${cols
+          .map((c) => `<th class="text-left border-b p-2 bg-gray-50">${c}</th>`)
+          .join('')}</tr></thead>`;
+
+      const tbody = document.createElement('tbody');
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = cols
+          .map(
+            (c) =>
+              `<td class="border-b p-2 align-top">${
+                row[c] === null || row[c] === undefined
+                  ? '<span class="text-gray-400">NULL</span>'
+                  : typeof row[c] === 'object'
+                  ? `<pre class="whitespace-pre-wrap">${JSON.stringify(row[c], null, 2)}</pre>`
+                  : String(row[c])
+              }</td>`
+          )
+          .join('');
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      section.appendChild(table);
+      container.appendChild(section);
     }
 
-    async function loadTables() {
-      tablesDiv.innerHTML = "";
-      for (const table of tables) {
-        log(`Fetching table: ${table}`);
+    async function fetchTable(name) {
+      const url = `/api/admin/table-viewer?table=${encodeURIComponent(name)}`;
+      dlog('Fetching table:', name);
+      const res = await fetch(url);
+      const data = await res.json();
+      dlog('Response for', name, data);
+      if (!res.ok || !data.success) {
+        return { name, rows: [], error: data.message || 'Error' };
+      }
+      return { name, rows: data.rows || [] };
+    }
+
+    async function loadAll() {
+      const container = document.getElementById('tables');
+      container.innerHTML = '';
+
+      for (const t of TABLES) {
         try {
-          const res = await fetch(`/api/admin/table-viewer?table=${table}`);
-          const data = await res.json();
-          log(`Response for ${table}`, data);
-
-          const section = document.createElement("div");
-          section.className = "section";
-          const title = document.createElement("h2");
-          title.className = "text-xl font-semibold mb-2";
-          title.textContent = table;
-          section.appendChild(title);
-
-          if (!data.success || !data.rows || data.rows.length === 0) {
-            const p = document.createElement("p");
-            p.className = "text-gray-500 italic";
-            p.textContent = "(No data)";
-            section.appendChild(p);
+          const { name, rows, error } = await fetchTable(t);
+          if (error) {
+            renderTable(container, name, []);
           } else {
-            const tableDiv = document.createElement("div");
-            tableDiv.className = "table-container";
-            const tbl = document.createElement("table");
-            const thead = document.createElement("thead");
-            const trHead = document.createElement("tr");
-            Object.keys(data.rows[0]).forEach(col => {
-              const th = document.createElement("th");
-              th.textContent = col;
-              trHead.appendChild(th);
-            });
-            thead.appendChild(trHead);
-            tbl.appendChild(thead);
-
-            const tbody = document.createElement("tbody");
-            data.rows.forEach(row => {
-              const tr = document.createElement("tr");
-              Object.values(row).forEach(val => {
-                const td = document.createElement("td");
-                td.textContent = val === null ? "NULL" : val;
-                tr.appendChild(td);
-              });
-              tbody.appendChild(tr);
-            });
-            tbl.appendChild(tbody);
-
-            tableDiv.appendChild(tbl);
-            section.appendChild(tableDiv);
+            renderTable(container, name, rows);
           }
-          tablesDiv.appendChild(section);
-        } catch (err) {
-          log(`Error fetching ${table}: ${err.message}`);
+        } catch (e) {
+          dlog('Fetch error for', t, e.message);
+          renderTable(container, t, []);
         }
       }
     }
 
-    document.getElementById("refreshBtn").addEventListener("click", loadTables);
-
-    log("table-viewer.html loaded.");
-    loadTables();
+    document.addEventListener('DOMContentLoaded', () => {
+      dlog('table-viewer.html loaded.');
+      document.getElementById('refreshBtn').onclick = () => loadAll();
+      loadAll();
+    });
   </script>
 </body>
 </html>
