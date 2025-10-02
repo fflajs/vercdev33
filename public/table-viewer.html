@@ -1,97 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Table Viewer</title>
-  <link rel="icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
-  <header class="bg-gray-800 text-white p-4 flex justify-between items-center">
-    <h1 class="text-lg font-bold">Database Table Viewer</h1>
-    <a href="/admin.html" class="text-sm hover:underline">← Back to Admin Portal</a>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="bg-white shadow p-4">
+    <h1 class="text-xl font-bold">Database Table Viewer</h1>
   </header>
 
-  <main class="flex-1 p-6 space-y-4">
-    <div>
-      <label for="table-select" class="block text-sm font-medium text-gray-700 mb-1">Select Table</label>
-      <select id="table-select" class="border rounded p-2 w-64">
-        <option value="people">people</option>
-        <option value="iterations">iterations</option>
-        <option value="organization_units">organization_units</option>
-        <option value="person_roles">person_roles</option>
-      </select>
-      <button id="load-btn" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Load</button>
-    </div>
+  <!-- Main content -->
+  <main class="flex-grow p-4 space-y-6">
+    <p class="text-gray-700">
+      View current data stored in the database. Read-only mode for testing/debugging.
+    </p>
 
-    <div id="table-container" class="overflow-x-auto bg-white shadow rounded p-4">
-      <p class="text-gray-500">Select a table and click <b>Load</b> to view its data.</p>
-    </div>
-
-    <details class="mt-6">
-      <summary class="cursor-pointer text-gray-600">Debug log (open to view)</summary>
-      <pre id="debug-log" class="bg-black text-green-400 p-2 rounded mt-2 text-sm h-48 overflow-y-auto"></pre>
-    </details>
+    <div id="tables" class="space-y-6"></div>
   </main>
 
+  <!-- Footer with back link -->
+  <footer class="p-4">
+    <a href="admin.html" class="text-blue-600 hover:underline">← Back to Admin Portal</a>
+  </footer>
+
   <script>
-    const log = (msg, obj) => {
-      const logEl = document.getElementById("debug-log");
-      const ts = new Date().toISOString();
-      logEl.textContent += `[${ts}] ${msg} ${obj ? JSON.stringify(obj, null, 2) : ""}\n`;
-      logEl.scrollTop = logEl.scrollHeight;
-    };
+    const tables = ["iterations", "organization_units", "people", "person_roles"];
 
-    document.getElementById("load-btn").addEventListener("click", async () => {
-      const table = document.getElementById("table-select").value;
-      log("[load-btn] Fetching table:", table);
-
+    async function loadTable(name) {
       try {
-        const res = await fetch(`/api/admin/db-view?table=${table}`);
-        log("[load-btn] response.ok:", res.ok);
-
+        const res = await fetch(`/api/admin/org-data-table?table=${name}`);
         const data = await res.json();
-        log("[load-btn] JSON:", data);
 
-        if (!res.ok || !data.success) {
-          document.getElementById("table-container").innerHTML =
-            `<p class="text-red-500">Error loading table: ${data.message || "Unknown error"}</p>`;
-          return;
-        }
+        const container = document.createElement("div");
+        container.className = "bg-white rounded shadow p-4";
 
-        // Render table
-        if (data.rows.length === 0) {
-          document.getElementById("table-container").innerHTML =
-            `<p class="text-gray-500">Table <b>${table}</b> is empty.</p>`;
-          return;
-        }
+        const title = document.createElement("h2");
+        title.className = "text-lg font-semibold mb-2";
+        title.textContent = name;
+        container.appendChild(title);
 
-        const headers = Object.keys(data.rows[0]);
-        let html = `<table class="table-auto border-collapse border border-gray-300 w-full text-sm">
-                      <thead><tr class="bg-gray-100">`;
-        headers.forEach(h => html += `<th class="border border-gray-300 px-2 py-1">${h}</th>`);
-        html += `</tr></thead><tbody>`;
-        data.rows.forEach(row => {
-          html += `<tr>`;
-          headers.forEach(h => {
-            html += `<td class="border border-gray-300 px-2 py-1">${row[h] ?? ""}</td>`;
+        if (data.success && data.rows.length > 0) {
+          const table = document.createElement("table");
+          table.className = "min-w-full border border-gray-300 text-sm";
+
+          // Header
+          const thead = document.createElement("thead");
+          thead.className = "bg-gray-200";
+          const headerRow = document.createElement("tr");
+          Object.keys(data.rows[0]).forEach(key => {
+            const th = document.createElement("th");
+            th.className = "border px-2 py-1 text-left";
+            th.textContent = key;
+            headerRow.appendChild(th);
           });
-          html += `</tr>`;
-        });
-        html += `</tbody></table>`;
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
 
-        document.getElementById("table-container").innerHTML = html;
+          // Body
+          const tbody = document.createElement("tbody");
+          data.rows.forEach(row => {
+            const tr = document.createElement("tr");
+            Object.values(row).forEach(value => {
+              const td = document.createElement("td");
+              td.className = "border px-2 py-1";
+              td.textContent = value;
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
 
+          container.appendChild(table);
+        } else {
+          const msg = document.createElement("p");
+          msg.className = "text-gray-500 italic";
+          msg.textContent = "(No data)";
+          container.appendChild(msg);
+        }
+
+        document.getElementById("tables").appendChild(container);
       } catch (err) {
-        console.error("DEBUG → Fetch error:", err);
-        log("[load-btn] Fetch error:", err);
-        document.getElementById("table-container").innerHTML =
-          `<p class="text-red-500">Network error</p>`;
+        console.error("Error loading table", name, err);
       }
-    });
+    }
 
-    log("[init] table-viewer.html loaded.");
+    tables.forEach(loadTable);
   </script>
 </body>
 </html>
