@@ -1,60 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Research Portal</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="max-w-3xl mx-auto p-6">
+<body class="min-h-screen bg-gray-100 flex items-center justify-center">
+  <div class="w-full max-w-md bg-white p-6 rounded-lg shadow">
     <!-- Title -->
-    <h1 class="text-3xl font-bold text-center mb-6">Research Portal</h1>
-    <p class="text-center text-gray-600 mb-8">
+    <h1 class="text-2xl font-bold text-center mb-2">Research Portal</h1>
+    <p class="text-gray-600 text-center mb-6">
       Access tools for research and analysis.
     </p>
 
-    <!-- Research Section -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-      <!-- Cognitive Tool -->
-      <a href="cognitive.html" class="block border rounded-lg shadow-sm p-6 bg-white hover:shadow-md transition">
-        <h2 class="text-xl font-semibold mb-2">Cognitive Tool</h2>
-        <p class="text-gray-600 text-sm">Explore and manage cognitive processes.</p>
+    <!-- Tool Buttons -->
+    <div class="flex flex-col space-y-3">
+      <a href="cognitive.html" 
+         class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded text-center">
+        Launch Cognitive Tool
       </a>
-
-      <!-- Analysis -->
-      <a href="analysis.html" class="block border rounded-lg shadow-sm p-6 bg-white hover:shadow-md transition">
-        <h2 class="text-xl font-semibold mb-2">Analysis</h2>
-        <p class="text-gray-600 text-sm">Perform and review research analyses.</p>
+      <a href="analyze.html" 
+         class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded text-center">
+        Launch Analysis
       </a>
     </div>
 
-    <!-- Back Link -->
-    <div class="mt-10 text-center">
-      <a href="index.html" class="text-blue-600 hover:underline">← Back to Login</a>
+    <!-- Footer -->
+    <div class="mt-6 text-center">
+      <a href="index.html" class="text-blue-500 hover:underline">
+        ← Back to Login
+      </a>
     </div>
 
-    <!-- Debug Section -->
-    <details class="mt-10 border rounded bg-white p-4">
-      <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
-      <pre id="debugLog" class="text-xs text-gray-700 mt-2 whitespace-pre-wrap"></pre>
+    <!-- Debug log -->
+    <details class="mt-6 text-sm text-gray-600">
+      <summary class="cursor-pointer">Debug log (open to view)</summary>
+      <pre id="debugLog" class="mt-2 bg-gray-100 p-2 rounded max-h-40 overflow-y-auto"></pre>
     </details>
   </div>
 
   <script>
-    function logDebug(message, obj = null) {
+    function logDebug(msg, obj = null) {
       const log = document.getElementById("debugLog");
-      const timestamp = new Date().toISOString();
-      if (obj) {
-        log.textContent += `[${timestamp}] ${message} ${JSON.stringify(obj, null, 2)}\n`;
-      } else {
-        log.textContent += `[${timestamp}] ${message}\n`;
-      }
+      const time = new Date().toISOString();
+      log.textContent += `[${time}] ${msg}\n`;
+      if (obj) log.textContent += JSON.stringify(obj, null, 2) + "\n";
       log.scrollTop = log.scrollHeight;
     }
 
-    // Initial log
+    // Initial trace
     logDebug("[init] portal.html loaded.");
   </script>
 </body>
