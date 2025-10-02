@@ -1,100 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Portal</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Portal</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col">
-  <!-- Header -->
-  <header class="bg-gray-800 text-white py-4 shadow-md">
-    <div class="container mx-auto px-4">
-      <h1 class="text-2xl font-bold">Portal</h1>
-      <p class="text-sm text-gray-300">Choose a section to continue</p>
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-3xl mx-auto p-6">
+    <!-- Title -->
+    <h1 class="text-3xl font-bold text-center mb-6">Research Portal</h1>
+    <p class="text-center text-gray-600 mb-8">
+      Access tools for research and analysis.
+    </p>
+
+    <!-- Research Section -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <!-- Cognitive Tool -->
+      <a href="cognitive.html" class="block border rounded-lg shadow-sm p-6 bg-white hover:shadow-md transition">
+        <h2 class="text-xl font-semibold mb-2">Cognitive Tool</h2>
+        <p class="text-gray-600 text-sm">Explore and manage cognitive processes.</p>
+      </a>
+
+      <!-- Analysis -->
+      <a href="analysis.html" class="block border rounded-lg shadow-sm p-6 bg-white hover:shadow-md transition">
+        <h2 class="text-xl font-semibold mb-2">Analysis</h2>
+        <p class="text-gray-600 text-sm">Perform and review research analyses.</p>
+      </a>
     </div>
-  </header>
 
-  <!-- Main Content -->
-  <main class="flex-grow container mx-auto px-4 py-8 space-y-8">
-    <!-- Admin Tools -->
-    <section>
-      <h2 class="text-xl font-semibold text-gray-700 mb-4">Admin Tools</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <a href="iteration-manager.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Iteration Manager">
-          <h3 class="text-lg font-bold text-gray-800">Iteration Manager</h3>
-          <p class="text-sm text-gray-600 mt-2">Manage iterations, create and close them.</p>
-        </a>
-        <a href="org-chart.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Organization Manager">
-          <h3 class="text-lg font-bold text-gray-800">Organization Manager</h3>
-          <p class="text-sm text-gray-600 mt-2">View and manage organizational structure.</p>
-        </a>
-        <a href="table-viewer.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Table Viewer">
-          <h3 class="text-lg font-bold text-gray-800">Table Viewer</h3>
-          <p class="text-sm text-gray-600 mt-2">View database tables in read-only mode.</p>
-        </a>
-      </div>
-    </section>
-
-    <!-- Research Tools -->
-    <section>
-      <h2 class="text-xl font-semibold text-gray-700 mb-4">Research Tools</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <a href="cognitive.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Cognitive Tool">
-          <h3 class="text-lg font-bold text-gray-800">Cognitive Tool</h3>
-          <p class="text-sm text-gray-600 mt-2">Access and work with cognitive tasks.</p>
-        </a>
-        <a href="analyze.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Analysis Tool">
-          <h3 class="text-lg font-bold text-gray-800">Analysis Tool</h3>
-          <p class="text-sm text-gray-600 mt-2">Perform analyses using selected datasets.</p>
-        </a>
-      </div>
-    </section>
-
-    <!-- Debug Log -->
-    <section>
-      <button onclick="toggleDebug()" class="text-sm text-blue-600 hover:underline">
-        Debug log (open to view)
-      </button>
-      <pre id="debugLog" class="hidden mt-2 p-2 bg-black text-green-400 text-xs rounded max-h-64 overflow-y-auto"></pre>
-    </section>
-  </main>
-
-  <!-- Footer -->
-  <footer class="bg-gray-100 py-4">
-    <div class="container mx-auto px-4 text-center">
-      <a id="backToLogin" href="index.html" class="text-sm text-blue-600 hover:underline">← Back to Login</a>
+    <!-- Back Link -->
+    <div class="mt-10 text-center">
+      <a href="index.html" class="text-blue-600 hover:underline">← Back to Login</a>
     </div>
-  </footer>
 
-  <!-- Scripts -->
+    <!-- Debug Section -->
+    <details class="mt-10 border rounded bg-white p-4">
+      <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
+      <pre id="debugLog" class="text-xs text-gray-700 mt-2 whitespace-pre-wrap"></pre>
+    </details>
+  </div>
+
   <script>
-    const debugEl = document.getElementById("debugLog");
-
-    function logDebug(msg, obj) {
-      const time = new Date().toISOString();
-      debugEl.textContent += `[${time}] ${msg}` + (obj ? " " + JSON.stringify(obj, null, 2) : "") + "\n";
+    function logDebug(message, obj = null) {
+      const log = document.getElementById("debugLog");
+      const timestamp = new Date().toISOString();
+      if (obj) {
+        log.textContent += `[${timestamp}] ${message} ${JSON.stringify(obj, null, 2)}\n`;
+      } else {
+        log.textContent += `[${timestamp}] ${message}\n`;
+      }
+      log.scrollTop = log.scrollHeight;
     }
 
-    function toggleDebug() {
-      debugEl.classList.toggle("hidden");
-    }
-
-    // Initial debug
+    // Initial log
     logDebug("[init] portal.html loaded.");
-
-    // Attach debug logging to all portal links
-    document.querySelectorAll(".portal-link").forEach(link => {
-      link.addEventListener("click", () => {
-        logDebug(`[nav] User clicked "${link.dataset.name}" → ${link.getAttribute("href")}`);
-      });
-    });
-
-    // Back to Login logging
-    document.getElementById("backToLogin").addEventListener("click", () => {
-      logDebug(`[nav] User clicked "Back to Login" → index.html`);
-    });
   </script>
 </body>
 </html>
