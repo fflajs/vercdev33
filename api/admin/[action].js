@@ -2,134 +2,91 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
-  process.env.SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 export default async function handler(req, res) {
-  const { query, method, body } = req;
-  const { action } = query;
+  const { action } = req.query;
+  const method = req.method;
+  const body = req.body;
 
-  console.log(`[${new Date().toISOString()}] ➡️ Admin API called: action=${action}, method=${method}`);
+  console.log(`[INFO] Admin API called: action=${action}, method=${method}`);
 
   try {
     switch (action) {
       /**
-       * ------------------------------------------------
-       * ACTIVE ITERATION
-       * ------------------------------------------------
+       * =====================================================
+       * ORG-DATA: Fetch iteration + org units + roles
+       * =====================================================
        */
-      case 'active-iteration':
+      case 'org-data':
         if (method === 'GET') {
-          console.log(`[active-iteration] Fetching active iteration...`);
-          const { data, error } = await supabase
+          const { iteration_id } = req.query;
+          console.log(`[org-data] Requested iteration_id = ${iteration_id}`);
+
+          // --- Load iteration ---
+          const { data: iteration, error: iterationError } = await supabase
             .from('iterations')
             .select('*')
-            .is('end_date', null)
+            .eq('id', iteration_id)
             .single();
 
-          if (error && error.code !== 'PGRST116') {
-            console.error(`[active-iteration] Error:`, error);
-            return res.status(500).json({ success: false, message: error.message });
-          }
-
-          if (!data) {
-            console.log(`[active-iteration] No active iteration found.`);
-            return res.status(404).json({ success: false, message: 'No active iteration found' });
-          }
-
-          console.log(`[active-iteration] Found iteration:`, data);
-          return res.status(200).json({ success: true, iteration: data });
-        }
-        break;
-
-      /**
-       * ------------------------------------------------
-       * USER CONTEXT (MOCKED)
-       * ------------------------------------------------
-       */
-      case 'user-context':
-        if (method === 'GET') {
-          console.log(`[user-context] Returning mocked context for now.`);
-          // ⚠️ Later this should come from login/session
-          const mockContext = {
-            userName: 'M0',
-            role: 'Manager',
-            orgUnitName: 'IT33',
-          };
-          return res.status(200).json({ success: true, context: mockContext });
-        }
-        break;
-
-      /**
-       * ------------------------------------------------
-       * SURVEY
-       * ------------------------------------------------
-       */
-      case 'survey':
-        if (method === 'POST') {
-          const { person_id, iteration_id, answers } = body;
-          console.log(`[survey] Saving survey: person_id=${person_id}, iteration_id=${iteration_id}`);
-
-          if (!person_id || !iteration_id || !answers) {
-            return res.status(400).json({
+          console.log('[org-data] Iteration query result:', iteration);
+          if (iterationError) {
+            console.error('[org-data] Iteration error:', iterationError);
+            return res.status(404).json({
               success: false,
-              message: 'person_id, iteration_id and answers are required',
+              message: `No iteration found with id ${iteration_id}`,
+              error: iterationError
             });
           }
 
-          const { data, error } = await supabase
-            .from('survey')
-            .insert([{ person_id, iteration_id, answers }])
-            .select()
-            .single();
-
-          if (error) {
-            console.error(`[survey] Insert error:`, error);
-            return res.status(500).json({ success: false, message: error.message });
-          }
-
-          console.log(`[survey] Insert success:`, data);
-          return res.status(201).json({ success: true, survey: data });
-        }
-
-        if (method === 'GET') {
-          const { person_id, iteration_id } = query;
-          console.log(`[survey] Fetching survey for person_id=${person_id}, iteration_id=${iteration_id}`);
-
-          if (!person_id || !iteration_id) {
-            return res.status(400).json({
-              success: false,
-              message: 'person_id and iteration_id are required',
-            });
-          }
-
-          const { data, error } = await supabase
-            .from('survey')
+          // --- Load organization units ---
+          const { data: orgUnits, error: orgError } = await supabase
+            .from('organization_units')
             .select('*')
-            .eq('person_id', person_id)
-            .eq('iteration_id', iteration_id)
-            .maybeSingle();
+            .eq('iteration_id', iteration_id);
 
-          if (error && error.code !== 'PGRST116') {
-            console.error(`[survey] Fetch error:`, error);
-            return res.status(500).json({ success: false, message: error.message });
+          console.log(`[org-data] Org units count = ${orgUnits ? orgUnits.length : 0}`);
+          if (orgError) {
+            console.error('[org-data] Org units error:', orgError);
+            return res.status(500).json({
+              success: false,
+              message: 'Error loading org units',
+              error: orgError
+            });
           }
 
-          if (!data) {
-            console.log(`[survey] No survey found for this person/iteration`);
-            return res.status(404).json({ success: false, message: 'No survey found' });
+          // --- Load person_roles with join ---
+          const { data: roles, error: rolesError } = await supabase
+            .from('person_roles')
+            .select('id, org_unit_id, role, people ( id, name )')
+            .in('org_unit_id', orgUnits.map(u => u.id));
+
+          console.log(`[org-data] Roles count = ${roles ? roles.length : 0}`);
+          if (rolesError) {
+            console.error('[org-data] Roles error:', rolesError);
+            return res.status(500).json({
+              success: false,
+              message: 'Error loading roles',
+              error: rolesError
+            });
           }
 
-          console.log(`[survey] Found survey:`, data);
-          return res.status(200).json({ success: true, survey: data });
+          return res.status(200).json({
+            success: true,
+            iteration,
+            orgUnits,
+            roles
+          });
         }
         break;
 
       /**
-       * ------------------------------------------------
+       * =====================================================
        * PEOPLE MANAGEMENT
-       * ------------------------------------------------
+       * =====================================================
        */
       case 'people':
         if (method === 'GET') {
@@ -140,12 +97,8 @@ export default async function handler(req, res) {
 
         if (method === 'POST') {
           const { name } = body;
-          console.log(`[people] Creating person with name=${name}`);
           if (!name) {
-            return res.status(400).json({
-              success: false,
-              message: 'Name is required',
-            });
+            return res.status(400).json({ success: false, message: 'Name is required' });
           }
 
           const { data, error } = await supabase
@@ -154,12 +107,12 @@ export default async function handler(req, res) {
             .select()
             .single();
 
+          console.log('[people] Insert result data:', data);
+          console.log('[people] Insert result error:', error);
+
           if (error) {
             if (error.code === '23505') {
-              return res.status(409).json({
-                success: false,
-                message: `Name "${name}" already exists.`,
-              });
+              return res.status(409).json({ success: false, message: `Name "${name}" already exists.` });
             }
             throw error;
           }
@@ -168,13 +121,42 @@ export default async function handler(req, res) {
         }
         break;
 
+      /**
+       * =====================================================
+       * ACTIVE ITERATION
+       * =====================================================
+       */
+      case 'active-iteration':
+        if (method === 'GET') {
+          const { data, error } = await supabase
+            .from('iterations')
+            .select('*')
+            .is('end_date', null)
+            .order('start_date', { ascending: false })
+            .limit(1)
+            .single();
+
+          console.log('[active-iteration] Query result:', data);
+
+          if (error || !data) {
+            return res.status(404).json({ success: false, message: 'No active iteration found' });
+          }
+          return res.status(200).json({ success: true, iteration: data });
+        }
+        break;
+
+      /**
+       * =====================================================
+       * DEFAULT
+       * =====================================================
+       */
       default:
-        console.warn(`[${action}] Unknown action`);
+        console.warn(`[WARN] Unknown action requested: ${action}`);
         return res.status(400).json({ success: false, message: `Unknown action: ${action}` });
     }
-  } catch (error) {
-    console.error(`[${action}] Admin API error:`, error);
-    return res.status(500).json({ success: false, message: error.message });
+  } catch (err) {
+    console.error('[ERROR] Admin API exception:', err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 }
 
