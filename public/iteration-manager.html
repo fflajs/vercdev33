@@ -1,115 +1,128 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Iteration Manager</title>
-  <link rel="icon" href="/favicon.ico" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="bg-white shadow-lg rounded-lg p-8 w-full max-w-2xl">
-    <h1 class="text-2xl font-bold mb-4">Iteration Manager</h1>
-    <p class="mb-6 text-gray-600">Manage the active iteration and create new ones when none is active.</p>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-3xl mx-auto py-10 px-4">
+    <h1 class="text-3xl font-bold mb-2 text-center">Iteration Manager</h1>
+    <p class="text-center text-gray-600 mb-8">
+      Manage the active iteration and create new ones when none is active.
+    </p>
 
-    <div id="status" class="mb-6"></div>
+    <div id="status" class="bg-white rounded shadow p-6 mb-8">
+      <div id="active-box" class="hidden">
+        <h2 class="text-xl font-semibold mb-2">Current Active Iteration</h2>
+        <p id="active-iteration" class="text-gray-700 mb-4"></p>
+        <button id="close-btn" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+          Close Current Iteration
+        </button>
+      </div>
 
-    <div id="createForm" class="hidden mb-6">
-      <h2 class="text-xl font-semibold mb-2">Create New Iteration</h2>
-      <label class="block mb-2">Iteration Name</label>
-      <input id="iterationName" type="text" class="border rounded w-full px-2 py-1 mb-4" placeholder="e.g. Iteration 7" />
-      
-      <label class="block mb-2">Question Set</label>
-      <select id="questionSet" class="border rounded w-full px-2 py-1 mb-4">
-        <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
-        <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
-        <option value="Pulse_Check_12.json">Pulse_Check_12.json</option>
-      </select>
-
-      <button id="createBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Create Iteration</button>
+      <div id="create-box" class="hidden">
+        <h2 class="text-xl font-semibold mb-4">Create New Iteration</h2>
+        <div class="grid grid-cols-1 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Iteration Name</label>
+            <input id="iter-name" type="text" class="w-full border rounded px-3 py-2" placeholder="e.g. Iteration 7"/>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Question Set</label>
+            <select id="iter-set" class="w-full border rounded px-3 py-2">
+              <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
+              <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
+              <option value="Pulse_Check_12.json">Pulse_Check_12.json</option>
+            </select>
+          </div>
+          <div>
+            <button id="create-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Create Iteration
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <button onclick="location.href='admin.html'" class="bg-gray-500 text-white px-4 py-2 rounded">← Back to Admin Portal</button>
+    <p class="text-center">
+      <a href="admin.html" class="text-blue-600 hover:underline">&larr; Back to Admin Portal</a>
+    </p>
 
-    <details class="mt-6">
+    <details class="mt-8">
       <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debugLog" class="text-xs bg-gray-100 p-2 rounded mt-2"></pre>
+      <pre id="debug" class="text-xs bg-black text-green-400 p-3 rounded h-64 overflow-y-auto"></pre>
     </details>
   </div>
 
   <script>
-    const statusDiv = document.getElementById("status");
-    const createForm = document.getElementById("createForm");
-    const createBtn = document.getElementById("createBtn");
-    const iterationName = document.getElementById("iterationName");
-    const questionSet = document.getElementById("questionSet");
-    const debugLog = document.getElementById("debugLog");
-
-    function log(msg, data) {
-      const ts = new Date().toISOString();
-      debugLog.textContent += `[${ts}] ${msg} ${data ? JSON.stringify(data, null, 2) : ""}\n`;
-      console.log(msg, data || "");
-    }
-
-    async function loadActive() {
-      log("[loadActive] Fetching /api/admin/active-iteration");
-      const res = await fetch("/api/admin/active-iteration");
-      const data = await res.json();
-      log("[loadActive] response.ok:", res.ok);
-      log("[loadActive] JSON:", data);
-
-      statusDiv.innerHTML = "";
-
-      if (data.success && data.iteration) {
-        statusDiv.innerHTML = `
-          <div class="mb-4">
-            <h2 class="text-xl font-semibold">Current Active Iteration</h2>
-            <p><strong>${data.iteration.name}</strong> (ID: ${data.iteration.id})</p>
-          </div>
-          <button id="closeBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Close Current Iteration</button>
-        `;
-        createForm.classList.add("hidden");
-
-        document.getElementById("closeBtn").onclick = async () => {
-          log("[closeBtn] Closing iteration...");
-          const res = await fetch("/api/admin/close-iteration", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: data.iteration.id }),
-          });
-          const result = await res.json();
-          log("[closeBtn] response.ok:", res.ok);
-          log("[closeBtn] JSON:", result);
-          loadActive();
-        };
-      } else {
-        statusDiv.innerHTML = `
-          <p class="text-gray-700 mb-2">No active iteration found. You can create a new one below.</p>
-        `;
-        createForm.classList.remove("hidden");
-      }
-    }
-
-    createBtn.onclick = async () => {
-      const name = iterationName.value.trim();
-      const set = questionSet.value;
-      if (!name) {
-        alert("Please enter an iteration name.");
-        return;
-      }
-      log("[createBtn] Creating iteration", { name, set });
-      const res = await fetch("/api/admin/create-iteration", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, question_set: set }),
-      });
-      const data = await res.json();
-      log("[createBtn] response.ok:", res.ok);
-      log("[createBtn] JSON:", data);
-      loadActive();
+    const log = (m, o) => {
+      const el = document.getElementById('debug');
+      const t = new Date().toISOString();
+      el.textContent += o ? `[${t}] ${m} ${JSON.stringify(o)}\n` : `[${t}] ${m}\n`;
+      el.scrollTop = el.scrollHeight;
     };
 
-    log("[init] iteration-manager.html loaded.");
+    const activeBox = document.getElementById('active-box');
+    const createBox = document.getElementById('create-box');
+    const activeLabel = document.getElementById('active-iteration');
+    const closeBtn = document.getElementById('close-btn');
+    const createBtn = document.getElementById('create-btn');
+    const iterName = document.getElementById('iter-name');
+    const iterSet = document.getElementById('iter-set');
+
+    async function loadActive() {
+      log('[loadActive] Fetching /api/admin/active-iteration');
+      const res = await fetch('/api/admin/active-iteration');
+      log('[loadActive] response.ok:', res.ok);
+      const json = await res.json().catch(() => ({}));
+      log('[loadActive] JSON:', json);
+
+      if (res.ok && json.success && json.iteration) {
+        activeLabel.textContent = `${json.iteration.name} (ID: ${json.iteration.id})`;
+        activeBox.classList.remove('hidden');
+        createBox.classList.add('hidden');
+      } else {
+        // No active iteration
+        activeBox.classList.add('hidden');
+        createBox.classList.remove('hidden');
+      }
+    }
+
+    closeBtn.onclick = async () => {
+      log('[closeBtn] Closing iteration...');
+      const res = await fetch('/api/admin/close-iteration', { method: 'POST' });
+      log('[closeBtn] response.ok:', res.ok);
+      const json = await res.json().catch(() => ({}));
+      log('[closeBtn] JSON:', json);
+      await loadActive();
+    };
+
+    createBtn.onclick = async () => {
+      const name = iterName.value.trim();
+      const set = iterSet.value;
+      if (!name) return alert('Please enter a name');
+      log('[createBtn] Creating iteration', { name, set });
+
+      const res = await fetch('/api/admin/create-iteration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, question_set: set })
+      });
+      log('[createBtn] response.ok:', res.ok);
+      const json = await res.json().catch(() => ({}));
+      log('[createBtn] JSON:', json);
+
+      if (!res.ok) {
+        alert(json.message || 'Failed to create iteration');
+        return;
+      }
+      iterName.value = '';
+      await loadActive();
+    };
+
+    log('[init] iteration-manager.html loaded.');
     loadActive();
   </script>
 </body>
