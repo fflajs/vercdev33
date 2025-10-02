@@ -1,143 +1,98 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database Table Viewer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .table-container {
-            max-height: 400px;
-            overflow: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            white-space: nowrap;
-        }
-        th {
-            background-color: #f2f2f2;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Table Viewer</title>
+  <link rel="icon" href="/favicon.ico" />
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-7xl mx-auto bg-white p-8 rounded-lg shadow-lg">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold">Database Table Viewer</h1>
-            <a href="/admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
-        </div>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+  <header class="bg-gray-800 text-white p-4 flex justify-between items-center">
+    <h1 class="text-lg font-bold">Database Table Viewer</h1>
+    <a href="/admin.html" class="text-sm hover:underline">← Back to Admin Portal</a>
+  </header>
 
-        <div id="loading-message" class="text-center text-gray-500">
-            <p>Loading table data...</p>
-        </div>
-
-        <div id="tables-wrapper" class="space-y-8 hidden">
-            <!-- Tables will be inserted here by JavaScript -->
-        </div>
+  <main class="flex-1 p-6 space-y-4">
+    <div>
+      <label for="table-select" class="block text-sm font-medium text-gray-700 mb-1">Select Table</label>
+      <select id="table-select" class="border rounded p-2 w-64">
+        <option value="people">people</option>
+        <option value="iterations">iterations</option>
+        <option value="organization_units">organization_units</option>
+        <option value="person_roles">person_roles</option>
+      </select>
+      <button id="load-btn" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Load</button>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const tablesWrapper = document.getElementById('tables-wrapper');
-            const loadingMessage = document.getElementById('loading-message');
+    <div id="table-container" class="overflow-x-auto bg-white shadow rounded p-4">
+      <p class="text-gray-500">Select a table and click <b>Load</b> to view its data.</p>
+    </div>
 
-            const createTableSection = (title, data) => {
-                const section = document.createElement('div');
-                const heading = document.createElement('h2');
-                heading.className = 'text-2xl font-semibold mb-2';
-                heading.textContent = title;
-                section.appendChild(heading);
+    <details class="mt-6">
+      <summary class="cursor-pointer text-gray-600">Debug log (open to view)</summary>
+      <pre id="debug-log" class="bg-black text-green-400 p-2 rounded mt-2 text-sm h-48 overflow-y-auto"></pre>
+    </details>
+  </main>
 
-                if (!data || data.length === 0) {
-                    const noDataMessage = document.createElement('p');
-                    noDataMessage.className = 'text-gray-500 italic';
-                    noDataMessage.textContent = 'No data in this table.';
-                    section.appendChild(noDataMessage);
-                    return section;
-                }
+  <script>
+    const log = (msg, obj) => {
+      const logEl = document.getElementById("debug-log");
+      const ts = new Date().toISOString();
+      logEl.textContent += `[${ts}] ${msg} ${obj ? JSON.stringify(obj, null, 2) : ""}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
 
-                const tableContainer = document.createElement('div');
-                tableContainer.className = 'table-container border rounded-lg';
+    document.getElementById("load-btn").addEventListener("click", async () => {
+      const table = document.getElementById("table-select").value;
+      log("[load-btn] Fetching table:", table);
 
-                const table = document.createElement('table');
-                const thead = document.createElement('thead');
-                const tbody = document.createElement('tbody');
-                
-                // Create headers from the keys of the first object
-                const headers = Object.keys(data[0]);
-                const headerRow = document.createElement('tr');
-                headers.forEach(headerText => {
-                    const th = document.createElement('th');
-                    th.textContent = headerText;
-                    headerRow.appendChild(th);
-                });
-                thead.appendChild(headerRow);
+      try {
+        const res = await fetch(`/api/admin/db-view?table=${table}`);
+        log("[load-btn] response.ok:", res.ok);
 
-                // Create data rows
-                data.forEach(rowData => {
-                    const row = document.createElement('tr');
-                    headers.forEach(header => {
-                        const td = document.createElement('td');
-                        let cellData = rowData[header];
-                        // Nicely format JSONB objects for display
-                        if (typeof cellData === 'object' && cellData !== null) {
-                            td.textContent = JSON.stringify(cellData);
-                        } else {
-                            td.textContent = cellData;
-                        }
-                        row.appendChild(td);
-                    });
-                    tbody.appendChild(row);
-                });
+        const data = await res.json();
+        log("[load-btn] JSON:", data);
 
-                table.appendChild(thead);
-                table.appendChild(tbody);
-                tableContainer.appendChild(table);
-                section.appendChild(tableContainer);
-                return section;
-            };
+        if (!res.ok || !data.success) {
+          document.getElementById("table-container").innerHTML =
+            `<p class="text-red-500">Error loading table: ${data.message || "Unknown error"}</p>`;
+          return;
+        }
 
-            try {
-                const response = await fetch('/api/all-tables-data');
-                if (!response.ok) throw new Error('Failed to fetch table data.');
-                const allTables = await response.json();
+        // Render table
+        if (data.rows.length === 0) {
+          document.getElementById("table-container").innerHTML =
+            `<p class="text-gray-500">Table <b>${table}</b> is empty.</p>`;
+          return;
+        }
 
-                // Define the order and titles for the tables
-                const tableConfig = [
-                    { key: 'iterations', title: 'Iterations' },
-                    { key: 'organization_units', title: 'Organization Units' },
-                    { key: 'people', title: 'People' },
-                    { key: 'person_roles', title: 'Person Roles' },
-                    { key: 'surveys', title: 'Surveys' },
-                    { key: 'app_data', title: 'Application Data' }
-                ];
-                
-                tableConfig.forEach(config => {
-                    if (allTables[config.key]) {
-                        const section = createTableSection(config.title, allTables[config.key]);
-                        tablesWrapper.appendChild(section);
-                    }
-                });
-
-                loadingMessage.classList.add('hidden');
-                tablesWrapper.classList.remove('hidden');
-
-            } catch (error) {
-                loadingMessage.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
-                console.error('Error loading table data:', error);
-            }
+        const headers = Object.keys(data.rows[0]);
+        let html = `<table class="table-auto border-collapse border border-gray-300 w-full text-sm">
+                      <thead><tr class="bg-gray-100">`;
+        headers.forEach(h => html += `<th class="border border-gray-300 px-2 py-1">${h}</th>`);
+        html += `</tr></thead><tbody>`;
+        data.rows.forEach(row => {
+          html += `<tr>`;
+          headers.forEach(h => {
+            html += `<td class="border border-gray-300 px-2 py-1">${row[h] ?? ""}</td>`;
+          });
+          html += `</tr>`;
         });
-    </script>
+        html += `</tbody></table>`;
+
+        document.getElementById("table-container").innerHTML = html;
+
+      } catch (err) {
+        console.error("DEBUG → Fetch error:", err);
+        log("[load-btn] Fetch error:", err);
+        document.getElementById("table-container").innerHTML =
+          `<p class="text-red-500">Network error</p>`;
+      }
+    });
+
+    log("[init] table-viewer.html loaded.");
+  </script>
 </body>
 </html>
-
 
