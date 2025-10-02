@@ -1,81 +1,135 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Person Registration</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="icon" href="/favicon.ico">
-</head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="w-full max-w-sm bg-white p-8 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold mb-2 text-center">Register New Person</h1>
-    <p class="text-gray-600 mb-6 text-center">Enter your full name to create an account.</p>
-    <form id="register-form">
-      <div class="mb-4">
-        <label for="name" class="block text-gray-700 text-sm font-bold mb-2">Full Name</label>
-        <input type="text" id="name" name="name"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-          required>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iteration Manager</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 min-h-screen flex flex-col items-center p-6">
+    <div class="w-full max-w-2xl bg-white shadow-md rounded-lg p-6">
+      <h1 class="text-2xl font-bold text-center mb-6">Iteration Manager</h1>
+
+      <!-- Active iteration status -->
+      <div id="active-iteration" class="mb-6 text-center"></div>
+
+      <!-- Create new iteration -->
+      <div id="create-iteration-section" class="mb-6 hidden">
+        <h2 class="text-xl font-semibold mb-4">Create New Iteration</h2>
+        <form id="create-iteration-form" class="space-y-4">
+          <div>
+            <label for="name" class="block text-sm font-medium text-gray-700"
+              >Iteration Name</label
+            >
+            <input
+              type="text"
+              id="name"
+              class="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              required
+            />
+          </div>
+          <div>
+            <label for="question_set" class="block text-sm font-medium text-gray-700"
+              >Question Set</label
+            >
+            <select
+              id="question_set"
+              class="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              required
+            >
+              <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
+              <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
+              <option value="Pulse_Check_12.json">Pulse_Check_12.json</option>
+            </select>
+          </div>
+          <button
+            type="submit"
+            class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600"
+          >
+            Create Iteration
+          </button>
+        </form>
       </div>
-      <div class="flex items-center justify-between">
-        <button type="submit"
-          class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-          Register
+
+      <!-- Close iteration -->
+      <div id="close-iteration-section" class="mb-6 hidden text-center">
+        <button
+          id="close-iteration-btn"
+          class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600"
+        >
+          Close Current Iteration
         </button>
-        <a href="/index.html"
-          class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
-          Back to Login
-        </a>
       </div>
-    </form>
-    <p id="message" class="text-center text-sm italic mt-4"></p>
-  </div>
 
-  <script>
-    document.getElementById('register-form').addEventListener('submit', async function (event) {
-      event.preventDefault();
-      const name = document.getElementById('name').value.trim();
-      const message = document.getElementById('message');
+      <div class="text-center">
+        <a href="/admin.html" class="text-blue-500 hover:underline">← Back to Admin Portal</a>
+      </div>
+    </div>
 
-      message.textContent = '';
-      message.className = 'text-center text-sm italic mt-4';
+    <script>
+      async function loadActiveIteration() {
+        const res = await fetch("/api/admin/active-iteration");
+        const data = await res.json();
+        const activeDiv = document.getElementById("active-iteration");
+        const createSection = document.getElementById("create-iteration-section");
+        const closeSection = document.getElementById("close-iteration-section");
 
-      if (!name) {
-        message.textContent = 'Please enter a name.';
-        message.classList.add('text-red-500');
-        return;
+        if (res.ok && data.success) {
+          const iter = data.iteration;
+          activeDiv.innerHTML = `
+            <p class="text-lg font-medium">Current Active Iteration: <strong>${iter.name}</strong> (ID: ${iter.id})</p>
+          `;
+          closeSection.classList.remove("hidden");
+          createSection.classList.add("hidden");
+        } else {
+          activeDiv.innerHTML = `<p class="text-lg font-medium text-gray-600">No active iteration.</p>`;
+          closeSection.classList.add("hidden");
+          createSection.classList.remove("hidden");
+        }
       }
 
-      if (name.toLowerCase() === 'admin') {
-        message.textContent = 'This name is reserved and cannot be used.';
-        message.classList.add('text-red-500');
-        return;
-      }
+      document.getElementById("create-iteration-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = document.getElementById("name").value.trim();
+        const question_set = document.getElementById("question_set").value;
 
-      try {
-        const response = await fetch('/api/admin/people', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
+        const res = await fetch("/api/admin/create-iteration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, question_set }),
         });
 
-        const data = await response.json();
-        console.log("DEBUG → response.ok:", response.ok);
-        console.log("DEBUG → full response:", data);
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || 'Registration failed.');
+        if (res.ok) {
+          alert("Iteration created successfully!");
+          loadActiveIteration();
+        } else {
+          alert("Error creating iteration");
         }
+      });
 
-        message.textContent = `User "${name}" successfully created! You can now log in.`;
-        message.classList.add('text-green-500');
-        document.getElementById('register-form').reset();
-      } catch (error) {
-        message.textContent = error.message;
-        message.classList.add('text-red-500');
-      }
-    });
-  </script>
-</body>
+      document.getElementById("close-iteration-btn").addEventListener("click", async () => {
+        const res = await fetch("/api/admin/active-iteration");
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const id = data.iteration.id;
+          const closeRes = await fetch("/api/admin/close-iteration", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+          if (closeRes.ok) {
+            alert("Iteration closed successfully!");
+            loadActiveIteration();
+          } else {
+            alert("Error closing iteration");
+          }
+        }
+      });
+
+      // Initial load
+      loadActiveIteration();
+    </script>
+  </body>
 </html>
 
