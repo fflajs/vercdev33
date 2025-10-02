@@ -13,6 +13,18 @@
       View current data stored in the database. Read-only mode for testing/debugging.
     </p>
 
+    <div class="mb-6 flex gap-4">
+      <button id="resetBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+        ⚠️ Reset Test Data
+      </button>
+      <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+        🔄 Refresh Now
+      </button>
+    </div>
+    <p class="text-sm text-gray-500 mb-6">
+      Reset clears all tables and inserts a seed iteration. Refresh reloads the table data without touching the DB.
+    </p>
+
     <div id="tables"></div>
 
     <div class="mt-6">
@@ -30,6 +42,8 @@
     const tables = ["organization_units", "iterations", "people", "person_roles"];
     const container = document.getElementById("tables");
     const debugEl = document.getElementById("debugLog");
+    const resetBtn = document.getElementById("resetBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
 
     function log(msg, data) {
       const line = `[${new Date().toISOString()}] ${msg}` + (data ? " " + JSON.stringify(data, null, 2) : "");
@@ -96,7 +110,42 @@
       }
     }
 
-    tables.forEach(loadTable);
+    async function refreshAllTables() {
+      log("[refreshAllTables] Reloading all tables…");
+      container.innerHTML = "";
+      for (const t of tables) {
+        await loadTable(t);
+      }
+    }
+
+    async function resetData() {
+      if (!confirm("⚠️ Are you sure you want to reset all test data?")) return;
+      log("[resetBtn] Sending reset-test-data request");
+      try {
+        const res = await fetch("/api/admin/reset-test-data", { method: "POST" });
+        log("[resetBtn] response.ok: " + res.ok);
+        const data = await res.json();
+        log("[resetBtn] JSON:", data);
+        if (data.success) {
+          alert("Database reset complete! Reloading tables…");
+          await refreshAllTables();
+        } else {
+          alert("Reset failed: " + data.message);
+        }
+      } catch (err) {
+        log("[resetBtn] Error:", err);
+        alert("Reset failed: " + err);
+      }
+    }
+
+    resetBtn.onclick = resetData;
+    refreshBtn.onclick = refreshAllTables;
+
+    // First load
+    refreshAllTables();
+
+    // 🔄 Auto-refresh every 30s
+    setInterval(refreshAllTables, 30000);
   </script>
 </body>
 </html>
