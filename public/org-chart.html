@@ -2,125 +2,141 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Organization Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    #debug-log {
-      max-height: 200px;
-      overflow-y: auto;
-      font-size: 0.8rem;
-      white-space: pre-wrap;
-      background: #111;
-      color: #0f0;
-      padding: 0.5rem;
-      border-radius: 0.5rem;
-      display: none;
-    }
-  </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md mt-8">
-    <h1 class="text-2xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-info" class="text-blue-600 mb-4">Loading iteration...</p>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-5xl mx-auto py-8 px-4">
+    <h1 class="text-3xl font-bold mb-4 text-center">Organization Manager</h1>
+    <p id="iteration-info" class="text-center text-gray-600 mb-6">Loading current iteration...</p>
     <div id="org-container" class="space-y-4"></div>
-    <a href="admin.html" class="mt-6 inline-block text-blue-600 hover:underline">← Back to Admin Portal</a>
+    <p class="mt-8 text-center">
+      <a href="admin.html" class="text-blue-500 hover:underline">&larr; Back to Admin Portal</a>
+    </p>
 
-    <!-- Debug Toggle -->
-    <div class="mt-6">
-      <button id="toggle-debug" class="px-3 py-1 bg-gray-700 text-white rounded">Debug log (open to view)</button>
-      <div id="debug-log"></div>
-    </div>
+    <!-- Debug log -->
+    <details class="mt-6">
+      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
+      <pre id="debug-log" class="text-xs bg-black text-green-400 p-2 mt-2 rounded h-64 overflow-y-auto"></pre>
+    </details>
   </div>
 
   <script>
-    const debugLogEl = document.getElementById("debug-log");
-    const toggleDebugBtn = document.getElementById("toggle-debug");
-    toggleDebugBtn.addEventListener("click", () => {
-      debugLogEl.style.display = debugLogEl.style.display === "none" ? "block" : "none";
-    });
-
-    function logDebug(msg, data) {
+    const logEl = document.getElementById("debug-log");
+    function debug(msg, obj) {
       const time = new Date().toISOString();
-      const line = `[${time}] ${msg}` + (data ? " " + JSON.stringify(data) : "");
-      console.log(line);
-      debugLogEl.textContent += line + "\n";
-      debugLogEl.scrollTop = debugLogEl.scrollHeight;
+      if (obj) {
+        logEl.textContent += `[${time}] ${msg} ${JSON.stringify(obj)}\n`;
+      } else {
+        logEl.textContent += `[${time}] ${msg}\n`;
+      }
+      logEl.scrollTop = logEl.scrollHeight;
     }
 
     async function loadIterationAndUnits() {
       try {
-        logDebug("Fetching active iteration...");
-        const iterRes = await fetch("/api/admin/active-iteration");
-        const iterData = await iterRes.json();
-        logDebug("Active iteration response", iterData);
+        debug("org-chart.html loaded.");
+        debug("Fetching active iteration...");
 
-        if (!iterData.success) {
+        const iterRes = await fetch("/api/admin/active-iteration");
+        const iterJson = await iterRes.json();
+        debug("Active iteration response", iterJson);
+
+        if (!iterJson.success) {
           document.getElementById("iteration-info").textContent = "No active iteration found";
           return;
         }
 
-        const iteration = iterData.iteration;
+        const iteration = iterJson.iteration;
         document.getElementById("iteration-info").textContent =
           `Current Iteration: ${iteration.name} (ID: ${iteration.id})`;
 
-        logDebug("Fetching org-data for iteration", { id: iteration.id });
-        const res = await fetch(`/api/admin/org-data?iteration_id=${iteration.id}`);
-        const data = await res.json();
-        logDebug("Org-data response", data);
+        debug("Fetching org-data for iteration", iteration);
 
-        if (!data.success) {
-          document.getElementById("org-container").textContent =
-            `Error loading iteration: ${data.message}`;
+        const orgRes = await fetch(`/api/admin/org-data?iteration_id=${iteration.id}`);
+        const orgJson = await orgRes.json();
+        debug("Org-data response", orgJson);
+
+        if (!orgJson.success) {
+          document.getElementById("org-container").innerHTML =
+            `<p class="text-red-500">Error loading iteration: ${orgJson.message}</p>`;
           return;
         }
 
-        renderOrgUnits(data.orgUnits, data.roles);
+        renderOrgData(orgJson);
       } catch (err) {
-        console.error(err);
-        document.getElementById("org-container").textContent =
-          "Error loading iteration data.";
-        logDebug("Error caught in loadIterationAndUnits", { error: err.message });
+        debug("Exception", { error: err.message });
+        document.getElementById("org-container").innerHTML =
+          `<p class="text-red-500">Unexpected error loading iteration</p>`;
       }
     }
 
-    function renderOrgUnits(orgUnits, roles) {
+    function renderOrgData(data) {
       const container = document.getElementById("org-container");
       container.innerHTML = "";
 
-      if (!orgUnits || orgUnits.length === 0) {
+      if (!data.units || data.units.length === 0) {
         container.innerHTML = `<p class="text-gray-500">No organization units defined yet.</p>`;
         return;
       }
 
-      orgUnits.forEach(unit => {
-        const div = document.createElement("div");
-        div.className = "p-3 border rounded";
-        div.innerHTML = `
-          <h2 class="font-semibold">${unit.name}</h2>
-          <p class="text-sm text-gray-500">Unit ID: ${unit.id}</p>
-          <button class="mt-2 px-3 py-1 bg-blue-500 text-white rounded">+ Add Subunit</button>
-          <button class="mt-2 px-3 py-1 bg-red-500 text-white rounded">Delete Unit</button>
+      data.units.forEach(unit => {
+        const unitDiv = document.createElement("div");
+        unitDiv.className = "p-4 bg-white rounded shadow";
+        unitDiv.innerHTML = `
+          <h2 class="text-xl font-semibold mb-2">${unit.name}</h2>
+          <div class="mb-2">
+            <button class="px-2 py-1 bg-green-500 text-white rounded text-sm add-role-btn" data-unit="${unit.id}">+ Add Role</button>
+            <button class="px-2 py-1 bg-red-500 text-white rounded text-sm remove-unit-btn" data-unit="${unit.id}">Delete Unit</button>
+          </div>
+          <ul class="space-y-1" id="roles-${unit.id}"></ul>
         `;
 
-        const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
-        if (unitRoles.length > 0) {
-          const ul = document.createElement("ul");
-          ul.className = "list-disc ml-6 mt-2";
+        const roleList = unitDiv.querySelector(`#roles-${unit.id}`);
+        const unitRoles = data.roles.filter(r => r.org_unit_id === unit.id);
+
+        if (unitRoles.length === 0) {
+          roleList.innerHTML = `<li class="text-gray-400 text-sm">No roles yet.</li>`;
+        } else {
           unitRoles.forEach(r => {
             const li = document.createElement("li");
-            li.textContent = `${r.role} → ${r.people ? r.people.name : "Unassigned"}`;
-            ul.appendChild(li);
+            li.className = "flex justify-between items-center text-sm";
+            li.innerHTML = `
+              <span>${r.person_name} — <em>${r.role}</em></span>
+              <button class="px-2 py-1 bg-red-400 text-white rounded text-xs remove-role-btn" data-role="${r.id}">Remove</button>
+            `;
+            roleList.appendChild(li);
           });
-          div.appendChild(ul);
         }
 
-        container.appendChild(div);
+        container.appendChild(unitDiv);
+      });
+
+      // attach handlers
+      document.querySelectorAll(".add-role-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const unitId = btn.getAttribute("data-unit");
+          debug("TODO: Add role clicked", { unitId });
+          alert(`Add role for unit ${unitId} (not yet implemented).`);
+        });
+      });
+      document.querySelectorAll(".remove-unit-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const unitId = btn.getAttribute("data-unit");
+          debug("TODO: Remove unit clicked", { unitId });
+          alert(`Remove unit ${unitId} (not yet implemented).`);
+        });
+      });
+      document.querySelectorAll(".remove-role-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const roleId = btn.getAttribute("data-role");
+          debug("TODO: Remove role clicked", { roleId });
+          alert(`Remove role ${roleId} (not yet implemented).`);
+        });
       });
     }
 
-    // --- INIT ---
-    logDebug("org-chart.html loaded.");
     loadIterationAndUnits();
   </script>
 </body>

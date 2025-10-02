@@ -7,86 +7,137 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  const { action } = req.query;
-  const method = req.method;
-  const body = req.body;
+  const { query, method, body } = req;
+  const { action } = query;
 
-  console.log(`[INFO] Admin API called: action=${action}, method=${method}`);
+  console.log(`[${new Date().toISOString()}] ➡️ Admin API called: action=${action}, method=${method}`);
 
   try {
     switch (action) {
+
       /**
-       * =====================================================
-       * ORG-DATA: Fetch iteration + org units + roles
-       * =====================================================
+       * -------------------------
+       * ACTIVE ITERATION
+       * -------------------------
+       */
+      case 'active-iteration':
+        if (method === 'GET') {
+          const { data, error } = await supabase
+            .from('iterations')
+            .select('*')
+            .is('end_date', null)
+            .single();
+
+          if (error && error.code !== 'PGRST116') throw error;
+          if (!data) return res.status(404).json({ success: false, message: 'No active iteration found' });
+
+          return res.status(200).json({ success: true, iteration: data });
+        }
+        break;
+
+      /**
+       * -------------------------
+       * ORG-DATA
+       * -------------------------
        */
       case 'org-data':
         if (method === 'GET') {
-          const { iteration_id } = req.query;
-          console.log(`[org-data] Requested iteration_id = ${iteration_id}`);
+          const iterationId = query.iteration_id;
+          console.log(`[${new Date().toISOString()}] Fetching org-data for iteration_id=${iterationId}`);
 
-          // --- Load iteration ---
-          const { data: iteration, error: iterationError } = await supabase
+          if (!iterationId) {
+            return res.status(400).json({ success: false, message: 'iteration_id is required' });
+          }
+
+          // Get iteration info
+          const { data: iteration, error: iterError } = await supabase
             .from('iterations')
             .select('*')
-            .eq('id', iteration_id)
+            .eq('id', iterationId)
             .single();
 
-          console.log('[org-data] Iteration query result:', iteration);
-          if (iterationError) {
-            console.error('[org-data] Iteration error:', iterationError);
-            return res.status(404).json({
-              success: false,
-              message: `No iteration found with id ${iteration_id}`,
-              error: iterationError
-            });
+          if (iterError) {
+            console.error('❌ Error loading iteration:', iterError);
+            return res.status(500).json({ success: false, message: 'Error loading iteration', error: iterError });
+          }
+          if (!iteration) {
+            return res.status(404).json({ success: false, message: `Iteration ${iterationId} not found` });
           }
 
-          // --- Load organization units ---
-          const { data: orgUnits, error: orgError } = await supabase
+          // Get org units
+          const { data: units, error: unitError } = await supabase
             .from('organization_units')
             .select('*')
-            .eq('iteration_id', iteration_id);
+            .eq('iteration_id', iterationId);
 
-          console.log(`[org-data] Org units count = ${orgUnits ? orgUnits.length : 0}`);
-          if (orgError) {
-            console.error('[org-data] Org units error:', orgError);
-            return res.status(500).json({
-              success: false,
-              message: 'Error loading org units',
-              error: orgError
-            });
+          if (unitError) {
+            console.error('❌ Error loading org units:', unitError);
+            return res.status(500).json({ success: false, message: 'Error loading org units', error: unitError });
           }
 
-          // --- Load person_roles with join ---
-          const { data: roles, error: rolesError } = await supabase
+          // Get people
+          const { data: people, error: peopleError } = await supabase
+            .from('people')
+            .select('*');
+
+          if (peopleError) {
+            console.error('❌ Error loading people:', peopleError);
+            return res.status(500).json({ success: false, message: 'Error loading people', error: peopleError });
+          }
+
+          // Get person_roles with joins
+          const { data: roles, error: roleError } = await supabase
             .from('person_roles')
-            .select('id, org_unit_id, role, people ( id, name )')
-            .in('org_unit_id', orgUnits.map(u => u.id));
+            .select(`
+              id,
+              person_id,
+              org_unit_id,
+              is_manager,
+              description,
+              iteration_id,
+              people (id, name),
+              organization_units (id, name)
+            `)
+            .eq('iteration_id', iterationId);
 
-          console.log(`[org-data] Roles count = ${roles ? roles.length : 0}`);
-          if (rolesError) {
-            console.error('[org-data] Roles error:', rolesError);
-            return res.status(500).json({
-              success: false,
-              message: 'Error loading roles',
-              error: rolesError
-            });
+          if (roleError) {
+            console.error('❌ Error loading roles:', roleError);
+            return res.status(500).json({ success: false, message: 'Error loading roles', error: roleError });
           }
+
+          // Map roles into clean objects
+          const mappedRoles = (roles || []).map(r => ({
+            id: r.id,
+            person_id: r.person_id,
+            person_name: r.people?.name || 'Unknown',
+            org_unit_id: r.org_unit_id,
+            org_unit_name: r.organization_units?.name || 'Unknown',
+            role: r.is_manager ? 'Manager' : 'Coworker',
+            description: r.description,
+            iteration_id: r.iteration_id
+          }));
+
+          console.log(`[${new Date().toISOString()}] ✅ Org-data query successful`, {
+            iteration,
+            units_count: units?.length,
+            roles_count: mappedRoles?.length,
+            people_count: people?.length
+          });
 
           return res.status(200).json({
             success: true,
             iteration,
-            orgUnits,
-            roles
+            units,
+            people,
+            roles: mappedRoles
           });
         }
         break;
 
       /**
-       * =====================================================
-       * PEOPLE MANAGEMENT
-       * =====================================================
+       * -------------------------
+       * PEOPLE
+       * -------------------------
        */
       case 'people':
         if (method === 'GET') {
@@ -107,9 +158,6 @@ export default async function handler(req, res) {
             .select()
             .single();
 
-          console.log('[people] Insert result data:', data);
-          console.log('[people] Insert result error:', error);
-
           if (error) {
             if (error.code === '23505') {
               return res.status(409).json({ success: false, message: `Name "${name}" already exists.` });
@@ -121,42 +169,12 @@ export default async function handler(req, res) {
         }
         break;
 
-      /**
-       * =====================================================
-       * ACTIVE ITERATION
-       * =====================================================
-       */
-      case 'active-iteration':
-        if (method === 'GET') {
-          const { data, error } = await supabase
-            .from('iterations')
-            .select('*')
-            .is('end_date', null)
-            .order('start_date', { ascending: false })
-            .limit(1)
-            .single();
-
-          console.log('[active-iteration] Query result:', data);
-
-          if (error || !data) {
-            return res.status(404).json({ success: false, message: 'No active iteration found' });
-          }
-          return res.status(200).json({ success: true, iteration: data });
-        }
-        break;
-
-      /**
-       * =====================================================
-       * DEFAULT
-       * =====================================================
-       */
       default:
-        console.warn(`[WARN] Unknown action requested: ${action}`);
         return res.status(400).json({ success: false, message: `Unknown action: ${action}` });
     }
   } catch (err) {
-    console.error('[ERROR] Admin API exception:', err);
-    return res.status(500).json({ success: false, message: err.message });
+    console.error(`[${new Date().toISOString()}] ❌ Admin API error:`, err);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: err });
   }
 }
 
