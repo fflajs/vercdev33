@@ -1,92 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>User Portal</title>
-  <link rel="icon" href="/favicon.ico">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Portal</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="w-full max-w-lg bg-white p-10 rounded-lg shadow-lg text-center">
-    <h1 class="text-3xl font-bold mb-4">Welcome, <span id="username"></span>!</h1>
-    <p id="iteration-display" class="text-blue-600 font-semibold mb-6">Loading active iteration...</p>
-
-    <p class="text-gray-600 mb-6">Please select an application to continue.</p>
-    <div id="user-links" class="space-y-4">
-      <!-- Links will be injected dynamically -->
+<body class="bg-gray-50 min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="bg-gray-800 text-white py-4 shadow-md">
+    <div class="container mx-auto px-4">
+      <h1 class="text-2xl font-bold">Portal</h1>
+      <p class="text-sm text-gray-300">Choose a section to continue</p>
     </div>
+  </header>
 
-    <button id="logout-btn"
-      class="mt-6 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
-      Logout
-    </button>
-  </div>
+  <!-- Main Content -->
+  <main class="flex-grow container mx-auto px-4 py-8 space-y-8">
+    <!-- Admin Tools -->
+    <section>
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">Admin Tools</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <a href="iteration-manager.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Iteration Manager">
+          <h3 class="text-lg font-bold text-gray-800">Iteration Manager</h3>
+          <p class="text-sm text-gray-600 mt-2">Manage iterations, create and close them.</p>
+        </a>
+        <a href="org-chart.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Organization Manager">
+          <h3 class="text-lg font-bold text-gray-800">Organization Manager</h3>
+          <p class="text-sm text-gray-600 mt-2">View and manage organizational structure.</p>
+        </a>
+        <a href="table-viewer.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Table Viewer">
+          <h3 class="text-lg font-bold text-gray-800">Table Viewer</h3>
+          <p class="text-sm text-gray-600 mt-2">View database tables in read-only mode.</p>
+        </a>
+      </div>
+    </section>
 
+    <!-- Research Tools -->
+    <section>
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">Research Tools</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <a href="cognitive.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Cognitive Tool">
+          <h3 class="text-lg font-bold text-gray-800">Cognitive Tool</h3>
+          <p class="text-sm text-gray-600 mt-2">Access and work with cognitive tasks.</p>
+        </a>
+        <a href="analyze.html" class="portal-link block p-6 bg-white rounded-lg shadow hover:shadow-lg transition" data-name="Analysis Tool">
+          <h3 class="text-lg font-bold text-gray-800">Analysis Tool</h3>
+          <p class="text-sm text-gray-600 mt-2">Perform analyses using selected datasets.</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- Debug Log -->
+    <section>
+      <button onclick="toggleDebug()" class="text-sm text-blue-600 hover:underline">
+        Debug log (open to view)
+      </button>
+      <pre id="debugLog" class="hidden mt-2 p-2 bg-black text-green-400 text-xs rounded max-h-64 overflow-y-auto"></pre>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-100 py-4">
+    <div class="container mx-auto px-4 text-center">
+      <a id="backToLogin" href="index.html" class="text-sm text-blue-600 hover:underline">← Back to Login</a>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
   <script>
-    const username = sessionStorage.getItem('loggedInUser');
-    const usernameSpan = document.getElementById('username');
-    const iterationDisplay = document.getElementById('iteration-display');
-    const userLinks = document.getElementById('user-links');
+    const debugEl = document.getElementById("debugLog");
 
-    if (!username) {
-      window.location.href = '/index.html'; // No user → back to login
-    } else {
-      usernameSpan.textContent = username;
+    function logDebug(msg, obj) {
+      const time = new Date().toISOString();
+      debugEl.textContent += `[${time}] ${msg}` + (obj ? " " + JSON.stringify(obj, null, 2) : "") + "\n";
     }
 
-    async function loadActiveIteration() {
-      try {
-        const res = await fetch('/api/admin/active-iteration');
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          iterationDisplay.textContent = 'No active iteration found';
-          iterationDisplay.classList.remove('text-blue-600');
-          iterationDisplay.classList.add('text-red-600');
-          return;
-        }
-        iterationDisplay.textContent =
-          `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
-
-        // Build navigation links depending on role
-        userLinks.innerHTML = '';
-
-        // Always available
-        const visualizer = document.createElement('a');
-        visualizer.href = '/cognitive.html';
-        visualizer.textContent = 'Login to Cognitive Visualizer';
-        visualizer.className =
-          'block w-full bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-600 transition';
-        userLinks.appendChild(visualizer);
-
-        const analyzer = document.createElement('a');
-        analyzer.href = '/analyze.html';
-        analyzer.textContent = 'Analyze Descriptions';
-        analyzer.className =
-          'block w-full bg-green-500 text-white font-bold py-2 px-4 rounded hover:bg-green-600 transition';
-        userLinks.appendChild(analyzer);
-
-        // Only for admin
-        if (username.toLowerCase() === 'admin') {
-          const adminPortal = document.createElement('a');
-          adminPortal.href = '/admin.html';
-          adminPortal.textContent = 'Go to Admin Portal';
-          adminPortal.className =
-            'block w-full bg-red-500 text-white font-bold py-2 px-4 rounded hover:bg-red-600 transition';
-          userLinks.appendChild(adminPortal);
-        }
-      } catch (err) {
-        iterationDisplay.textContent = `Error: ${err.message}`;
-        iterationDisplay.classList.remove('text-blue-600');
-        iterationDisplay.classList.add('text-red-600');
-      }
+    function toggleDebug() {
+      debugEl.classList.toggle("hidden");
     }
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      sessionStorage.removeItem('loggedInUser');
-      window.location.href = '/index.html';
+    // Initial debug
+    logDebug("[init] portal.html loaded.");
+
+    // Attach debug logging to all portal links
+    document.querySelectorAll(".portal-link").forEach(link => {
+      link.addEventListener("click", () => {
+        logDebug(`[nav] User clicked "${link.dataset.name}" → ${link.getAttribute("href")}`);
+      });
     });
 
-    loadActiveIteration();
+    // Back to Login logging
+    document.getElementById("backToLogin").addEventListener("click", () => {
+      logDebug(`[nav] User clicked "Back to Login" → index.html`);
+    });
   </script>
 </body>
 </html>
