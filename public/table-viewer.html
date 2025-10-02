@@ -1,151 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
+    .container { max-width: 1200px; margin: 2rem auto; padding: 2rem; background: #fff; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .section { margin-bottom: 2rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { padding: 0.5rem; border-bottom: 1px solid #e5e7eb; text-align: left; white-space: nowrap; }
+    th { background: #f3f4f6; font-weight: 600; position: sticky; top: 0; z-index: 1; }
+    .table-container { max-height: 300px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 0.5rem; }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="max-w-5xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
-    <p class="mb-6 text-gray-600">
-      View current data stored in the database. Read-only mode for testing/debugging.
-    </p>
+<body>
+  <div class="container">
+    <h1 class="text-2xl font-bold text-center mb-4">Database Table Viewer</h1>
+    <p class="text-center text-gray-600 mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
 
-    <div class="mb-6 flex gap-4">
-      <button id="resetBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-        ⚠️ Reset Test Data
-      </button>
-      <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-        🔄 Refresh Now
-      </button>
-    </div>
-    <p class="text-sm text-gray-500 mb-6">
-      Reset clears all tables and inserts a seed iteration. Refresh reloads the table data without touching the DB.
-    </p>
-
+    <!-- Tables -->
     <div id="tables"></div>
 
-    <div class="mt-6">
-      <a href="admin.html" class="text-blue-600 hover:underline">&larr; Back to Admin Portal</a>
+    <!-- Controls -->
+    <div class="flex justify-between mt-6">
+      <button id="refreshBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Refresh Now</button>
+      <a href="admin.html" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">← Back to Admin Portal</a>
     </div>
 
-    <!-- Debug Log -->
-    <details class="mt-8">
+    <!-- Debug -->
+    <details class="mt-6">
       <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
-      <pre id="debugLog" class="bg-black text-green-400 p-3 mt-2 rounded max-h-64 overflow-y-auto text-sm"></pre>
+      <pre id="debug-log" class="bg-gray-100 p-3 text-sm rounded max-h-64 overflow-auto"></pre>
     </details>
   </div>
 
   <script>
-    const tables = ["organization_units", "iterations", "people", "person_roles"];
-    const container = document.getElementById("tables");
-    const debugEl = document.getElementById("debugLog");
-    const resetBtn = document.getElementById("resetBtn");
-    const refreshBtn = document.getElementById("refreshBtn");
+    const tables = ["organization_units", "iterations", "people", "person_roles", "surveys"];
+    const logEl = document.getElementById("debug-log");
+    const tablesDiv = document.getElementById("tables");
 
-    function log(msg, data) {
-      const line = `[${new Date().toISOString()}] ${msg}` + (data ? " " + JSON.stringify(data, null, 2) : "");
-      console.log(line);
-      debugEl.textContent += line + "\n";
+    function log(msg, obj) {
+      const ts = new Date().toISOString();
+      logEl.textContent += `[${ts}] ${msg}` + (obj ? " " + JSON.stringify(obj) : "") + "\\n";
+      logEl.scrollTop = logEl.scrollHeight;
     }
 
-    async function loadTable(name) {
-      log(`[loadTable] Fetching table: ${name}`);
-      try {
-        const res = await fetch(`/api/admin/table-data?table=${name}`);
-        log(`[loadTable] response.ok: ${res.ok}`);
-        const data = await res.json();
-        log(`[loadTable] JSON for ${name}:`, data);
+    async function loadTables() {
+      tablesDiv.innerHTML = "";
+      for (const table of tables) {
+        log(`Fetching table: ${table}`);
+        try {
+          const res = await fetch(`/api/admin/table-viewer?table=${table}`);
+          const data = await res.json();
+          log(`Response for ${table}`, data);
 
-        const section = document.createElement("div");
-        section.className = "mb-6";
+          const section = document.createElement("div");
+          section.className = "section";
+          const title = document.createElement("h2");
+          title.className = "text-xl font-semibold mb-2";
+          title.textContent = table;
+          section.appendChild(title);
 
-        const title = document.createElement("h2");
-        title.className = "text-xl font-semibold mb-2";
-        title.textContent = name;
-        section.appendChild(title);
-
-        if (data.success && data.rows.length > 0) {
-          const table = document.createElement("table");
-          table.className = "min-w-full border border-gray-300 text-sm";
-          const thead = document.createElement("thead");
-          thead.className = "bg-gray-200";
-
-          const headerRow = document.createElement("tr");
-          Object.keys(data.rows[0]).forEach((col) => {
-            const th = document.createElement("th");
-            th.className = "border px-2 py-1 text-left";
-            th.textContent = col;
-            headerRow.appendChild(th);
-          });
-          thead.appendChild(headerRow);
-          table.appendChild(thead);
-
-          const tbody = document.createElement("tbody");
-          data.rows.forEach((row) => {
-            const tr = document.createElement("tr");
-            Object.values(row).forEach((val) => {
-              const td = document.createElement("td");
-              td.className = "border px-2 py-1";
-              td.textContent = val;
-              tr.appendChild(td);
+          if (!data.success || !data.rows || data.rows.length === 0) {
+            const p = document.createElement("p");
+            p.className = "text-gray-500 italic";
+            p.textContent = "(No data)";
+            section.appendChild(p);
+          } else {
+            const tableDiv = document.createElement("div");
+            tableDiv.className = "table-container";
+            const tbl = document.createElement("table");
+            const thead = document.createElement("thead");
+            const trHead = document.createElement("tr");
+            Object.keys(data.rows[0]).forEach(col => {
+              const th = document.createElement("th");
+              th.textContent = col;
+              trHead.appendChild(th);
             });
-            tbody.appendChild(tr);
-          });
-          table.appendChild(tbody);
+            thead.appendChild(trHead);
+            tbl.appendChild(thead);
 
-          section.appendChild(table);
-        } else {
-          const noData = document.createElement("p");
-          noData.className = "text-gray-500";
-          noData.textContent = "(No data)";
-          section.appendChild(noData);
+            const tbody = document.createElement("tbody");
+            data.rows.forEach(row => {
+              const tr = document.createElement("tr");
+              Object.values(row).forEach(val => {
+                const td = document.createElement("td");
+                td.textContent = val === null ? "NULL" : val;
+                tr.appendChild(td);
+              });
+              tbody.appendChild(tr);
+            });
+            tbl.appendChild(tbody);
+
+            tableDiv.appendChild(tbl);
+            section.appendChild(tableDiv);
+          }
+          tablesDiv.appendChild(section);
+        } catch (err) {
+          log(`Error fetching ${table}: ${err.message}`);
         }
-
-        container.appendChild(section);
-      } catch (err) {
-        log(`[loadTable] Error fetching ${name}: ${err}`);
       }
     }
 
-    async function refreshAllTables() {
-      log("[refreshAllTables] Reloading all tables…");
-      container.innerHTML = "";
-      for (const t of tables) {
-        await loadTable(t);
-      }
-    }
+    document.getElementById("refreshBtn").addEventListener("click", loadTables);
 
-    async function resetData() {
-      if (!confirm("⚠️ Are you sure you want to reset all test data?")) return;
-      log("[resetBtn] Sending reset-test-data request");
-      try {
-        const res = await fetch("/api/admin/reset-test-data", { method: "POST" });
-        log("[resetBtn] response.ok: " + res.ok);
-        const data = await res.json();
-        log("[resetBtn] JSON:", data);
-        if (data.success) {
-          alert("Database reset complete! Reloading tables…");
-          await refreshAllTables();
-        } else {
-          alert("Reset failed: " + data.message);
-        }
-      } catch (err) {
-        log("[resetBtn] Error:", err);
-        alert("Reset failed: " + err);
-      }
-    }
-
-    resetBtn.onclick = resetData;
-    refreshBtn.onclick = refreshAllTables;
-
-    // First load
-    refreshAllTables();
-
-    // 🔄 Auto-refresh every 30s
-    setInterval(refreshAllTables, 30000);
+    log("table-viewer.html loaded.");
+    loadTables();
   </script>
 </body>
 </html>

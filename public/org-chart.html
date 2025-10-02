@@ -5,172 +5,219 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Organization Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    .unit-card { border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; margin: 0.5rem 0; background: #f9fafb; }
-    .role-badge { display: inline-block; padding: 0.25rem 0.5rem; margin: 0.25rem; border-radius: 0.25rem; font-size: 0.8rem; }
-    .manager { background: #d1fae5; color: #065f46; }
-    .coworker { background: #e0f2fe; color: #0369a1; }
-    #debug-log { white-space: pre-wrap; font-size: 0.75rem; background: #111; color: #0f0; padding: 0.5rem; border-radius: 0.25rem; margin-top: 1rem; display: none; }
-  </style>
 </head>
-<body class="bg-gray-100">
-
+<body class="bg-gray-50 text-gray-900">
   <div class="max-w-5xl mx-auto p-6">
-    <h1 class="text-3xl font-bold mb-4">Organization Manager</h1>
-    <p id="iteration-info" class="text-gray-600 mb-6">Loading current iteration...</p>
+    <h1 class="text-3xl font-bold mb-4 text-center">Organization Manager</h1>
+    <p id="iteration-info" class="text-center text-blue-600 font-medium mb-6">Loading current iteration...</p>
 
-    <!-- Root Unit Creation -->
-    <div class="mb-6">
-      <input id="root-name" type="text" placeholder="Root Unit Name" class="p-2 border rounded w-1/2">
-      <button id="create-root-btn" class="ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Create Root Unit</button>
+    <div id="org-container" class="space-y-4"></div>
+
+    <div class="mt-6 text-center">
+      <button id="create-root-btn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Create Root Unit</button>
     </div>
 
-    <!-- Org Units -->
-    <div id="units-container"></div>
-
-    <a href="admin.html" class="inline-block mt-6 text-blue-600 hover:underline">← Back to Admin Portal</a>
-
-    <!-- Debug toggle -->
-    <div class="mt-6">
-      <button onclick="document.getElementById('debug-log').style.display =
-        (document.getElementById('debug-log').style.display==='none'?'block':'none')"
-        class="text-xs text-gray-500 underline">Debug log (open to view)</button>
-      <div id="debug-log"></div>
+    <div class="mt-8 text-center">
+      <a href="admin.html" class="text-blue-500 hover:underline">← Back to Admin Portal</a>
     </div>
+
+    <!-- Debug Section -->
+    <details class="mt-6">
+      <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
+      <pre id="debug-log" class="bg-gray-900 text-green-400 text-sm p-4 rounded max-h-64 overflow-auto"></pre>
+    </details>
   </div>
 
   <script>
-    const debugLog = (msg, obj) => {
-      const logBox = document.getElementById('debug-log');
-      const ts = new Date().toISOString();
-      logBox.textContent += `[${ts}] ${msg} ${obj ? JSON.stringify(obj) : ''}\n`;
+    const log = (msg, data=null) => {
+      const logEl = document.getElementById("debug-log");
+      const timestamp = new Date().toISOString();
+      logEl.textContent += `[${timestamp}] ${msg} ${data ? JSON.stringify(data) : ""}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(msg, data);
     };
 
-    const iterationInfo = document.getElementById("iteration-info");
-    const unitsContainer = document.getElementById("units-container");
-    let activeIteration = null;
-    let allPeople = [];
+    let iteration = null;
+    let units = [];
+    let roles = [];
+    let people = [];
 
-    async function loadActiveIteration() {
-      debugLog("Fetching active iteration...");
+    async function loadIteration() {
+      log("Fetching active iteration...");
       const res = await fetch("/api/admin/active-iteration");
       const data = await res.json();
-      debugLog("Active iteration response", data);
-
       if (data.success && data.iteration) {
-        activeIteration = data.iteration;
-        iterationInfo.textContent =
-          `Current Iteration: ${data.iteration.name} (ID: ${data.iteration.id}) — Question Set: ${data.iteration.question_set}`;
+        iteration = data.iteration;
+        document.getElementById("iteration-info").textContent =
+          `Current Iteration: ${iteration.name} (ID: ${iteration.id}) — Question Set: ${iteration.question_set}`;
+        log("Active iteration loaded", iteration);
         await loadOrgData();
       } else {
-        iterationInfo.textContent = "No active iteration found.";
+        document.getElementById("iteration-info").textContent = "No active iteration.";
+        log("No active iteration found", data);
       }
     }
 
     async function loadOrgData() {
-      if (!activeIteration) return;
-      debugLog("Fetching org-data for iteration", activeIteration);
-      const res = await fetch(`/api/admin/org-data?iteration_id=${activeIteration.id}`);
+      if (!iteration) return;
+      log("Fetching org-data for iteration", iteration);
+      const res = await fetch(`/api/admin/org-data?iteration_id=${iteration.id}`);
       const data = await res.json();
-      debugLog("Org-data response", data);
-
-      unitsContainer.innerHTML = "";
-
+      log("Org-data response", data);
       if (data.success) {
-        allPeople = data.people || [];
-        if (!data.units || data.units.length === 0) {
-          unitsContainer.innerHTML = `<p class="text-gray-500">No organization units defined yet for this iteration.</p>`;
-        } else {
-          renderUnits(data.units, data.roles);
-        }
+        units = data.units || [];
+        roles = data.roles || [];
+        people = data.people || [];
+        renderUnits();
       } else {
-        unitsContainer.innerHTML = `<p class="text-red-500">Error loading iteration: ${data.message}</p>`;
+        document.getElementById("org-container").innerHTML =
+          `<p class="text-red-500">Error loading iteration: ${data.message}</p>`;
       }
     }
 
-    function renderUnits(units, roles) {
-      units.forEach(unit => {
-        const div = document.createElement("div");
-        div.className = "unit-card";
+    function renderUnits() {
+      const container = document.getElementById("org-container");
+      container.innerHTML = "";
 
-        const unitRoles = roles.filter(r => r.org_unit_id === unit.id);
-        const roleBadges = unitRoles.map(r =>
-          `<span class="role-badge ${r.is_manager ? "manager" : "coworker"}">${r.people?.name || "Unknown"}</span>`
-        ).join(" ");
+      if (!units.length) {
+        container.innerHTML = `<p class="text-gray-500 text-center">No organization units defined yet for this iteration.</p>`;
+        return;
+      }
 
-        div.innerHTML = `
-          <h3 class="text-lg font-semibold">${unit.name}</h3>
-          <div class="mt-2">${roleBadges || '<span class="text-gray-400">No roles assigned</span>'}</div>
-          <div class="mt-2 flex items-center">
-            <select class="person-select border p-1 rounded mr-2">
-              <option value="">-- Assign Person --</option>
-              ${allPeople.map(p => `<option value="${p.id}">${p.name}</option>`).join("")}
-            </select>
-            <label class="mr-2"><input type="checkbox" class="is-manager"> Manager</label>
-            <button class="assign-btn px-2 py-1 bg-green-500 text-white rounded">Assign</button>
+      const rootUnits = units.filter(u => !u.parent_id);
+      rootUnits.forEach(u => container.appendChild(renderUnit(u)));
+    }
+
+    function renderUnit(unit) {
+      const div = document.createElement("div");
+      div.className = "border p-3 rounded bg-white shadow";
+      div.innerHTML = `
+        <div class="flex justify-between items-center">
+          <input type="text" value="${unit.name}" data-unit-id="${unit.id}"
+            class="unit-name border rounded px-2 py-1 text-lg font-semibold w-1/2"/>
+          <div class="space-x-2">
+            <button class="add-subunit bg-blue-500 text-white px-2 py-1 rounded" data-id="${unit.id}">➕ Subunit</button>
+            <button class="delete-unit bg-red-500 text-white px-2 py-1 rounded" data-id="${unit.id}">🗑 Delete</button>
           </div>
-        `;
+        </div>
+        <div class="ml-6 mt-2">
+          <p class="font-medium">Roles:</p>
+          <ul id="roles-${unit.id}" class="list-disc pl-5 text-sm"></ul>
+          <select id="assign-${unit.id}" class="border rounded mt-2 px-2 py-1">
+            <option value="">Assign person...</option>
+            ${people.map(p => `<option value="${p.id}">${p.name}</option>`).join("")}
+          </select>
+        </div>
+        <div class="ml-6 mt-2" id="children-${unit.id}"></div>
+      `;
 
-        const assignBtn = div.querySelector(".assign-btn");
-        assignBtn.addEventListener("click", async () => {
-          const personId = div.querySelector(".person-select").value;
-          const isManager = div.querySelector(".is-manager").checked;
-          if (!personId) return alert("Select a person first!");
-
-          const payload = {
-            person_id: parseInt(personId),
-            org_unit_id: unit.id,
-            iteration_id: activeIteration.id,
-            is_manager: isManager
-          };
-          debugLog("Assigning role", payload);
-
-          const res = await fetch("/api/admin/assign-role", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          const result = await res.json();
-          debugLog("Assign-role response", result);
-
-          if (result.success) {
-            await loadOrgData();
-          } else {
-            alert("Error assigning role: " + result.message);
-          }
-        });
-
-        unitsContainer.appendChild(div);
+      // Render roles for this unit
+      const rolesUl = div.querySelector(`#roles-${unit.id}`);
+      roles.filter(r => r.org_unit_id === unit.id).forEach(r => {
+        const person = people.find(p => p.id === r.person_id);
+        const li = document.createElement("li");
+        li.textContent = `${person ? person.name : "Unknown"} ${r.is_manager ? "(Manager)" : "(Member)"}`;
+        const rmBtn = document.createElement("button");
+        rmBtn.textContent = "✖";
+        rmBtn.className = "ml-2 text-red-600";
+        rmBtn.onclick = () => removeRole(r.id);
+        li.appendChild(rmBtn);
+        rolesUl.appendChild(li);
       });
+
+      // Render children units
+      const childrenDiv = div.querySelector(`#children-${unit.id}`);
+      units.filter(u => u.parent_id === unit.id).forEach(child => {
+        childrenDiv.appendChild(renderUnit(child));
+      });
+
+      // Handlers
+      div.querySelector(".add-subunit").onclick = () => addSubunit(unit.id);
+      div.querySelector(".delete-unit").onclick = () => deleteUnit(unit.id);
+      div.querySelector(".unit-name").addEventListener("change", (e) => renameUnit(unit.id, e.target.value));
+      div.querySelector(`#assign-${unit.id}`).addEventListener("change", (e) => {
+        if (e.target.value) assignPerson(unit.id, e.target.value);
+      });
+
+      return div;
     }
 
-    document.getElementById("create-root-btn").addEventListener("click", async () => {
-      const name = document.getElementById("root-name").value.trim();
-      if (!name) return alert("Please enter a name for the root unit");
-
-      const payload = { name, parent_id: null, iteration_id: activeIteration.id };
-      debugLog("POST", { url: "/api/admin/create-org-unit", body: payload });
-
+    async function createRootUnit() {
+      const name = prompt("Enter root unit name:");
+      if (!name) return;
+      log("POST create root", { name });
       const res = await fetch("/api/admin/create-org-unit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, parent_id: null, iteration_id: iteration.id })
       });
       const data = await res.json();
-      debugLog("POST response", data);
+      log("Create root response", data);
+      await loadOrgData();
+    }
 
-      if (data.success) {
-        document.getElementById("root-name").value = "";
-        await loadOrgData();
-      } else {
-        alert("Error creating root: " + data.message);
-      }
-    });
+    async function addSubunit(parentId) {
+      const name = prompt("Enter subunit name:");
+      if (!name) return;
+      log("POST add subunit", { name, parentId });
+      const res = await fetch("/api/admin/create-org-unit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, parent_id: parentId, iteration_id: iteration.id })
+      });
+      const data = await res.json();
+      log("Add subunit response", data);
+      await loadOrgData();
+    }
 
-    // Init
-    debugLog("org-chart loaded");
-    loadActiveIteration();
+    async function assignPerson(unitId, personId) {
+      log("POST assign person", { unitId, personId });
+      const res = await fetch("/api/admin/assign-role", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ org_unit_id: unitId, person_id: personId, iteration_id: iteration.id })
+      });
+      const data = await res.json();
+      log("Assign person response", data);
+      await loadOrgData();
+    }
+
+    async function removeRole(roleId) {
+      if (!confirm("Remove this role?")) return;
+      log("POST remove role", { roleId });
+      const res = await fetch("/api/admin/remove-role", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role_id: roleId })
+      });
+      const data = await res.json();
+      log("Remove role response", data);
+      await loadOrgData();
+    }
+
+    async function deleteUnit(unitId) {
+      if (!confirm("Delete this unit (and all subunits/roles)?")) return;
+      log("POST delete unit", { unitId });
+      const res = await fetch("/api/admin/delete-org-unit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unit_id: unitId })
+      });
+      const data = await res.json();
+      log("Delete unit response", data);
+      await loadOrgData();
+    }
+
+    async function renameUnit(unitId, newName) {
+      log("POST rename unit", { unitId, newName });
+      const res = await fetch("/api/admin/rename-org-unit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unit_id: unitId, new_name: newName })
+      });
+      const data = await res.json();
+      log("Rename unit response", data);
+      await loadOrgData();
+    }
+
+    document.getElementById("create-root-btn").onclick = createRootUnit;
+
+    loadIteration();
+    log("org-chart loaded");
   </script>
 </body>
 </html>
