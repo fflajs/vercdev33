@@ -3,211 +3,136 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cognitive Space Visualizer</title>
-
+  <title>Cognitive Tool</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
-  <style>
-    body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #111827; }
-    .container { max-width: 1200px; margin: 2rem auto; padding: 2rem; background-color: #ffffff; border-radius: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .slider-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
-    .slider-item { display: flex; flex-direction: column; }
-    .chart-container { width: 100%; height: 300px; margin-bottom: 2rem; }
-    .voxel-container { width: 100%; height: 500px; border-radius: 1rem; background-color: #e5e7eb; }
-    .voxel-canvas { width: 100%; height: 100%; display: block; }
-  </style>
 </head>
-<body>
-  <div class="container">
-    <div class="text-center mb-6">
-      <h1 class="text-3xl font-bold">Cognitive Space Visualizer</h1>
-      <p id="iteration-display" class="text-blue-600 font-semibold mt-1">Loading active iteration...</p>
-      <p class="text-sm text-gray-500">Proof of Concept — October 2025</p>
-    </div>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-4xl mx-auto p-6 bg-white shadow rounded-lg mt-10">
+    <h1 class="text-2xl font-bold mb-2 text-center">Cognitive Tool</h1>
+    <p id="iteration-info" class="text-center text-gray-600">Loading active iteration...</p>
+    <p id="user-info" class="text-center text-gray-500 mb-6"></p>
 
-    <div id="user-context-display" class="text-center mb-6 p-3 bg-gray-100 rounded border text-sm"></div>
-
-    <!-- Survey questions -->
-    <div class="p-4 mb-8 bg-gray-50 rounded border">
-      <h2 class="text-xl font-semibold mb-4 text-center">Survey Questions</h2>
-      <div id="survey-questions" class="slider-container"></div>
-    </div>
-
-    <!-- JSON + Save -->
-    <div class="p-4 mb-8 bg-gray-50 rounded border">
-      <h2 class="text-xl font-semibold mb-4 text-center">Survey Data</h2>
-      <textarea id="json-output" class="w-full h-48 p-3 border rounded font-mono text-sm bg-gray-100" readonly></textarea>
-      <div class="flex justify-between mt-4 space-x-4">
-        <button id="reset-button" class="flex-1 p-3 bg-gray-400 text-white rounded hover:bg-gray-500">Reset</button>
-        <button id="save-button" class="flex-1 p-3 bg-green-500 text-white rounded hover:bg-green-600">Save</button>
+    <!-- Survey form -->
+    <form id="survey-form" class="space-y-4">
+      <div>
+        <label for="q1" class="block text-sm font-medium text-gray-700">Q1: Knowledge density (1-8)</label>
+        <input type="range" min="1" max="8" value="4" id="q1" name="q1" class="w-full">
+        <span id="q1-value" class="text-sm text-gray-600">4</span>
       </div>
-      <span id="message-area" class="text-xs text-green-600 mt-2 block text-center"></span>
-    </div>
-
-    <!-- Charts -->
-    <div class="p-4 mb-8 bg-gray-50 rounded border">
-      <h2 class="text-xl font-semibold mb-4 text-center">Gaussian Distributions</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="chart-container"><canvas id="knowledge-density-chart"></canvas></div>
-        <div class="chart-container"><canvas id="familiarity-chart"></canvas></div>
-        <div class="chart-container"><canvas id="cognitive-load-chart"></canvas></div>
+      <div>
+        <label for="q2" class="block text-sm font-medium text-gray-700">Q2: Familiarity (1-8)</label>
+        <input type="range" min="1" max="8" value="4" id="q2" name="q2" class="w-full">
+        <span id="q2-value" class="text-sm text-gray-600">4</span>
       </div>
-    </div>
+      <div>
+        <label for="q3" class="block text-sm font-medium text-gray-700">Q3: Cognitive load (1-8)</label>
+        <input type="range" min="1" max="8" value="4" id="q3" name="q3" class="w-full">
+        <span id="q3-value" class="text-sm text-gray-600">4</span>
+      </div>
+      <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save Survey</button>
+    </form>
 
-    <!-- Voxel 3D -->
-    <div class="p-4 mb-8 bg-gray-50 rounded border">
-      <h2 class="text-xl font-semibold mb-4 text-center">3D Voxel Scene</h2>
-      <div class="voxel-container"><canvas id="voxel-canvas" class="voxel-canvas"></canvas></div>
-    </div>
+    <p id="message" class="text-center mt-4 text-sm"></p>
 
-    <!-- Analysis -->
-    <div class="p-4 mb-8 bg-gray-50 rounded border">
-      <h2 class="text-xl font-semibold mb-4 text-center">Analysis & Coaching</h2>
-      <p class="text-lg font-medium text-gray-800" id="analysis-desc">Adjust sliders to see analysis.</p>
-      <p class="text-md text-gray-600 mt-2" id="analysis-tip"></p>
-    </div>
-
-    <a href="portal.html" class="text-blue-600 hover:underline block text-center mb-4">← Back to Research Portal</a>
-
-    <!-- Debug -->
-    <details class="mt-6">
+    <!-- Debug log -->
+    <details class="mt-8">
       <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
-      <pre id="debug-log" class="bg-black text-green-400 text-xs p-4 mt-2 rounded h-48 overflow-y-auto"></pre>
+      <pre id="debug-log" class="bg-gray-100 p-2 mt-2 h-64 overflow-y-auto text-xs"></pre>
     </details>
+
+    <div class="mt-6 text-center">
+      <a href="portal.html" class="text-blue-600 hover:underline">← Back to Research Portal</a>
+    </div>
   </div>
 
-  <script>
-    // --- Debug logger ---
-    function logDebug(msg, obj) {
-      const logEl = document.getElementById('debug-log');
-      const timestamp = new Date().toISOString();
-      if (obj) {
-        logEl.textContent += `[${timestamp}] ${msg}: ${JSON.stringify(obj, null, 2)}\n`;
-      } else {
-        logEl.textContent += `[${timestamp}] ${msg}\n`;
-      }
-      logEl.scrollTop = logEl.scrollHeight;
-      console.log(msg, obj || '');
+<script>
+  const debugLog = document.getElementById("debug-log");
+  function log(msg, obj) {
+    const time = new Date().toISOString();
+    debugLog.textContent += `[${time}] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
+    debugLog.scrollTop = debugLog.scrollHeight;
+    console.log(msg, obj || "");
+  }
+
+  let activeIteration = null;
+  let userContext = null;
+
+  async function loadIteration() {
+    try {
+      log("Fetching /api/admin/active-iteration");
+      const res = await fetch("/api/admin/active-iteration");
+      const data = await res.json();
+      log("active-iteration response", data);
+      if (!res.ok || !data.success) throw new Error(data.message || "No active iteration");
+      activeIteration = data.iteration;
+      document.getElementById("iteration-info").textContent =
+        `Iteration Id: ${activeIteration.id}, Name: ${activeIteration.name}, Question Set: ${activeIteration.question_set}`;
+    } catch (err) {
+      document.getElementById("iteration-info").textContent = "No active iteration found.";
+      log("Iteration load error", err.message);
     }
+  }
 
-    // --- State ---
-    let surveyValues = [];
-    let chartInstances = {};
-    let voxelScene = null, voxelGrid = [];
-
-    // --- Chart helpers ---
-    const chartLabels = Array.from({ length: 71 }, (_, i) => (1 + i * 0.1).toFixed(1));
-    const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
-    const gaussian = (x, m, s) => Math.exp(-0.5 * Math.pow((x - m) / s, 2)) / (s * Math.sqrt(2 * Math.PI));
-    const getGaussianData = (mean, stdDev = 1) => Array.from({length:71}, (_,i)=>gaussian(1+i*0.1, mean, stdDev));
-
-    function renderCharts(data) {
-      const createChart = (id, label, color) => new Chart(document.getElementById(id), {
-        type: 'line',
-        data: { labels: chartLabels, datasets: [{ data, borderColor: color, backgroundColor: color+'33', fill:true }] },
-        options: { ...chartOptions, plugins: { title:{ display:true, text:label } } }
-      });
-      if(chartInstances.knowledge) chartInstances.knowledge.destroy();
-      chartInstances.knowledge = createChart("knowledge-density-chart","Knowledge Density","rgb(75,192,192)");
-      if(chartInstances.familiarity) chartInstances.familiarity.destroy();
-      chartInstances.familiarity = createChart("familiarity-chart","Familiarity","rgb(54,162,235)");
-      if(chartInstances.cognitive) chartInstances.cognitive.destroy();
-      chartInstances.cognitive = createChart("cognitive-load-chart","Cognitive Load","rgb(255,159,64)");
+  async function loadUserContext() {
+    try {
+      log("Fetching /api/admin/user-context");
+      const res = await fetch("/api/admin/user-context");
+      const data = await res.json();
+      log("user-context response", data);
+      if (!res.ok || !data.success) throw new Error("Could not fetch user context");
+      userContext = data.context;
+      document.getElementById("user-info").textContent =
+        `Org Unit: ${userContext.orgUnitName}, User: ${userContext.userName}, Role: ${userContext.role}`;
+    } catch (err) {
+      document.getElementById("user-info").textContent = "User context not available.";
+      log("User context error", err.message);
     }
+  }
 
-    // --- 3D voxel ---
-    function initVoxel() {
-      const canvas = document.getElementById("voxel-canvas");
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth/canvas.clientHeight,0.1,1000);
-      const renderer = new THREE.WebGLRenderer({canvas,antialias:true});
-      renderer.setSize(canvas.clientWidth,canvas.clientHeight);
-      camera.position.set(1.5,1.5,1.5);
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-      scene.add(new THREE.AmbientLight(0xffffff,0.7));
-      const dir = new THREE.DirectionalLight(0xffffff,0.8); dir.position.set(5,10,7.5); scene.add(dir);
-      const voxelSize = 1/8; const geom=new THREE.BoxGeometry(voxelSize,voxelSize,voxelSize);
-      for(let z=1;z<=8;z++)for(let y=1;y<=8;y++)for(let x=1;x<=8;x++){
-        const voxel=new THREE.Mesh(geom,new THREE.MeshBasicMaterial({color:0xaaaaaa,wireframe:true,opacity:0.3,transparent:true}));
-        voxel.position.set((x-0.5)/8-0.5,(y-0.5)/8-0.5,(z-0.5)/8-0.5);
-        scene.add(voxel); voxelGrid.push(voxel);
-      }
-      function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
-      animate();
-      voxelScene={scene,camera,renderer};
+  async function saveSurvey(answers) {
+    if (!activeIteration || !userContext) {
+      log("Cannot save survey, missing context");
+      return { success: false, message: "Missing context" };
     }
-
-    function updateVoxel(meanX, meanY, meanZ) {
-      voxelGrid.forEach(v=>v.material.color.set(0xaaaaaa));
-      const index=(meanX-1)+(meanY-1)*8+(meanZ-1)*64;
-      if(voxelGrid[index]) voxelGrid[index].material.color.set(0xef4444);
-    }
-
-    // --- Survey logic ---
-    function updateAll() {
-      const qPerGroup = surveyValues.length/3;
-      const kd = surveyValues.slice(0,qPerGroup), fm = surveyValues.slice(qPerGroup,qPerGroup*2), cl = surveyValues.slice(qPerGroup*2);
-      const mean = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
-      const mX=mean(kd), mY=mean(fm), mZ=mean(cl);
-      const rounded={x:Math.round(mX), y:Math.round(mY), z:Math.round(mZ)};
-      document.getElementById("json-output").value = JSON.stringify({survey:surveyValues, mean:{mX,mY,mZ}, rounded},null,2);
-      renderCharts({knowledge_density:getGaussianData(mX), familiarity:getGaussianData(mY), cognitive_load:getGaussianData(mZ)});
-      updateVoxel(rounded.x,rounded.y,rounded.z);
-      document.getElementById("analysis-desc").textContent=`Mean: (${mX.toFixed(2)}, ${mY.toFixed(2)}, ${mZ.toFixed(2)})`;
-    }
-
-    // --- Init ---
-    window.onload = async () => {
-      logDebug("init cognitive-tool.html loaded");
-      initVoxel();
-
-      // 1. Load active iteration
-      try {
-        const res = await fetch("/api/admin/active-iteration");
-        const data = await res.json();
-        if(data.success && data.iteration) {
-          document.getElementById("iteration-display").textContent =
-            `Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
-          logDebug("active-iteration", data);
-        } else {
-          document.getElementById("iteration-display").textContent="No active iteration found";
-        }
-      } catch(err) { logDebug("error loading iteration", err); }
-
-      // 2. Build survey from fixed 12 questions (Pulse Check sample)
-      const questions=[...Array(12).keys()].map(i=>`Q${i+1}`);
-      surveyValues=new Array(questions.length).fill(4);
-      const container=document.getElementById("survey-questions");
-      questions.forEach((q,i)=>{
-        const item=document.createElement("div"); item.className="slider-item";
-        item.innerHTML=`<label>${q} - Value: <span id="val-${i}">4</span></label>
-        <input type="range" min="1" max="8" value="4" id="slider-${i}" class="w-full">`;
-        container.appendChild(item);
-        document.getElementById(`slider-${i}`).addEventListener("input",e=>{
-          surveyValues[i]=+e.target.value; document.getElementById(`val-${i}`).textContent=e.target.value; updateAll();
-        });
-      });
-
-      document.getElementById("reset-button").addEventListener("click",()=>{
-        surveyValues.fill(4); document.querySelectorAll("input[type=range]").forEach((s,i)=>{s.value=4; document.getElementById(`val-${i}`).textContent=4;});
-        updateAll(); logDebug("reset");
-      });
-
-      document.getElementById("save-button").addEventListener("click",async()=>{
-        try{
-          const res=await fetch("/api/admin/save-survey",{method:"POST",headers:{"Content-Type":"application/json"},body:document.getElementById("json-output").value});
-          const data=await res.json();
-          logDebug("save-survey response", data);
-          document.getElementById("message-area").textContent="Saved!";
-        }catch(err){ logDebug("save error",err); document.getElementById("message-area").textContent="Save failed"; }
-      });
-
-      updateAll();
+    const payload = {
+      person_id: userContext.userName, // ⚠️ placeholder until real person_id available
+      iteration_id: activeIteration.id,
+      answers
     };
-  </script>
+    log("Saving survey payload", payload);
+    const res = await fetch("/api/admin/survey", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    log("survey save response", data);
+    return data;
+  }
+
+  // --- FORM BEHAVIOR ---
+  const form = document.getElementById("survey-form");
+  ["q1","q2","q3"].forEach(id=>{
+    const slider=document.getElementById(id);
+    const output=document.getElementById(id+"-value");
+    slider.addEventListener("input",()=>{output.textContent=slider.value;});
+  });
+
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const answers = {
+      q1: parseInt(document.getElementById("q1").value),
+      q2: parseInt(document.getElementById("q2").value),
+      q3: parseInt(document.getElementById("q3").value)
+    };
+    const result = await saveSurvey(answers);
+    document.getElementById("message").textContent = result.success ? "Survey saved successfully." : "Survey save failed: " + result.message;
+  });
+
+  // --- INIT ---
+  loadIteration();
+  loadUserContext();
+</script>
 </body>
 </html>
 
