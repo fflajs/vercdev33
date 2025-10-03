@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   const {
     query: { action },
     method,
-    body,
+    body
   } = req;
 
   console.info(`[${new Date().toISOString()}] ➡️ Admin API called: action=${action}, method=${method}`);
@@ -17,197 +17,195 @@ export default async function handler(req, res) {
   try {
     switch (action) {
       /**
+       * ===================================================
        * ACTIVE ITERATION
+       * ===================================================
        */
-      case 'active-iteration': {
-        if (method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
-        const { data, error } = await supabase
-          .from('iterations')
-          .select('*')
-          .is('end_date', null)
-          .single();
-        if (error && error.code !== 'PGRST116') throw error;
-        if (!data) return res.status(200).json({ success: false, message: 'No active iteration found' });
-        return res.status(200).json({ success: true, iteration: data });
-      }
-
-      /**
-       * CREATE ITERATION (with cloning)
-       */
-      case 'create-iteration': {
-        if (method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
-        const { name, set } = body;
-        if (!name || !set) return res.status(400).json({ success: false, message: 'Name and set are required' });
-
-        // End current iteration if exists
-        await supabase.from('iterations').update({ end_date: new Date().toISOString() }).is('end_date', null);
-
-        // Find last iteration
-        const { data: lastIter } = await supabase.from('iterations').select('*').order('id', { ascending: false }).limit(1).maybeSingle();
-
-        // Create new iteration
-        const { data: newIter, error: errNew } = await supabase
-          .from('iterations')
-          .insert([{ name, question_set: set }])
-          .select()
-          .single();
-        if (errNew) throw errNew;
-
-        // Clone org units + roles if last iteration exists
-        if (lastIter) {
-          const { data: prevUnits } = await supabase.from('organization_units').select('*').eq('iteration_id', lastIter.id);
-          if (prevUnits?.length) {
-            const idMap = {};
-            for (const u of prevUnits) {
-              const { data: ins, error: insErr } = await supabase
-                .from('organization_units')
-                .insert([{ name: u.name, parent_id: u.parent_id ? idMap[u.parent_id] : null, iteration_id: newIter.id }])
-                .select()
-                .single();
-              if (insErr) throw insErr;
-              idMap[u.id] = ins.id;
-            }
-            const { data: prevRoles } = await supabase.from('person_roles').select('*').eq('iteration_id', lastIter.id);
-            for (const r of prevRoles) {
-              const { error: insRoleErr } = await supabase.from('person_roles').insert([{
-                person_id: r.person_id,
-                org_unit_id: idMap[r.org_unit_id],
-                is_manager: r.is_manager,
-                description: r.description,
-                iteration_id: newIter.id
-              }]);
-              if (insRoleErr) throw insRoleErr;
-            }
-          }
+      case 'active-iteration':
+        if (method === 'GET') {
+          const { data, error } = await supabase
+            .from('iterations')
+            .select('*')
+            .is('end_date', null)
+            .order('id', { ascending: false })
+            .maybeSingle();
+          if (error) throw error;
+          if (!data) return res.json({ success: false, message: 'No active iteration' });
+          return res.json({ success: true, iteration: data });
         }
-
-        return res.status(200).json({ success: true, iteration: newIter });
-      }
+        break;
 
       /**
-       * CLOSE ITERATION
+       * ===================================================
+       * PEOPLE (REGISTER)
+       * ===================================================
        */
-      case 'close-iteration': {
-        if (method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
-        const { iteration_id } = body;
-        if (!iteration_id) return res.status(400).json({ success: false, message: 'Iteration ID required' });
-
-        const { error } = await supabase.from('iterations').update({ end_date: new Date().toISOString() }).eq('id', iteration_id);
-        if (error) throw error;
-
-        return res.status(200).json({ success: true });
-      }
-
-      /**
-       * PEOPLE (registration)
-       */
-      case 'people': {
+      case 'people':
         if (method === 'POST') {
           const { name } = body;
           if (!name) return res.status(400).json({ success: false, message: 'Name required' });
 
-          const { data: existing } = await supabase.from('people').select('id').eq('name', name).maybeSingle();
-          if (existing) return res.status(409).json({ success: false, message: `Name "${name}" already exists` });
+          const { data: exists, error: exErr } = await supabase
+            .from('people')
+            .select('*')
+            .eq('name', name)
+            .maybeSingle();
+          if (exErr) throw exErr;
+          if (exists) return res.status(409).json({ success: false, message: 'Name already exists' });
 
-          const { data, error } = await supabase.from('people').insert([{ name }]).select().single();
-          if (error) throw error;
-          return res.status(200).json({ success: true, person: data });
-        }
-        return res.status(405).json({ success: false, message: 'Method not allowed' });
-      }
-
-      /**
-       * GET USER ROLES
-       */
-      case 'get-user-roles': {
-        if (method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
-        const { name } = req.query;
-        if (!name) return res.status(400).json({ success: false, message: 'Name required' });
-
-        const { data: user } = await supabase.from('people').select('*').eq('name', name).single();
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-        const { data: iteration } = await supabase.from('iterations').select('*').is('end_date', null).single();
-        if (!iteration) return res.status(404).json({ success: false, message: 'No active iteration' });
-
-        const { data: roles, error: errRoles } = await supabase
-          .from('person_roles')
-          .select('id, is_manager, org_unit_id, iteration_id, organization_units(id, name, parent_id)')
-          .eq('person_id', user.id)
-          .eq('iteration_id', iteration.id);
-        if (errRoles) throw errRoles;
-
-        return res.status(200).json({ success: true, user, iteration, roles });
-      }
-
-      /**
-       * GET ROLE CONTEXT
-       */
-      case 'get-role-context': {
-        if (method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
-        const { role_id } = req.query;
-        if (!role_id) return res.status(400).json({ success: false, message: 'role_id required' });
-
-        const { data: role, error } = await supabase
-          .from('person_roles')
-          .select('id, is_manager, iteration_id, org_unit_id, people(name), organization_units(name), iterations(name, question_set)')
-          .eq('id', role_id)
-          .single();
-        if (error) throw error;
-
-        return res.status(200).json({
-          success: true,
-          context: {
-            user: role.people.name,
-            roleType: role.is_manager ? 'Manager' : 'Member',
-            unitName: role.organization_units.name,
-            iterName: role.iterations.name,
-            iterId: role.iteration_id,
-            qset: role.iterations.question_set,
-          }
-        });
-      }
-
-      /**
-       * TABLE VIEWER (dual mode)
-       */
-      case 'table-viewer': {
-        if (method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
-        const { table, role_id } = req.query;
-
-        let filterIterationId = null;
-        if (role_id) {
-          // fetch iteration_id via role context
-          const { data: role, error } = await supabase
-            .from('person_roles')
-            .select('iteration_id')
-            .eq('id', role_id)
+          const { data, error } = await supabase
+            .from('people')
+            .insert([{ name }])
+            .select()
             .single();
           if (error) throw error;
-          filterIterationId = role.iteration_id;
+          return res.json({ success: true, person: data });
         }
+        break;
 
-        let query = supabase.from(table).select('*');
+      /**
+       * ===================================================
+       * GET USER ROLES
+       * ===================================================
+       */
+      case 'get-user-roles':
+        if (method === 'GET') {
+          const { name } = req.query;
+          const { data: user, error: userErr } = await supabase
+            .from('people')
+            .select('*')
+            .eq('name', name)
+            .maybeSingle();
+          if (userErr) throw userErr;
+          if (!user) return res.json({ success: false, message: 'User not found' });
 
-        // Apply iteration_id filter in user mode (if column exists)
-        if (filterIterationId) {
-          const tablesWithIter = ['organization_units', 'person_roles', 'surveys'];
-          if (tablesWithIter.includes(table)) {
-            query = query.eq('iteration_id', filterIterationId);
+          const { data: iteration, error: iterErr } = await supabase
+            .from('iterations')
+            .select('*')
+            .is('end_date', null)
+            .order('id', { ascending: false })
+            .maybeSingle();
+          if (iterErr) throw iterErr;
+          if (!iteration) return res.json({ success: false, message: 'No active iteration' });
+
+          const { data: roles, error: roleErr } = await supabase
+            .from('person_roles')
+            .select('id, is_manager, org_unit_id, iteration_id, organization_units(id,name,parent_id)')
+            .eq('person_id', user.id)
+            .eq('iteration_id', iteration.id);
+          if (roleErr) throw roleErr;
+
+          return res.json({ success: true, user, iteration, roles });
+        }
+        break;
+
+      /**
+       * ===================================================
+       * GET ROLE CONTEXT
+       * ===================================================
+       */
+      case 'get-role-context':
+        if (method === 'GET') {
+          const { role_id } = req.query;
+          const { data: role, error: roleErr } = await supabase
+            .from('person_roles')
+            .select('id,is_manager,iteration_id,organization_units(id,name),people(name)')
+            .eq('id', role_id)
+            .single();
+          if (roleErr) throw roleErr;
+
+          const { data: iter, error: iterErr } = await supabase
+            .from('iterations')
+            .select('*')
+            .eq('id', role.iteration_id)
+            .single();
+          if (iterErr) throw iterErr;
+
+          return res.json({
+            success: true,
+            context: {
+              user: role.people.name,
+              roleType: role.is_manager ? 'Manager' : 'Member',
+              unitName: role.organization_units?.name ?? '??',
+              iterName: iter.name,
+              iterId: iter.id,
+              qset: iter.question_set
+            }
+          });
+        }
+        break;
+
+      /**
+       * ===================================================
+       * ORG DATA (Org Manager)
+       * ===================================================
+       */
+      case 'org-data':
+        if (method === 'GET') {
+          const { iteration_id } = req.query;
+          if (!iteration_id) return res.status(400).json({ success: false, message: 'iteration_id required' });
+
+          const { data: units, error: uErr } = await supabase
+            .from('organization_units')
+            .select('*')
+            .eq('iteration_id', iteration_id);
+          if (uErr) throw uErr;
+
+          const { data: roles, error: rErr } = await supabase
+            .from('person_roles')
+            .select('*, people(name)')
+            .eq('iteration_id', iteration_id);
+          if (rErr) throw rErr;
+
+          const { data: people, error: pErr } = await supabase
+            .from('people')
+            .select('*');
+          if (pErr) throw pErr;
+
+          return res.json({ success: true, units, roles, people });
+        }
+        break;
+
+      /**
+       * ===================================================
+       * TABLE VIEWER (dual mode)
+       * ===================================================
+       */
+      case 'table-viewer':
+        if (method === 'GET') {
+          const { table, role_id } = req.query;
+
+          if (!table) return res.status(400).json({ success: false, message: 'table required' });
+
+          let query = supabase.from(table).select('*');
+
+          if (role_id) {
+            // user mode → filter by iteration
+            const { data: role, error: rErr } = await supabase
+              .from('person_roles')
+              .select('iteration_id')
+              .eq('id', role_id)
+              .single();
+            if (rErr) throw rErr;
+            if (!role) return res.json({ success: false, message: 'Role not found' });
+
+            if (['organization_units', 'person_roles', 'surveys'].includes(table)) {
+              query = query.eq('iteration_id', role.iteration_id);
+            }
           }
-        }
+          const { data, error } = await query;
+          if (error) throw error;
 
-        const { data, error } = await query;
-        if (error) throw error;
-        return res.status(200).json({ success: true, data });
-      }
+          return res.json({ success: true, data });
+        }
+        break;
 
       default:
         return res.status(400).json({ success: false, message: `Unknown action: ${action}` });
     }
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] ERROR action=${action}:`, err);
-    return res.status(500).json({ success: false, message: `Error in ${action}`, error: err });
+    console.error('API error', err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 }
 

@@ -1,80 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100">
-  <div class="max-w-5xl mx-auto p-6 bg-white rounded shadow">
+<body class="p-6 bg-gray-100">
+  <div class="max-w-4xl mx-auto bg-white p-4 rounded shadow">
     <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
-    <div id="context" class="mb-4 text-gray-700"></div>
+    <div id="context" class="mb-4 text-sm text-gray-700"></div>
     <div id="tables"></div>
-    <button id="refreshBtn" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded">Refresh Now</button>
-    <a href="admin.html" class="ml-4 text-blue-600">← Back to Admin Portal</a>
+
+    <div class="mt-6">
+      <button onclick="loadAll()" class="bg-blue-500 text-white px-3 py-1 rounded">Refresh Now</button>
+      <a href="admin.html" class="ml-4 text-blue-600">&larr; Back to Admin Portal</a>
+    </div>
+
+    <details class="mt-4">
+      <summary>Debug log (open to view)</summary>
+      <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
+    </details>
   </div>
 
-  <details class="max-w-5xl mx-auto mt-4">
-    <summary class="cursor-pointer">Debug log (open to view)</summary>
-    <pre id="debug" class="bg-gray-900 text-green-400 p-2 rounded text-sm"></pre>
-  </details>
+<script>
+const log=(msg,obj=null)=>{const el=document.getElementById('debug');el.textContent+=`[table-viewer] ${msg} ${obj?JSON.stringify(obj):''}\n`;};
 
-  <script>
-    const debug = (msg, obj=null) => {
-      const line = `[${new Date().toISOString()}] [table-viewer] ${msg}`;
-      console.log(line, obj ?? '');
-      document.getElementById('debug').textContent += line + (obj ? ' ' + JSON.stringify(obj) : '') + "\n";
-    };
+let roleId=null; let iterId=null;
 
-    let roleId = null;
-    let iterContext = null;
+async function loadAll(){
+  log("Loading all tables...");
+  const tables=["organization_units","iterations","people","person_roles","surveys","app_data"];
+  const wrap=document.getElementById('tables'); wrap.innerHTML='';
+  for(const t of tables){
+    log("Fetching table: "+t);
+    const res=await fetch(`/api/admin/table-viewer?table=${t}${roleId?`&role_id=${roleId}`:''}`);
+    const json=await res.json();
+    log("Response for "+t,json);
+    const pre=document.createElement('pre');
+    pre.className="bg-gray-100 p-2 text-xs overflow-auto mb-4";
+    pre.textContent=t+"\n"+JSON.stringify(json.data,null,2);
+    wrap.appendChild(pre);
+  }
+}
 
-    async function loadContext() {
-      const params = new URLSearchParams(window.location.search);
-      roleId = params.get('role_id');
-      if (roleId) {
-        debug("Using role_id="+roleId);
-        const resp = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-        const json = await resp.json();
-        debug("get-role-context result", json);
-        if (json.success) {
-          iterContext = json.context;
-          document.getElementById('context').innerText =
-            `User: ${iterContext.user} — Role: ${iterContext.roleType} — Unit: ${iterContext.unitName} — Iteration: ${iterContext.iterName} (ID: ${iterContext.iterId}) — Question Set: ${iterContext.qset}`;
-        }
-      } else {
-        debug("Admin mode (no role_id)");
-        document.getElementById('context').innerText = "Admin Mode — Viewing full database (all iterations)";
-      }
+async function init(){
+  log("page loaded");
+
+  const params=new URLSearchParams(window.location.search);
+  roleId=params.get('role_id');
+  if(roleId){
+    log("Using role_id="+roleId);
+    const ctxRes=await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+    const ctxJson=await ctxRes.json();
+    log("get-role-context result",ctxJson);
+    if(ctxJson.success){
+      const ctx=ctxJson.context;
+      iterId=ctx.iterId;
+      document.getElementById('context').textContent=
+        `User: ${ctx.user} — Role: ${ctx.roleType} — Unit: ${ctx.unitName} — Iteration: ${ctx.iterName} (ID: ${ctx.iterId}) — Question Set: ${ctx.qset}`;
     }
+  }else{
+    document.getElementById('context').textContent="Admin mode (full database view)";
+  }
+  await loadAll();
+}
 
-    async function fetchTable(name) {
-      debug("Fetching table: "+name);
-      const resp = await fetch(`/api/admin/table-viewer?table=${name}${roleId ? "&role_id="+roleId : ""}`);
-      const json = await resp.json();
-      debug("Response for "+name, json);
-      const div = document.createElement('div');
-      div.className = "mb-6";
-      div.innerHTML = `<h2 class="text-xl font-semibold mb-2">${name}</h2><pre class="bg-gray-200 p-2 rounded text-sm">${JSON.stringify(json.data, null, 2)}</pre>`;
-      document.getElementById('tables').appendChild(div);
-    }
-
-    async function loadAll() {
-      document.getElementById('tables').innerHTML = "";
-      const tables = ["organization_units","iterations","people","person_roles","surveys","app_data"];
-      for (const t of tables) {
-        await fetchTable(t);
-      }
-    }
-
-    document.getElementById('refreshBtn').onclick = () => loadAll();
-
-    (async function init() {
-      debug("page loaded");
-      await loadContext();
-      await loadAll();
-    })();
-  </script>
+window.addEventListener('load',init);
+</script>
 </body>
 </html>
 
