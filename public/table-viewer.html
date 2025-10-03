@@ -1,73 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 text-gray-900 min-h-screen">
-  <div class="max-w-5xl mx-auto p-6">
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-6xl mx-auto p-6">
     <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
-    <p class="mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
+    <p class="text-sm text-gray-600 mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
 
-    <div id="tables"></div>
+    <div id="tables" class="space-y-8"></div>
 
-    <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded mt-4">Refresh Now</button>
-    <a href="portal.html" class="ml-6 text-blue-600">← Back to Admin Portal</a>
+    <div class="mt-6">
+      <button id="refreshBtn"
+              class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Refresh Now</button>
+    </div>
 
-    <!-- Debug -->
+    <div class="mt-6">
+      <a href="portal.html" class="text-blue-600 hover:underline">← Back to Admin Portal</a>
+    </div>
+
     <details class="mt-6">
-      <summary class="cursor-pointer font-bold">Debug log (open to view)</summary>
-      <pre id="debug" class="bg-black text-green-400 p-2 mt-2 rounded text-sm"></pre>
+      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
+      <pre id="debugLog" class="bg-black text-green-400 p-2 text-xs overflow-auto h-64"></pre>
     </details>
   </div>
 
   <script>
-    const tables = ["organization_units", "iterations", "people", "person_roles", "surveys", "app_data"];
-    const tablesEl = document.getElementById("tables");
-    const debugEl = document.getElementById("debug");
-    function log(...args) {
-      const msg = `[${new Date().toISOString()}] ${args.join(" ")}\n`;
-      debugEl.textContent += msg;
-      console.log(...args);
-    }
+    const log = (msg, obj=null) => {
+      const ts = new Date().toISOString();
+      document.getElementById("debugLog").textContent += `[${ts}] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
+      console.log(msg, obj);
+    };
 
-    async function fetchTable(table) {
-      log("Fetching table:", table);
-      const res = await fetch(`/api/admin/table-viewer?table=${table}`);
+    const urlParams = new URLSearchParams(window.location.search);
+    const roleId = urlParams.get("role_id");
+
+    const tables = ["organization_units","iterations","people","person_roles","surveys","app_data"];
+
+    async function fetchTable(name) {
+      log("Fetching table: " + name);
+      const res = await fetch(`/api/admin/table-viewer?table=${name}`);
       const json = await res.json();
-      log("Response for", table, JSON.stringify(json));
+      log("Response for " + name, json);
 
-      const container = document.createElement("div");
-      container.className = "mb-6";
-      container.innerHTML = `<h2 class="text-xl font-semibold mb-2">${table}</h2>`;
+      const div = document.getElementById("table-" + name);
+      const tbody = div.querySelector("tbody");
+      tbody.innerHTML = "";
 
-      if (!json.success || !json.rows || json.rows.length === 0) {
-        container.innerHTML += `<p class="text-gray-600">(No data)</p>`;
-      } else {
-        const keys = Object.keys(json.rows[0]);
-        const tableEl = document.createElement("table");
-        tableEl.className = "min-w-full border border-gray-300 text-sm";
-        tableEl.innerHTML = `
-          <thead><tr>${keys.map(k => `<th class="border px-2 py-1">${k}</th>`).join("")}</tr></thead>
-          <tbody>
-            ${json.rows.map(r => `<tr>${keys.map(k => `<td class="border px-2 py-1">${r[k] ?? ""}</td>`).join("")}</tr>`).join("")}
-          </tbody>
-        `;
-        container.appendChild(tableEl);
+      if (!json.success) {
+        tbody.innerHTML = `<tr><td colspan="99" class="text-red-600">${json.message}</td></tr>`;
+        return;
       }
-      tablesEl.appendChild(container);
+
+      const data = json.data;
+      if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="99" class="text-gray-500">No records found</td></tr>`;
+        return;
+      }
+
+      const cols = Object.keys(data[0]);
+      const thead = div.querySelector("thead tr");
+      thead.innerHTML = "";
+      cols.forEach(c => {
+        thead.innerHTML += `<th class="border px-2 py-1 bg-gray-100">${c}</th>`;
+      });
+
+      data.forEach(row => {
+        const tr = document.createElement("tr");
+        cols.forEach(c => {
+          const td = document.createElement("td");
+          td.className = "border px-2 py-1 text-sm";
+          td.textContent = row[c];
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
     }
 
     async function loadAll() {
-      tablesEl.innerHTML = "";
-      for (const t of tables) {
-        await fetchTable(t);
+      document.getElementById("tables").innerHTML = "";
+      tables.forEach(name => {
+        const div = document.createElement("div");
+        div.id = "table-" + name;
+        div.innerHTML = `<h2 class="text-xl font-semibold mb-2">${name}</h2>
+                         <table class="border-collapse border w-full text-sm">
+                           <thead><tr></tr></thead>
+                           <tbody><tr><td>Loading...</td></tr></tbody>
+                         </table>`;
+        document.getElementById("tables").appendChild(div);
+      });
+
+      for (const name of tables) {
+        await fetchTable(name);
       }
     }
 
-    document.getElementById("refreshBtn").addEventListener("click", loadAll);
-
+    document.getElementById("refreshBtn").onclick = loadAll;
     log("table-viewer.html loaded.");
     loadAll();
   </script>
