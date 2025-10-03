@@ -1,138 +1,259 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
   <title>Cognitive Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .debug-box { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+    .slider-ticks { font-size: 0.65rem; color: #9CA3AF; }
+  </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
-  <div class="max-w-4xl mx-auto p-6 bg-white shadow rounded-lg mt-10">
-    <h1 class="text-2xl font-bold mb-2 text-center">Cognitive Tool</h1>
-    <p id="iteration-info" class="text-center text-gray-600">Loading active iteration...</p>
-    <p id="user-info" class="text-center text-gray-500 mb-6"></p>
-
-    <!-- Survey form -->
-    <form id="survey-form" class="space-y-4">
-      <div>
-        <label for="q1" class="block text-sm font-medium text-gray-700">Q1: Knowledge density (1-8)</label>
-        <input type="range" min="1" max="8" value="4" id="q1" name="q1" class="w-full">
-        <span id="q1-value" class="text-sm text-gray-600">4</span>
-      </div>
-      <div>
-        <label for="q2" class="block text-sm font-medium text-gray-700">Q2: Familiarity (1-8)</label>
-        <input type="range" min="1" max="8" value="4" id="q2" name="q2" class="w-full">
-        <span id="q2-value" class="text-sm text-gray-600">4</span>
-      </div>
-      <div>
-        <label for="q3" class="block text-sm font-medium text-gray-700">Q3: Cognitive load (1-8)</label>
-        <input type="range" min="1" max="8" value="4" id="q3" name="q3" class="w-full">
-        <span id="q3-value" class="text-sm text-gray-600">4</span>
-      </div>
-      <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save Survey</button>
-    </form>
-
-    <p id="message" class="text-center mt-4 text-sm"></p>
-
-    <!-- Debug log -->
-    <details class="mt-8">
-      <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
-      <pre id="debug-log" class="bg-gray-100 p-2 mt-2 h-64 overflow-y-auto text-xs"></pre>
-    </details>
-
-    <div class="mt-6 text-center">
-      <a href="portal.html" class="text-blue-600 hover:underline">← Back to Research Portal</a>
+  <div class="max-w-3xl mx-auto p-6">
+    <!-- Title -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <h1 class="text-2xl font-bold">Cognitive Tool</h1>
+      <p class="text-gray-500 text-sm">Answer questions and save/load your survey.</p>
+      <p id="subtitle" class="mt-2 text-sm text-blue-600">Loading context…</p>
     </div>
+
+    <!-- Sliders -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Survey (12 questions)</h2>
+        <div class="text-sm text-gray-500">Range: 1 — 8</div>
+      </div>
+      <div id="sliders" class="space-y-4"></div>
+
+      <div class="mt-6 flex gap-3">
+        <button id="btnReset" class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 text-gray-900">Reset</button>
+        <button id="btnSave" class="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white">Save</button>
+        <span id="msg" class="text-sm ml-2"></span>
+      </div>
+    </div>
+
+    <!-- Debug -->
+    <details class="bg-white rounded-lg shadow p-6">
+      <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
+      <div id="debug" class="debug-box text-xs text-gray-700 mt-3"></div>
+    </details>
   </div>
 
-<script>
-  const debugLog = document.getElementById("debug-log");
-  function log(msg, obj) {
-    const time = new Date().toISOString();
-    debugLog.textContent += `[${time}] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
-    debugLog.scrollTop = debugLog.scrollHeight;
-    console.log(msg, obj || "");
-  }
-
-  let activeIteration = null;
-  let userContext = null;
-
-  async function loadIteration() {
-    try {
-      log("Fetching /api/admin/active-iteration");
-      const res = await fetch("/api/admin/active-iteration");
-      const data = await res.json();
-      log("active-iteration response", data);
-      if (!res.ok || !data.success) throw new Error(data.message || "No active iteration");
-      activeIteration = data.iteration;
-      document.getElementById("iteration-info").textContent =
-        `Iteration Id: ${activeIteration.id}, Name: ${activeIteration.name}, Question Set: ${activeIteration.question_set}`;
-    } catch (err) {
-      document.getElementById("iteration-info").textContent = "No active iteration found.";
-      log("Iteration load error", err.message);
+  <script>
+    // -------- Debug helper --------
+    function log(msg, obj) {
+      const box = document.getElementById('debug');
+      const ts = new Date().toISOString();
+      box.textContent += `[${ts}] ${msg}` + (obj ? ` ${JSON.stringify(obj)}` : '') + '\n';
     }
-  }
 
-  async function loadUserContext() {
-    try {
-      log("Fetching /api/admin/user-context");
-      const res = await fetch("/api/admin/user-context");
-      const data = await res.json();
-      log("user-context response", data);
-      if (!res.ok || !data.success) throw new Error("Could not fetch user context");
-      userContext = data.context;
-      document.getElementById("user-info").textContent =
-        `Org Unit: ${userContext.orgUnitName}, User: ${userContext.userName}, Role: ${userContext.role}`;
-    } catch (err) {
-      document.getElementById("user-info").textContent = "User context not available.";
-      log("User context error", err.message);
-    }
-  }
+    // -------- DOM refs --------
+    const subtitleEl = document.getElementById('subtitle');
+    const slidersWrap = document.getElementById('sliders');
+    const btnReset = document.getElementById('btnReset');
+    const btnSave = document.getElementById('btnSave');
+    const msgEl = document.getElementById('msg');
 
-  async function saveSurvey(answers) {
-    if (!activeIteration || !userContext) {
-      log("Cannot save survey, missing context");
-      return { success: false, message: "Missing context" };
-    }
-    const payload = {
-      person_id: userContext.userName, // ⚠️ placeholder until real person_id available
-      iteration_id: activeIteration.id,
-      answers
+    // -------- URL params --------
+    const params = new URLSearchParams(window.location.search);
+    const iterationId = params.get('iterationId');
+    const personRoleId = params.get('personRoleId');
+
+    // -------- State --------
+    const N = 12; // first working set; we can switch to dynamic by question_set later
+    let values = Array(N).fill(4);
+    let context = {
+      iteration: null,
+      user: null, // { person_id, name, org_unit_id, org_unit_name, is_manager }
     };
-    log("Saving survey payload", payload);
-    const res = await fetch("/api/admin/survey", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    log("survey save response", data);
-    return data;
-  }
 
-  // --- FORM BEHAVIOR ---
-  const form = document.getElementById("survey-form");
-  ["q1","q2","q3"].forEach(id=>{
-    const slider=document.getElementById(id);
-    const output=document.getElementById(id+"-value");
-    slider.addEventListener("input",()=>{output.textContent=slider.value;});
-  });
+    function setMsg(text, ok=true) {
+      msgEl.textContent = text;
+      msgEl.className = 'text-sm ml-2 ' + (ok ? 'text-green-600' : 'text-red-600');
+      if (text) setTimeout(() => { msgEl.textContent=''; }, 4000);
+    }
 
-  form.addEventListener("submit", async (e)=>{
-    e.preventDefault();
-    const answers = {
-      q1: parseInt(document.getElementById("q1").value),
-      q2: parseInt(document.getElementById("q2").value),
-      q3: parseInt(document.getElementById("q3").value)
+    // -------- Build sliders --------
+    function buildSliders() {
+      slidersWrap.innerHTML = '';
+      for (let i = 0; i < N; i++) {
+        const id = `q${i+1}`;
+        const row = document.createElement('div');
+        row.className = 'border rounded p-3';
+
+        const label = document.createElement('div');
+        label.className = 'flex items-center justify-between';
+        label.innerHTML = `<span class="font-medium">Q${i+1}</span><span class="text-sm text-gray-500">Value: <span id="${id}-val">${values[i]}</span></span>`;
+
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.min = '1';
+        input.max = '8';
+        input.step = '1';
+        input.value = String(values[i]);
+        input.className = 'w-full mt-2';
+        input.oninput = (e) => {
+          values[i] = parseInt(e.target.value, 10);
+          document.getElementById(`${id}-val`).textContent = values[i];
+        };
+
+        const ticks = document.createElement('div');
+        ticks.className = 'slider-ticks w-full flex justify-between';
+        ticks.innerHTML = '<span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span><span>|</span>';
+
+        row.appendChild(label);
+        row.appendChild(input);
+        row.appendChild(ticks);
+        slidersWrap.appendChild(row);
+      }
+    }
+
+    async function loadActiveIteration() {
+      log('GET /api/admin/active-iteration');
+      const res = await fetch('/api/admin/active-iteration');
+      const data = await res.json();
+      log('active-iteration response', data);
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Cannot load active iteration');
+      }
+      return data.iteration;
+    }
+
+    async function loadPersonContext(prId) {
+      const url = `/api/admin/person-context?person_role_id=${encodeURIComponent(prId)}`;
+      log('GET ' + url);
+      const res = await fetch(url);
+      const data = await res.json();
+      log('person-context response', data);
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Cannot load person context');
+      }
+      return data.context;
+    }
+
+    async function loadSurvey(prId, itId) {
+      const url = `/api/admin/survey?person_role_id=${encodeURIComponent(prId)}&iteration_id=${encodeURIComponent(itId)}`;
+      log('GET ' + url);
+      const res = await fetch(url);
+      const data = await res.json();
+      log('survey GET response', data);
+      if (!res.ok) return null;
+      if (data && data.success && data.survey && Array.isArray(data.survey.survey_results)) {
+        return data.survey.survey_results;
+      }
+      return null;
+    }
+
+    async function saveSurvey(prId, itId, arr) {
+      const url = `/api/admin/survey`;
+      const payload = { person_role_id: prId, iteration_id: itId, survey_results: arr };
+      log('POST ' + url, payload);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      log('survey POST response', data);
+      if (!res.ok || !data.success) throw new Error(data.message || 'Save failed');
+      return data;
+    }
+
+    function renderSubtitle() {
+      if (!context.iteration || !context.user) {
+        subtitleEl.textContent = 'No active iteration or user context.';
+        subtitleEl.className = 'mt-2 text-sm text-red-600';
+        return;
+      }
+      const it = context.iteration;
+      const u  = context.user;
+      const roleName = u.is_manager ? 'Manager' : 'Member';
+      subtitleEl.innerHTML = `
+        Iteration Id: <b>${it.id}</b> — Name: <b>${it.name}</b> — Question Set: <b>${it.question_set}</b>
+        <br>
+        Org Unit: <b>${u.org_unit_name}</b> — User: <b>${u.name}</b> — Role: <b>${roleName}</b>
+      `;
+      subtitleEl.className = 'mt-2 text-sm text-blue-600';
+    }
+
+    // -------- Init --------
+    (async function init() {
+      log('cognitive-tool.html loaded');
+
+      if (!iterationId || !personRoleId) {
+        subtitleEl.textContent = 'Missing iterationId or personRoleId in URL.';
+        subtitleEl.className = 'mt-2 text-sm text-red-600';
+        log('Missing params', { iterationId, personRoleId });
+        buildSliders();
+        return;
+      }
+
+      try {
+        const [iter, userCtx] = await Promise.all([
+          loadActiveIteration(),
+          loadPersonContext(personRoleId),
+        ]);
+
+        // Optional: verify the iterationId from URL matches active iteration
+        if (String(iter.id) !== String(iterationId)) {
+          log('Warning: URL iterationId differs from active iteration id', { urlIterationId: iterationId, active: iter.id });
+        }
+
+        context.iteration = iter;
+        context.user = userCtx;
+
+        renderSubtitle();
+        buildSliders();
+
+        // Try load previous survey
+        const existing = await loadSurvey(personRoleId, iterationId);
+        if (existing && existing.length === N) {
+          values = existing.slice();
+          // re-apply values into sliders
+          document.querySelectorAll('#sliders input[type="range"]').forEach((inp, idx) => {
+            inp.value = String(values[idx]);
+            const valEl = document.getElementById(`q${idx+1}-val`);
+            if (valEl) valEl.textContent = values[idx];
+          });
+          setMsg('Loaded saved survey.');
+        } else {
+          setMsg('No saved survey found (or count mismatch).');
+        }
+
+      } catch (err) {
+        log('Init error', { error: String(err) });
+        subtitleEl.textContent = 'Failed to load context: ' + err.message;
+        subtitleEl.className = 'mt-2 text-sm text-red-600';
+      }
+    })();
+
+    // -------- Actions --------
+    btnReset.onclick = () => {
+      values = Array(N).fill(4);
+      document.querySelectorAll('#sliders input[type="range"]').forEach((inp, idx) => {
+        inp.value = '4';
+        const valEl = document.getElementById(`q${idx+1}-val`);
+        if (valEl) valEl.textContent = '4';
+      });
+      setMsg('Reset done.');
+      log('Reset sliders to default (4)');
     };
-    const result = await saveSurvey(answers);
-    document.getElementById("message").textContent = result.success ? "Survey saved successfully." : "Survey save failed: " + result.message;
-  });
 
-  // --- INIT ---
-  loadIteration();
-  loadUserContext();
-</script>
+    btnSave.onclick = async () => {
+      try {
+        if (!iterationId || !personRoleId) {
+          setMsg('Missing personRoleId/iterationId.', false);
+          return;
+        }
+        await saveSurvey(personRoleId, iterationId, values);
+        setMsg('Survey saved.');
+      } catch (err) {
+        setMsg('Save failed: ' + err.message, false);
+      }
+    };
+  </script>
 </body>
 </html>
 
