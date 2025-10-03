@@ -2,68 +2,171 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Organization Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 text-gray-900 min-h-screen">
-  <div class="max-w-4xl mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-4">Organization Manager</h1>
-    <div id="iteration" class="mb-4"></div>
-    <div id="org-container" class="mb-6"></div>
-    <button id="addRootBtn" class="bg-blue-600 text-white px-4 py-2 rounded mb-6">Create Root Unit</button>
-    <a href="portal.html" class="text-blue-600">← Back to Admin Portal</a>
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-5xl mx-auto py-8 px-4">
+    <h1 class="text-3xl font-bold mb-2">Organization Manager</h1>
+    <p id="iteration-info" class="mb-6 text-gray-700">Loading iteration...</p>
+
+    <div id="org-container" class="space-y-4"></div>
+
+    <button id="create-root-btn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Create Root Unit</button>
+
+    <div class="mt-8">
+      <a href="admin.html" class="text-blue-600 hover:underline">← Back to Admin Portal</a>
+    </div>
 
     <!-- Debug -->
     <details class="mt-6">
-      <summary class="cursor-pointer font-bold">Debug log (open to view)</summary>
-      <pre id="debug" class="bg-black text-green-400 p-2 mt-2 rounded text-sm"></pre>
+      <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
+      <pre id="debug-log" class="text-xs bg-black text-green-400 p-3 rounded max-h-80 overflow-y-auto"></pre>
     </details>
   </div>
 
   <script>
-    const debugEl = document.getElementById("debug");
-    function log(...args) {
-      const msg = `[${new Date().toISOString()}] ${args.join(" ")}\n`;
-      debugEl.textContent += msg;
-      console.log(...args);
-    }
+    const log = (msg, obj=null) => {
+      const line = `[${new Date().toISOString()}] ${msg} ${obj ? JSON.stringify(obj) : ""}`;
+      console.log(line);
+      const dbg = document.getElementById("debug-log");
+      dbg.textContent += line + "\n";
+    };
 
-    const params = new URLSearchParams(window.location.search);
-    const roleId = params.get("role_id");
+    const urlParams = new URLSearchParams(window.location.search);
+    const roleId = urlParams.get("role_id");
+    let iterationId = null;
 
-    async function loadData() {
+    async function loadContextAndData() {
       log("org-chart loaded");
       if (!roleId) {
-        log("❌ Missing role_id in query string");
-        document.getElementById("iteration").innerText = "Error: Missing role_id context.";
+        log("Missing role_id context");
+        document.getElementById("iteration-info").textContent = "Missing role_id context";
         return;
       }
 
       try {
-        log("Fetching active iteration via role context...");
-        const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-        const json = await res.json();
-        log("Response get-role-context", JSON.stringify(json));
+        log("Fetching role context for role_id=" + roleId);
+        const resp = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+        const data = await resp.json();
+        log("Response get-role-context", data);
 
-        if (!json.success) {
-          document.getElementById("iteration").innerText = "Error loading context: " + json.message;
+        if (!data.success) {
+          document.getElementById("iteration-info").textContent = "Error loading context: " + data.message;
           return;
         }
 
-        const { context } = json;
-        document.getElementById("iteration").innerText =
-          `Current Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
+        const ctx = data.context;
+        iterationId = ctx.iterId;
+        document.getElementById("iteration-info").textContent =
+          `Current Iteration: ${ctx.iterName} (ID: ${ctx.iterId}) — Question Set: ${ctx.qset}`;
+
+        await loadOrgData(iterationId);
+
       } catch (err) {
-        log("Error", err);
+        log("Error fetching role context", {error: err.message});
+        document.getElementById("iteration-info").textContent = "Error loading context.";
       }
     }
 
-    document.getElementById("addRootBtn").addEventListener("click", async () => {
-      log("Clicked Create Root Unit");
-      // TODO: Implement create root call here
-    });
+    async function loadOrgData(iterId) {
+      try {
+        log("Fetching org-data for iteration " + iterId);
+        const resp = await fetch(`/api/admin/org-data?iteration_id=${iterId}`);
+        const data = await resp.json();
+        log("Response org-data", data);
 
-    loadData();
+        if (!data.success) {
+          document.getElementById("org-container").innerHTML =
+            `<p class="text-red-600">Error: ${data.message}</p>`;
+          return;
+        }
+
+        renderOrg(data.units, data.roles, data.people);
+
+      } catch (err) {
+        log("Error loading org-data", {error: err.message});
+        document.getElementById("org-container").innerHTML =
+          `<p class="text-red-600">Error loading org-data</p>`;
+      }
+    }
+
+    function renderOrg(units, roles, people) {
+      const container = document.getElementById("org-container");
+      container.innerHTML = "";
+
+      if (!units || units.length === 0) {
+        container.innerHTML = `<p class="text-gray-500">No organization units defined yet.</p>`;
+        return;
+      }
+
+      const rootUnits = units.filter(u => u.parent_id === null);
+      rootUnits.forEach(root => {
+        container.appendChild(renderUnit(root, units, roles, people));
+      });
+    }
+
+    function renderUnit(unit, units, roles, people) {
+      const div = document.createElement("div");
+      div.className = "border rounded p-3 bg-white shadow";
+
+      const rolesForUnit = roles.filter(r => r.org_unit_id === unit.id);
+      const peopleById = Object.fromEntries(people.map(p => [p.id, p]));
+
+      div.innerHTML = `<h2 class="font-semibold text-lg">${unit.name}</h2>`;
+      if (rolesForUnit.length > 0) {
+        const ul = document.createElement("ul");
+        ul.className = "ml-4 list-disc";
+        rolesForUnit.forEach(r => {
+          const person = peopleById[r.person_id];
+          const li = document.createElement("li");
+          li.textContent = `${person ? person.name : "?"} — ${r.is_manager ? "Manager" : "Member"}`;
+          ul.appendChild(li);
+        });
+        div.appendChild(ul);
+      }
+
+      const children = units.filter(u => u.parent_id === unit.id);
+      if (children.length > 0) {
+        const sub = document.createElement("div");
+        sub.className = "ml-6 mt-2 space-y-2";
+        children.forEach(ch => {
+          sub.appendChild(renderUnit(ch, units, roles, people));
+        });
+        div.appendChild(sub);
+      }
+
+      return div;
+    }
+
+    document.getElementById("create-root-btn").onclick = async () => {
+      if (!iterationId) {
+        alert("No iteration context");
+        return;
+      }
+      const name = prompt("Enter root unit name:");
+      if (!name) return;
+      try {
+        log("POST create-org-unit", {name, parent_id: null, iteration_id: iterationId});
+        const resp = await fetch("/api/admin/create-org-unit", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name, parent_id: null, iteration_id: iterationId})
+        });
+        const data = await resp.json();
+        log("Response create-org-unit", data);
+        if (data.success) {
+          await loadOrgData(iterationId);
+        } else {
+          alert("Error: " + data.message);
+        }
+      } catch (err) {
+        log("Error creating root", {error: err.message});
+      }
+    };
+
+    loadContextAndData();
   </script>
 </body>
 </html>
