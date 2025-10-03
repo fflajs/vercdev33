@@ -34,23 +34,43 @@ async function loadData(){
   log("page loaded");
   const params=new URLSearchParams(window.location.search);
   const roleId=params.get('role_id');
-  if(!roleId){log("Missing role_id");return;}
-  log("Using role_id="+roleId);
 
-  const ctxRes=await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-  const ctxJson=await ctxRes.json();
-  log("get-role-context result",ctxJson);
-  if(!ctxJson.success)return;
-  const ctx=ctxJson.context;
-  document.getElementById('context').textContent=
-    `User: ${ctx.user} — Role: ${ctx.roleType} — Unit: ${ctx.unitName} — Iteration: ${ctx.iterName} (ID: ${ctx.iterId}) — Question Set: ${ctx.qset}`;
+  if(roleId){
+    // Role-based mode
+    log("Using role_id="+roleId);
+    const ctxRes=await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+    const ctxJson=await ctxRes.json();
+    log("get-role-context result",ctxJson);
+    if(!ctxJson.success)return;
+    const ctx=ctxJson.context;
+    document.getElementById('context').textContent=
+      `User: ${ctx.user} — Role: ${ctx.roleType} — Unit: ${ctx.unitName} — Iteration: ${ctx.iterName} (ID: ${ctx.iterId}) — Question Set: ${ctx.qset}`;
 
-  const dataRes=await fetch(`/api/admin/org-data?iteration_id=${ctx.iterId}`);
-  const dataJson=await dataRes.json();
-  log("org-data result",dataJson);
-  if(!dataJson.success)return;
+    const dataRes=await fetch(`/api/admin/org-data?iteration_id=${ctx.iterId}`);
+    const dataJson=await dataRes.json();
+    log("org-data result",dataJson);
+    if(!dataJson.success)return;
 
-  renderTree(dataJson.units,dataJson.roles);
+    renderTree(dataJson.units,dataJson.roles);
+  } else {
+    // Admin mode: show active iteration full org-data
+    log("Admin mode (no role_id)");
+    const iterRes=await fetch(`/api/admin/active-iteration`);
+    const iterJson=await iterRes.json();
+    log("active-iteration result",iterJson);
+    if(!iterJson.success)return;
+
+    const iter=iterJson.iteration;
+    document.getElementById('context').textContent=
+      `Admin mode — Active Iteration: ${iter.name} (ID: ${iter.id}) — Question Set: ${iter.question_set}`;
+
+    const dataRes=await fetch(`/api/admin/org-data?iteration_id=${iter.id}`);
+    const dataJson=await dataRes.json();
+    log("org-data result",dataJson);
+    if(!dataJson.success)return;
+
+    renderTree(dataJson.units,dataJson.roles);
+  }
 }
 
 function renderTree(units,roles){
