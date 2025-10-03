@@ -42,22 +42,43 @@
     let context = null;
     let allPeople = [];
 
-    async function fetchContext() {
+    async function init() {
+      debug("[org-chart] page loaded");
       const params = new URLSearchParams(window.location.search);
       const roleId = params.get("role_id");
-      if (!roleId) return debug("[org-chart] Missing role_id");
 
-      debug("[org-chart] Fetching role context for role_id=" + roleId);
-      const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-      const data = await res.json();
-      debug("[org-chart] get-role-context result", data);
+      if (roleId) {
+        debug("[org-chart] Using role_id=" + roleId);
+        const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+        const data = await res.json();
+        debug("[org-chart] get-role-context result", data);
 
-      if (data.success) {
-        context = data.context;
-        document.getElementById("context").textContent =
-          `User: ${context.user} — Role: ${context.roleType} — Unit: ${context.unitName} — ` +
-          `Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
-        await loadOrgData(context.iterId);
+        if (data.success) {
+          context = data.context;
+          document.getElementById("context").textContent =
+            `User: ${context.user} — Role: ${context.roleType} — Unit: ${context.unitName} — ` +
+            `Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
+          await loadOrgData(context.iterId);
+        }
+      } else {
+        debug("[org-chart] No role_id → falling back to active-iteration (Admin mode)");
+        const res = await fetch(`/api/admin/active-iteration`);
+        const data = await res.json();
+        debug("[org-chart] active-iteration result", data);
+
+        if (data.success && data.iteration) {
+          context = {
+            user: "Admin",
+            roleType: "Administrator",
+            unitName: "(all units)",
+            iterName: data.iteration.name,
+            iterId: data.iteration.id,
+            qset: data.iteration.question_set
+          };
+          document.getElementById("context").textContent =
+            `Admin mode — Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
+          await loadOrgData(context.iterId);
+        }
       }
     }
 
@@ -119,7 +140,7 @@
       build(null);
     }
 
-    // UI actions
+    // --- Actions ---
     async function addSubunit(parentId) {
       const name = prompt("Subunit name?");
       if (!name) return;
@@ -186,7 +207,7 @@
       await loadOrgData(context.iterId);
     };
 
-    fetchContext();
+    init();
   </script>
 </body>
 </html>
