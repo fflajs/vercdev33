@@ -1,56 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
   <title>Research Portal</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="min-h-screen flex flex-col items-center justify-center p-6">
-    <div class="w-full max-w-md bg-white shadow-lg rounded-lg p-6">
-      <h1 class="text-2xl font-bold mb-4 text-center">Research Portal</h1>
-      <p class="text-center text-gray-600 mb-6">
-        Access tools for research and analysis.
-      </p>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white w-full max-w-xl p-8 rounded-lg shadow-lg">
+    <h1 class="text-3xl font-bold text-center mb-1">Research Portal</h1>
+    <p class="text-gray-600 text-center mb-6">Access tools for research and analysis.</p>
 
-      <div class="space-y-3">
-        <a href="/cognitive-tool.html"
-           class="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg shadow">
-          Launch Cognitive Tool
-        </a>
-        <a href="/analysis.html"
-           class="block w-full text-center bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg shadow">
-          Launch Analysis
-        </a>
-      </div>
-
-      <div class="mt-6">
-        <a href="/index.html"
-           class="block w-full text-center bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg">
-          ← Back to Login
-        </a>
-      </div>
+    <div class="space-y-3">
+      <a id="link-cog"
+         class="block w-full text-center bg-blue-600 text-white font-semibold py-3 rounded hover:bg-blue-700"
+         href="#">
+         Launch Cognitive Tool
+      </a>
+      <a id="link-analysis"
+         class="block w-full text-center bg-purple-600 text-white font-semibold py-3 rounded hover:bg-purple-700"
+         href="#">
+         Launch Analysis
+      </a>
     </div>
 
-    <!-- Debug Panel -->
-    <details class="mt-6 w-full max-w-md">
-      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debugLog" class="bg-black text-green-400 text-xs p-3 rounded mt-2 h-48 overflow-y-scroll"></pre>
+    <div class="mt-6 flex items-center justify-between">
+      <a href="/index.html" class="text-blue-600 hover:text-blue-800">Back to Login</a>
+    </div>
+
+    <!-- Debug -->
+    <details class="mt-6 text-xs text-gray-600">
+      <summary class="cursor-pointer">Debug log (open to view)</summary>
+      <pre id="debug" class="mt-2 bg-gray-50 p-2 rounded border overflow-auto"></pre>
     </details>
   </div>
 
   <script>
-    function logDebug(message, data) {
-      const log = document.getElementById("debugLog");
-      const timestamp = new Date().toISOString();
-      log.textContent += `[${timestamp}] ${message} ${data ? JSON.stringify(data) : ""}\n`;
-      log.scrollTop = log.scrollHeight;
-    }
+    const dbg = (...a) => {
+      const el = document.getElementById('debug');
+      if (el) el.textContent += a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') + "\n";
+      console.log('[portal]', ...a);
+    };
 
-    // Initial debug entry
-    logDebug("portal.html loaded.");
+    (function init() {
+      const p = new URLSearchParams(window.location.search);
+      const personRoleId = p.get('personRoleId');
+      const iterationId  = p.get('iterationId');
+      const orgUnitId    = p.get('orgUnitId');
+
+      dbg('params', { personRoleId, iterationId, orgUnitId });
+
+      const missing = !personRoleId || !iterationId || !orgUnitId;
+      const cog = document.getElementById('link-cog');
+      const ana = document.getElementById('link-analysis');
+
+      if (missing) {
+        // Disable links if context missing
+        cog.classList.add('opacity-60', 'pointer-events-none');
+        ana.classList.add('opacity-60', 'pointer-events-none');
+        dbg('context missing → links disabled');
+        return;
+      }
+
+      const q = `?personRoleId=${encodeURIComponent(personRoleId)}&iterationId=${encodeURIComponent(iterationId)}&orgUnitId=${encodeURIComponent(orgUnitId)}`;
+      cog.href = `/cognitive-tool.html${q}`;
+      ana.href = `/analysis.html${q}`;
+      dbg('links set', { cog: cog.href, ana: ana.href });
+    })();
   </script>
 </body>
 </html>

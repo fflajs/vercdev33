@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Select Your Role — Cognitive Space Analyzer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white w-full max-w-2xl p-8 rounded-lg shadow-lg">
+    <h1 class="text-2xl font-bold text-center">Select Your Role</h1>
+    <p class="text-gray-600 text-center mb-4">
+      Choose which organization unit and role you want to use for the current active iteration.
+    </p>
+
+    <div id="status" class="text-center mb-4 text-sm text-blue-700"></div>
+
+    <div class="border rounded-lg p-4 bg-gray-50 mb-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+        <div><span class="font-semibold">User:</span> <span id="u-name">—</span></div>
+        <div><span class="font-semibold">Iteration:</span> <span id="iter-name">—</span></div>
+        <div><span class="font-semibold">Iteration ID:</span> <span id="iter-id">—</span></div>
+        <div><span class="font-semibold">Question Set:</span> <span id="iter-set">—</span></div>
+      </div>
+    </div>
+
+    <div id="roles-box" class="hidden">
+      <h2 class="text-lg font-semibold mb-2">Available Roles</h2>
+      <div id="roles-list" class="space-y-2"></div>
+    </div>
+
+    <div id="empty-msg" class="hidden text-center text-sm text-red-600 mb-4">
+      No roles found for this user in the active iteration. Please contact your administrator.
+    </div>
+
+    <div class="flex items-center gap-3 mt-4">
+      <button id="continue-btn"
+              class="flex-1 bg-blue-600 text-white font-semibold py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+              disabled>
+        Continue to Portal
+      </button>
+      <a href="/index.html" class="text-blue-600 hover:text-blue-800">Back</a>
+    </div>
+
+    <!-- Debug -->
+    <details class="mt-6 text-xs text-gray-600">
+      <summary class="cursor-pointer">Debug log (open to view)</summary>
+      <pre id="debug" class="mt-2 bg-gray-50 p-2 rounded border overflow-auto"></pre>
+    </details>
+  </div>
+
+  <script>
+    const dbg = (...a) => {
+      const el = document.getElementById('debug');
+      if (el) el.textContent += a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') + "\n";
+      console.log('[login-user]', ...a);
+    };
+
+    (async function init() {
+      const params = new URLSearchParams(window.location.search);
+      const name = (params.get('name') || '').trim();
+      if (!name) {
+        document.getElementById('status').textContent = 'Missing user name — please go back and enter your name.';
+        return;
+      }
+      document.getElementById('status').textContent = `Loading roles for "${name}"...`;
+
+      // 1) Ask server for this user's roles (auto-picks active iteration)
+      const url = `/api/admin/get-user-roles?name=${encodeURIComponent(name)}`;
+      dbg('GET', url);
+      let data;
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+        dbg('GET result', json);
+        if (!res.ok || !json.success) {
+          document.getElementById('status').textContent = json.message || 'Failed to load roles.';
+          return;
+        }
+        data = json;
+      } catch (e) {
+        document.getElementById('status').textContent = 'Network error while loading roles.';
+        return;
+      }
+
+      // 2) Fill iteration & user
+      const { person, iteration, roles } = data;
+      document.getElementById('u-name').textContent = person?.name || '—';
+      document.getElementById('iter-name').textContent = iteration?.name || '—';
+      document.getElementById('iter-id').textContent = iteration?.id ?? '—';
+      document.getElementById('iter-set').textContent = iteration?.question_set || '—';
+
+      // 3) Render roles
+      const list = document.getElementById('roles-list');
+      list.innerHTML = '';
+      if (!roles || roles.length === 0) {
+        document.getElementById('empty-msg').classList.remove('hidden');
+        document.getElementById('status').textContent = 'No roles to choose.';
+        return;
+      }
+
+      document.getElementById('roles-box').classList.remove('hidden');
+      document.getElementById('empty-msg').classList.add('hidden');
+      document.getElementById('status').textContent = `Found ${roles.length} role(s). Select one and continue.`;
+
+      roles.forEach((r, idx) => {
+        const id = `role-${idx}`;
+        const row = document.createElement('label');
+        row.className = 'flex items-center justify-between p-3 border rounded bg-white';
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <input type="radio" name="rolepick" id="${id}" value="${r.role_id}" data-org="${r.org_unit_id}" />
+            <div>
+              <div class="font-medium">${r.org_unit_name}</div>
+              <div class="text-xs text-gray-600">${r.role_label}</div>
+            </div>
+          </div>
+          <div class="text-xs text-gray-500">role_id: ${r.role_id}</div>
+        `;
+        list.appendChild(row);
+      });
+
+      let selected = null;
+      list.addEventListener('change', (e) => {
+        if (e.target && e.target.name === 'rolepick') {
+          selected = {
+            roleId: parseInt(e.target.value, 10),
+            orgUnitId: parseInt(e.target.dataset.org, 10),
+          };
+          document.getElementById('continue-btn').disabled = false;
+          dbg('selected', selected);
+        }
+      });
+
+      document.getElementById('continue-btn').onclick = () => {
+        if (!selected) return;
+        const q = new URLSearchParams({
+          personRoleId: String(selected.roleId),
+          orgUnitId: String(selected.orgUnitId),
+          iterationId: String(iteration.id),
+        }).toString();
+        const dest = `/portal.html?${q}`;
+        dbg('→ portal', dest);
+        window.location.href = dest;
+      };
+    })();
+  </script>
+</body>
+</html>
+

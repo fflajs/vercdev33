@@ -1,83 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Cognitive Space Analyzer</title>
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <meta charset="UTF-8" />
+  <title>Cognitive Space Analyzer — Welcome</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="w-full max-w-lg bg-white p-10 rounded-lg shadow-lg text-center">
-    <h1 class="text-4xl font-bold mb-4">Cognitive Space Analyzer</h1>
-    <p class="text-gray-600 mb-8 leading-relaxed">
-      Welcome! This application helps individuals and teams visualize and understand their cognitive landscape.  
-      By answering survey questions, you can generate visual and analytical insights that support growth and communication.
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white w-full max-w-md p-8 rounded-lg shadow-lg">
+    <h1 class="text-3xl font-bold text-center mb-2">Cognitive Space Analyzer</h1>
+    <p class="text-gray-600 text-center mb-6">
+      Welcome! Please register or log in.
     </p>
 
-    <!-- Login Form -->
-    <form id="login-form" class="mb-4">
-      <div class="flex items-center border-b border-blue-500 py-2">
-        <input id="name-input"
-               class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none"
-               type="text"
-               placeholder="Enter Your Full Name to Login"
-               aria-label="Full name">
-        <button class="flex-shrink-0 bg-blue-500 hover:bg-blue-700 border-blue-500 hover:border-blue-700
-                       text-sm border-4 text-white py-1 px-2 rounded"
-                type="submit">
-          Login
-        </button>
-      </div>
-    </form>
+    <!-- Login -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-1">Enter Your Name</label>
+      <input id="login-name" type="text" placeholder="e.g. Alice"
+             class="w-full border rounded px-3 py-2" />
+      <button id="login-btn"
+              class="mt-3 w-full bg-blue-600 text-white font-semibold py-2 rounded hover:bg-blue-700">
+        Login
+      </button>
+    </div>
 
-    <a href="/register.html"
-       class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none
-              focus:shadow-outline inline-block">
-      Register
-    </a>
+    <!-- Register -->
+    <div class="flex items-center justify-between">
+      <a href="/register.html" class="text-blue-600 hover:text-blue-800">Register</a>
+    </div>
 
-    <p id="error-message" class="text-red-500 text-xs italic mt-4"></p>
+    <hr class="my-6" />
+
+    <div class="flex items-center justify-center space-x-3">
+      <a href="/admin.html" class="text-sm text-gray-500 hover:text-gray-700">Admin Portal</a>
+    </div>
+
+    <!-- Debug -->
+    <details class="mt-6 text-xs text-gray-600">
+      <summary class="cursor-pointer">Debug log (open to view)</summary>
+      <pre id="debug" class="mt-2 bg-gray-50 p-2 rounded border overflow-auto"></pre>
+    </details>
   </div>
 
   <script>
-    document.getElementById('login-form').addEventListener('submit', async function (event) {
-      event.preventDefault();
-      const nameInput = document.getElementById('name-input');
-      const errorMessage = document.getElementById('error-message');
-      const name = nameInput.value.trim();
-      errorMessage.textContent = '';
+    const debug = (...args) => {
+      const el = document.getElementById('debug');
+      if (el) el.textContent += args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') + "\n";
+      console.log('[index]', ...args);
+    };
 
-      if (!name) {
-        errorMessage.textContent = 'Please enter a name.';
-        return;
-      }
+    document.getElementById('login-btn').onclick = () => {
+      const name = (document.getElementById('login-name').value || '').trim();
+      if (!name) return alert('Please enter your name.');
 
-      // Handle Admin login separately
-      if (name.toLowerCase() === 'admin') {
+      if (name === 'Admin') {
+        debug('Admin login → admin.html');
         window.location.href = '/admin.html';
         return;
       }
 
-      try {
-        const response = await fetch('/api/check-person', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || 'Person not found.');
-        }
-
-        // Success -> Save session and redirect
-        sessionStorage.setItem('loggedInUser', name);
-        window.location.href = '/portal.html';
-      } catch (error) {
-        errorMessage.textContent = error.message;
-      }
-    });
+      debug('User login → login-user.html', { name });
+      window.location.href = `/login-user.html?name=${encodeURIComponent(name)}`;
+    };
   </script>
 </body>
 </html>
