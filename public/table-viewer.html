@@ -2,124 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100">
-  <div class="max-w-5xl mx-auto my-10 bg-white p-8 rounded-lg shadow">
-    <h1 class="text-3xl font-bold mb-2">Database Table Viewer</h1>
+<body class="bg-gray-100 font-sans">
+  <div class="max-w-5xl mx-auto mt-8 p-6 bg-white shadow rounded">
+    <h1 class="text-2xl font-bold mb-2">Database Table Viewer</h1>
     <p class="text-gray-600 mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
 
-    <div id="tables"></div>
+    <div id="tables-container" class="space-y-6"></div>
 
-    <div class="mt-6 flex items-center gap-3">
-      <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Refresh Now</button>
-      <a href="/admin.html" class="text-blue-600 hover:underline">← Back to Admin Portal</a>
+    <div class="flex justify-between items-center mt-6">
+      <button id="refresh-btn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Refresh Now</button>
+      <a href="admin.html" class="text-blue-600 hover:underline">← Back to Admin Portal</a>
     </div>
 
-    <details class="mt-6">
-      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debug" class="text-xs bg-gray-50 border rounded p-3 whitespace-pre-wrap"></pre>
+    <details class="mt-4">
+      <summary class="cursor-pointer font-mono">Debug log (open to view)</summary>
+      <pre id="debug-log" class="bg-gray-100 p-2 mt-2 text-xs h-64 overflow-y-auto"></pre>
     </details>
   </div>
 
-  <script>
-    const dlog = (...args) => {
-      const ts = new Date().toISOString();
-      const line = `[${ts}] ` + args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-      console.log(line);
-      const pre = document.getElementById('debug');
-      pre.textContent += line + "\n";
-    };
+<script>
+  const debug = (msg, obj=null) => {
+    const line = `[${new Date().toISOString()}] ${msg}`;
+    document.getElementById("debug-log").textContent += line + (obj ? " " + JSON.stringify(obj) : "") + "\n";
+    console.log(line, obj || "");
+  };
 
-    const TABLES = [
-      'organization_units',
-      'iterations',
-      'people',
-      'person_roles',
-      'surveys',
-      'app_data',
-    ];
+  const tables = ["organization_units","iterations","people","person_roles","surveys","app_data"];
 
-    function renderTable(container, name, rows) {
-      const section = document.createElement('section');
-      section.className = 'mb-8';
-      section.innerHTML = `<h2 class="text-xl font-semibold mb-2">${name}</h2>`;
+  async function fetchTable(table) {
+    try {
+      debug(`Fetching table: ${table}`);
+      const res = await fetch(`/api/admin/table-viewer?table=${table}`);
+      const data = await res.json();
+      debug(`Response for ${table}`, data);
 
-      if (!rows || rows.length === 0) {
-        section.innerHTML += `<div class="text-gray-500 italic">(No data)</div>`;
-        container.appendChild(section);
+      const container = document.getElementById(`table-${table}`);
+      if (!data.success) {
+        container.innerHTML = `<p class="text-red-500">${data.message || "Error"}</p>`;
+        return;
+      }
+      if (!data.rows || data.rows.length === 0) {
+        container.innerHTML = `<p class="text-gray-500">(No data)</p>`;
         return;
       }
 
-      const cols = Object.keys(rows[0]);
-
-      const table = document.createElement('table');
-      table.className = 'w-full border-collapse text-sm';
-      table.innerHTML =
-        `<thead><tr>${cols
-          .map((c) => `<th class="text-left border-b p-2 bg-gray-50">${c}</th>`)
-          .join('')}</tr></thead>`;
-
-      const tbody = document.createElement('tbody');
-      rows.forEach((row) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = cols
-          .map(
-            (c) =>
-              `<td class="border-b p-2 align-top">${
-                row[c] === null || row[c] === undefined
-                  ? '<span class="text-gray-400">NULL</span>'
-                  : typeof row[c] === 'object'
-                  ? `<pre class="whitespace-pre-wrap">${JSON.stringify(row[c], null, 2)}</pre>`
-                  : String(row[c])
-              }</td>`
-          )
-          .join('');
-        tbody.appendChild(tr);
+      const cols = Object.keys(data.rows[0]);
+      let html = `<div class="overflow-x-auto"><table class="min-w-full text-xs border"><thead><tr>`;
+      cols.forEach(c => html += `<th class="px-2 py-1 border bg-gray-100">${c}</th>`);
+      html += "</tr></thead><tbody>";
+      data.rows.forEach(r => {
+        html += "<tr>";
+        cols.forEach(c => html += `<td class="px-2 py-1 border">${r[c]}</td>`);
+        html += "</tr>";
       });
-      table.appendChild(tbody);
-      section.appendChild(table);
-      container.appendChild(section);
+      html += "</tbody></table></div>";
+      container.innerHTML = html;
+    } catch (err) {
+      debug(`Error loading ${table}`, err);
     }
+  }
 
-    async function fetchTable(name) {
-      const url = `/api/admin/table-viewer?table=${encodeURIComponent(name)}`;
-      dlog('Fetching table:', name);
-      const res = await fetch(url);
-      const data = await res.json();
-      dlog('Response for', name, data);
-      if (!res.ok || !data.success) {
-        return { name, rows: [], error: data.message || 'Error' };
-      }
-      return { name, rows: data.rows || [] };
+  async function loadAll() {
+    const container = document.getElementById("tables-container");
+    container.innerHTML = "";
+    for (const t of tables) {
+      container.innerHTML += `<div><h2 class="text-lg font-semibold mb-2">${t}</h2><div id="table-${t}" class="text-sm"></div></div>`;
+      await fetchTable(t);
     }
+  }
 
-    async function loadAll() {
-      const container = document.getElementById('tables');
-      container.innerHTML = '';
+  document.getElementById("refresh-btn").addEventListener("click", loadAll);
 
-      for (const t of TABLES) {
-        try {
-          const { name, rows, error } = await fetchTable(t);
-          if (error) {
-            renderTable(container, name, []);
-          } else {
-            renderTable(container, name, rows);
-          }
-        } catch (e) {
-          dlog('Fetch error for', t, e.message);
-          renderTable(container, t, []);
-        }
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      dlog('table-viewer.html loaded.');
-      document.getElementById('refreshBtn').onclick = () => loadAll();
-      loadAll();
-    });
-  </script>
+  window.addEventListener("DOMContentLoaded", () => {
+    debug("table-viewer.html loaded.");
+    loadAll();
+  });
+</script>
 </body>
 </html>
 
