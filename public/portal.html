@@ -1,73 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>User Portal</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 text-gray-900">
-  <div class="max-w-2xl mx-auto my-10 p-6 bg-white rounded-xl shadow">
-    <header class="mb-6">
-      <h1 class="text-2xl font-bold">User Portal</h1>
-      <p class="text-gray-600">Welcome to the cognitive tools and analysis portal.</p>
-    </header>
+<body class="bg-gray-100 text-gray-900">
 
-    <section class="mb-6">
-      <p><span class="font-medium">User:</span> <span id="ctx-user">—</span></p>
-      <p><span class="font-medium">Role:</span> <span id="ctx-role">—</span></p>
-      <p><span class="font-medium">Unit:</span> <span id="ctx-unit">—</span></p>
-      <p><span class="font-medium">Iteration:</span> <span id="ctx-iter-name">—</span></p>
-      <p><span class="font-medium">Iteration ID:</span> <span id="ctx-iter-id">—</span></p>
-      <p><span class="font-medium">Question Set:</span> <span id="ctx-qset">—</span></p>
-    </section>
+<div class="max-w-3xl mx-auto p-6">
+  <h1 class="text-3xl font-bold mb-4">User Portal</h1>
+  <p class="mb-6">Welcome to the cognitive tools and analysis portal.</p>
 
-    <section class="mb-6">
-      <h2 class="font-semibold mb-2">Tools</h2>
-      <div class="flex flex-col gap-2">
-        <a href="/cognitive-tool.html" class="px-4 py-2 bg-blue-600 text-white rounded text-center">Cognitive Tool</a>
-        <a href="/analyze.html" class="px-4 py-2 bg-blue-600 text-white rounded text-center">Analyzer</a>
-      </div>
-    </section>
-
-    <a href="/index.html" class="px-4 py-2 border rounded">← Back to Welcome</a>
-
-    <details class="mt-6">
-      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debug" class="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto"></pre>
-    </details>
+  <div id="context" class="mb-6 p-4 bg-gray-50 rounded border">
+    <p><strong>User:</strong> <span id="ctx-user">—</span></p>
+    <p><strong>Role:</strong> <span id="ctx-role">—</span></p>
+    <p><strong>Unit:</strong> <span id="ctx-unit">—</span></p>
+    <p><strong>Iteration:</strong> <span id="ctx-iter">—</span></p>
+    <p><strong>Iteration ID:</strong> <span id="ctx-iterid">—</span></p>
+    <p><strong>Question Set:</strong> <span id="ctx-qset">—</span></p>
   </div>
 
-  <script>
-    (function(){
-      const dlog = (...args) => {
-        const stamp = new Date().toISOString();
-        console.log(...args);
-        const el = document.getElementById('debug');
-        if (el) el.textContent += `[${stamp}] ${args.map(a => typeof a==='string'?a:JSON.stringify(a)).join(' ')}\n`;
-      };
+  <div class="grid gap-4">
+    <a id="cogtool-link" href="#" class="p-3 bg-blue-600 text-white rounded text-center hover:bg-blue-700">Cognitive Tool</a>
+    <a href="analyze.html" class="p-3 bg-purple-600 text-white rounded text-center hover:bg-purple-700">Analyzer</a>
+    <a href="org-chart.html" class="p-3 bg-green-600 text-white rounded text-center hover:bg-green-700">Organization Manager</a>
+    <a href="table-viewer.html" class="p-3 bg-gray-600 text-white rounded text-center hover:bg-gray-700">Database Table Viewer</a>
+  </div>
 
-      const params = new URLSearchParams(location.search);
-      const user = params.get('user_name');
-      const roleType = params.get('role_type');
-      const unitName = params.get('unit_name');
-      const iterName = params.get('iteration_name');
-      const iterId = params.get('iteration_id');
-      const qset = params.get('question_set');
+  <div class="mt-6">
+    <a href="index.html" class="text-blue-600 hover:underline">← Back to Welcome</a>
+  </div>
 
-      document.getElementById('ctx-user').textContent = user || '—';
-      document.getElementById('ctx-role').textContent = roleType || '—';
-      document.getElementById('ctx-unit').textContent = unitName || '—';
-      document.getElementById('ctx-iter-name').textContent = iterName || '—';
-      document.getElementById('ctx-iter-id').textContent = iterId || '—';
-      document.getElementById('ctx-qset').textContent = qset || '—';
+  <details class="mt-6">
+    <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
+    <pre id="debug-log" class="bg-black text-green-400 p-2 rounded mt-2 text-sm"></pre>
+  </details>
+</div>
 
-      dlog('[portal] Context loaded', {
-        user, roleType, unitName, iterName, iterId, qset
-      });
-    })();
-  </script>
+<script>
+function logDebug(msg, obj=null) {
+  const log = document.getElementById("debug-log");
+  log.textContent += `[${new Date().toISOString()}] [portal] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
+}
+
+async function loadContext() {
+  const params = new URLSearchParams(window.location.search);
+  const roleId = params.get("role_id");
+  if (!roleId) {
+    logDebug("No role_id provided in URL");
+    return;
+  }
+
+  logDebug("Fetching role context for role_id=" + roleId);
+  try {
+    const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+    const data = await res.json();
+    logDebug("GET result", data);
+
+    if (data.success) {
+      document.getElementById("ctx-user").textContent = data.user.name;
+      document.getElementById("ctx-role").textContent = data.roleType;
+      document.getElementById("ctx-unit").textContent = data.unitName;
+      document.getElementById("ctx-iter").textContent = data.iterName;
+      document.getElementById("ctx-iterid").textContent = data.iterId;
+      document.getElementById("ctx-qset").textContent = data.qset;
+
+      const cogtoolLink = document.getElementById("cogtool-link");
+      cogtoolLink.href = `cognitive-tool.html?role_id=${roleId}`;
+    }
+  } catch (err) {
+    logDebug("Error fetching context", {error: err.message});
+  }
+}
+
+loadContext();
+</script>
 </body>
 </html>
 
