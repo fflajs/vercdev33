@@ -2,72 +2,80 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Research Portal</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>User Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="bg-white w-full max-w-xl p-8 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold text-center mb-1">Research Portal</h1>
-    <p class="text-gray-600 text-center mb-6">Access tools for research and analysis.</p>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-4xl mx-auto py-8 px-4">
+    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+      <h1 class="text-2xl font-bold mb-2">User Portal</h1>
+      <p class="text-sm text-gray-600 mb-4">Welcome to the cognitive tools and analysis portal.</p>
 
-    <div class="space-y-3">
-      <a id="link-cog"
-         class="block w-full text-center bg-blue-600 text-white font-semibold py-3 rounded hover:bg-blue-700"
-         href="#">
-         Launch Cognitive Tool
-      </a>
-      <a id="link-analysis"
-         class="block w-full text-center bg-purple-600 text-white font-semibold py-3 rounded hover:bg-purple-700"
-         href="#">
-         Launch Analysis
-      </a>
+      <!-- Context Info -->
+      <div id="contextBox" class="p-4 border border-gray-200 rounded bg-gray-50 text-sm text-gray-700">
+        <p><span class="font-semibold">User:</span> <span id="ctxUser">—</span></p>
+        <p><span class="font-semibold">Role:</span> <span id="ctxRole">—</span></p>
+        <p><span class="font-semibold">Unit:</span> <span id="ctxUnit">—</span></p>
+        <p><span class="font-semibold">Iteration:</span> <span id="ctxIter">—</span></p>
+        <p><span class="font-semibold">Iteration ID:</span> <span id="ctxIterId">—</span></p>
+        <p><span class="font-semibold">Question Set:</span> <span id="ctxQSet">—</span></p>
+      </div>
     </div>
 
-    <div class="mt-6 flex items-center justify-between">
-      <a href="/index.html" class="text-blue-600 hover:text-blue-800">Back to Login</a>
+    <!-- Navigation -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <a href="cognitive-tool.html" class="block bg-blue-600 text-white text-center py-4 rounded-lg shadow hover:bg-blue-700">Cognitive Tool</a>
+      <a href="analyze.html" class="block bg-green-600 text-white text-center py-4 rounded-lg shadow hover:bg-green-700">Analyzer</a>
+      <a href="org-chart.html" class="block bg-purple-600 text-white text-center py-4 rounded-lg shadow hover:bg-purple-700">Organization Manager</a>
+      <a href="table-viewer.html" class="block bg-gray-600 text-white text-center py-4 rounded-lg shadow hover:bg-gray-700">Database Table Viewer</a>
     </div>
 
-    <!-- Debug -->
-    <details class="mt-6 text-xs text-gray-600">
-      <summary class="cursor-pointer">Debug log (open to view)</summary>
-      <pre id="debug" class="mt-2 bg-gray-50 p-2 rounded border overflow-auto"></pre>
+    <a href="index.html" class="mt-6 inline-block text-sm text-gray-500">← Back to Welcome</a>
+
+    <!-- Debug log -->
+    <details class="mt-6">
+      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
+      <pre id="debugLog" class="bg-gray-100 text-xs p-2 overflow-auto h-40"></pre>
     </details>
   </div>
 
   <script>
-    const dbg = (...a) => {
-      const el = document.getElementById('debug');
-      if (el) el.textContent += a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') + "\n";
-      console.log('[portal]', ...a);
-    };
+    const params = new URLSearchParams(window.location.search);
+    const roleId = params.get("role_id");
+    const debugLog = document.getElementById("debugLog");
 
-    (function init() {
-      const p = new URLSearchParams(window.location.search);
-      const personRoleId = p.get('personRoleId');
-      const iterationId  = p.get('iterationId');
-      const orgUnitId    = p.get('orgUnitId');
+    function log(msg, obj) {
+      const line = `[${new Date().toISOString()}] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
+      debugLog.textContent += line;
+      console.log(msg, obj || "");
+    }
 
-      dbg('params', { personRoleId, iterationId, orgUnitId });
-
-      const missing = !personRoleId || !iterationId || !orgUnitId;
-      const cog = document.getElementById('link-cog');
-      const ana = document.getElementById('link-analysis');
-
-      if (missing) {
-        // Disable links if context missing
-        cog.classList.add('opacity-60', 'pointer-events-none');
-        ana.classList.add('opacity-60', 'pointer-events-none');
-        dbg('context missing → links disabled');
+    async function loadContext() {
+      if (!roleId) {
+        log("[portal] No role_id in URL");
         return;
       }
 
-      const q = `?personRoleId=${encodeURIComponent(personRoleId)}&iterationId=${encodeURIComponent(iterationId)}&orgUnitId=${encodeURIComponent(orgUnitId)}`;
-      cog.href = `/cognitive-tool.html${q}`;
-      ana.href = `/analysis.html${q}`;
-      dbg('links set', { cog: cog.href, ana: ana.href });
-    })();
+      log("[portal] Fetching role context for role_id=" + roleId);
+      const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+      const data = await res.json();
+      log("[portal] GET result", data);
+
+      if (!data.success) {
+        alert("Error: " + data.message);
+        return;
+      }
+
+      const r = data.context;
+      document.getElementById("ctxUser").textContent = r.person_name;
+      document.getElementById("ctxRole").textContent = r.is_manager ? "Manager" : "Member";
+      document.getElementById("ctxUnit").textContent = r.org_unit_name;
+      document.getElementById("ctxIter").textContent = r.iteration_name;
+      document.getElementById("ctxIterId").textContent = r.iteration_id;
+      document.getElementById("ctxQSet").textContent = r.question_set;
+    }
+
+    loadContext();
   </script>
 </body>
 </html>
