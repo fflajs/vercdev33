@@ -1,125 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Select Your Role</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+  <meta charset="UTF-8" />
+  <title>Login - Select Role</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 text-gray-900">
-  <div class="max-w-2xl mx-auto my-10 p-6 bg-white rounded-xl shadow">
-    <header class="mb-6">
-      <h1 class="text-2xl font-bold">Select Your Role</h1>
-      <p class="text-gray-600">Choose which organization unit and role you want to use for the current active iteration.</p>
-    </header>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg">
+    <h1 class="text-2xl font-bold mb-4">Select Your Role</h1>
+    <p class="mb-4">Choose which organization unit and role you want to use for the current active iteration.</p>
 
-    <section>
-      <h2 class="font-semibold mb-2">Available Roles</h2>
-      <select id="roleSelect" class="w-full border rounded p-2 mb-4">
-        <option value="">— Select role —</option>
-      </select>
-    </section>
+    <label for="roleSelect" class="block text-sm font-medium mb-1">Available Roles</label>
+    <select id="roleSelect" class="w-full border rounded p-2 mb-4"></select>
 
-    <section class="mb-6">
-      <p><span class="font-medium">User:</span> <span id="ctx-user">—</span></p>
-      <p><span class="font-medium">Iteration:</span> <span id="ctx-iter-name">—</span></p>
-      <p><span class="font-medium">Iteration ID:</span> <span id="ctx-iter-id">—</span></p>
-      <p><span class="font-medium">Question Set:</span> <span id="ctx-qset">—</span></p>
-    </section>
-
-    <div class="flex gap-4">
-      <button id="continueBtn" class="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50" disabled>
-        Continue to Portal
-      </button>
-      <a href="/index.html" class="px-4 py-2 border rounded">Back</a>
+    <div id="context" class="mb-4 text-sm text-gray-700">
+      <p>User: <span id="userName">—</span></p>
+      <p>Iteration: <span id="iterName">—</span></p>
+      <p>Iteration ID: <span id="iterId">—</span></p>
+      <p>Question Set: <span id="qset">—</span></p>
     </div>
 
+    <div class="flex gap-2">
+      <button id="continueBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Continue to Portal</button>
+      <a href="index.html" class="bg-gray-300 px-4 py-2 rounded">Back</a>
+    </div>
+
+    <!-- Debug -->
     <details class="mt-6">
       <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debug" class="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto"></pre>
+      <pre id="debug" class="bg-black text-green-400 text-xs p-2 rounded h-40 overflow-y-auto"></pre>
     </details>
   </div>
 
   <script>
-    (function(){
-      const dlog = (...args) => {
-        const stamp = new Date().toISOString();
-        console.log(...args);
-        const el = document.getElementById('debug');
-        if (el) el.textContent += `[${stamp}] ${args.map(a => typeof a==='string'?a:JSON.stringify(a)).join(' ')}\n`;
-      };
+    const debug = (msg, obj) => {
+      const el = document.getElementById("debug");
+      el.textContent += `[${new Date().toISOString()}] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
+      el.scrollTop = el.scrollHeight;
+      console.log(msg, obj || "");
+    };
 
-      const params = new URLSearchParams(location.search);
-      const name = params.get('name');
-      const roleSelect = document.getElementById('roleSelect');
-      const ctxUser = document.getElementById('ctx-user');
-      const ctxIterName = document.getElementById('ctx-iter-name');
-      const ctxIterId = document.getElementById('ctx-iter-id');
-      const ctxQset = document.getElementById('ctx-qset');
-      const continueBtn = document.getElementById('continueBtn');
-      let roles = [];
+    const params = new URLSearchParams(window.location.search);
+    const userName = params.get("name");
+    debug("[login-user] page loaded for", { userName });
 
-      async function loadRoles() {
-        if (!name) {
-          dlog('[login-user] Missing ?name param');
+    async function loadRoles() {
+      try {
+        debug("[login-user] GET /api/admin/get-user-roles?name=" + userName);
+        const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(userName)}`);
+        const json = await res.json();
+        debug("[login-user] GET result", json);
+
+        if (!json.success) {
+          alert("Error loading roles: " + json.message);
           return;
         }
-        dlog('[login-user] GET /api/admin/get-user-roles?name=' + name);
 
-        try {
-          const resp = await fetch('/api/admin/get-user-roles?name=' + encodeURIComponent(name));
-          const data = await resp.json();
-          dlog('[login-user] GET result', data);
+        document.getElementById("userName").textContent = json.user.name;
+        document.getElementById("iterName").textContent = json.iteration.name;
+        document.getElementById("iterId").textContent = json.iteration.id;
+        document.getElementById("qset").textContent = json.iteration.question_set;
 
-          if (!resp.ok || !data.success) return;
-
-          ctxUser.textContent = data.user?.name || '—';
-          ctxIterName.textContent = data.iteration?.name || '—';
-          ctxIterId.textContent = data.iteration?.id ?? '—';
-          ctxQset.textContent = data.iteration?.question_set || '—';
-
-          roles = data.roles || [];
-          roleSelect.innerHTML = '<option value="">— Select role —</option>';
-
-          roles.forEach(r => {
-            const opt = document.createElement('option');
-            const unitName = r.unit?.name || 'Unknown Unit';
-            const roleType = r.is_manager ? 'Manager' : 'Coworker';
-            opt.value = r.id;
-            opt.textContent = `${unitName} - ${roleType}`;
-            roleSelect.appendChild(opt);
-          });
-
-          roleSelect.addEventListener('change', () => {
-            continueBtn.disabled = !roleSelect.value;
-          });
-
-        } catch (e) {
-          dlog('[login-user] Error fetching roles', String(e));
-        }
+        const sel = document.getElementById("roleSelect");
+        sel.innerHTML = "";
+        json.roles.forEach(r => {
+          const opt = document.createElement("option");
+          opt.value = r.id;
+          opt.textContent = `${r.unit?.name || "??"} - ${r.is_manager ? "Manager" : "Coworker"}`;
+          sel.appendChild(opt);
+        });
+      } catch (err) {
+        debug("[login-user] ERROR loading roles", err);
       }
+    }
 
-      continueBtn.addEventListener('click', () => {
-        const roleId = roleSelect.value;
-        if (!roleId) return;
-        // find selected role
-        const role = roles.find(r => String(r.id) === String(roleId));
-        if (!role) return;
-        const payload = {
-          role_id: role.id,
-          user_name: ctxUser.textContent,
-          iteration_id: ctxIterId.textContent,
-          iteration_name: ctxIterName.textContent,
-          question_set: ctxQset.textContent,
-          unit_name: role.unit?.name || '—',
-          role_type: role.is_manager ? 'Manager' : 'Coworker'
-        };
-        location.href = '/portal.html?' + new URLSearchParams(payload).toString();
-      });
+    document.getElementById("continueBtn").onclick = () => {
+      const roleId = document.getElementById("roleSelect").value;
+      if (!roleId) {
+        alert("Please select a role");
+        return;
+      }
+      debug("[login-user] continue with role_id=" + roleId);
+      window.location.href = `portal.html?role_id=${roleId}`;
+    };
 
-      loadRoles();
-    })();
+    loadRoles();
   </script>
 </body>
 </html>
