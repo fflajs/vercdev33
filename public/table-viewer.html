@@ -6,29 +6,28 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="p-6 bg-gray-100">
-  <div class="max-w-4xl mx-auto bg-white p-4 rounded shadow">
-    <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
-    <div id="context" class="mb-4 text-sm text-gray-700"></div>
-    <div id="tables"></div>
+<div class="max-w-6xl mx-auto bg-white p-4 rounded shadow">
+  <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
+  <div id="context" class="mb-4 text-sm text-gray-700"></div>
+  <div id="tables" class="space-y-6"></div>
 
-    <div class="mt-6">
-      <button onclick="loadAll()" class="bg-blue-500 text-white px-3 py-1 rounded">Refresh Now</button>
-      <a href="admin.html" class="ml-4 text-blue-600">&larr; Back to Admin Portal</a>
-    </div>
-
-    <details class="mt-4">
-      <summary>Debug log (open to view)</summary>
-      <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
-    </details>
+  <div class="mt-6">
+    <button onclick="loadAll()" class="bg-blue-500 text-white px-3 py-1 rounded">Refresh Now</button>
+    <a href="admin.html" class="ml-4 text-blue-600">&larr; Back to Admin Portal</a>
   </div>
 
-<script>
-const log=(msg,obj=null)=>{const el=document.getElementById('debug');el.textContent+=`[table-viewer] ${msg} ${obj?JSON.stringify(obj):''}\n`;};
+  <details class="mt-4">
+    <summary>Debug log (open to view)</summary>
+    <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
+  </details>
+</div>
 
-let roleId=null; let iterId=null;
+<script>
+const log=(msg,obj=null)=>{document.getElementById('debug').textContent+=`[table-viewer] ${msg} ${obj?JSON.stringify(obj):''}\n`;};
+
+let roleId=null;
 
 async function loadAll(){
-  log("Loading all tables...");
   const tables=["organization_units","iterations","people","person_roles","surveys","app_data"];
   const wrap=document.getElementById('tables'); wrap.innerHTML='';
   for(const t of tables){
@@ -36,16 +35,46 @@ async function loadAll(){
     const res=await fetch(`/api/admin/table-viewer?table=${t}${roleId?`&role_id=${roleId}`:''}`);
     const json=await res.json();
     log("Response for "+t,json);
-    const pre=document.createElement('pre');
-    pre.className="bg-gray-100 p-2 text-xs overflow-auto mb-4";
-    pre.textContent=t+"\n"+JSON.stringify(json.data,null,2);
-    wrap.appendChild(pre);
+
+    const section=document.createElement('div');
+    section.innerHTML=`<h2 class="text-lg font-semibold mb-2">${t}</h2>`;
+
+    if(json.success && json.data && json.data.length){
+      const table=document.createElement('table');
+      table.className="table-auto border-collapse border border-gray-400 text-xs";
+      const thead=document.createElement('thead');
+      const tr=document.createElement('tr');
+      Object.keys(json.data[0]).forEach(k=>{
+        const th=document.createElement('th');
+        th.className="border border-gray-400 px-2 py-1 bg-gray-100";
+        th.textContent=k;
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+      table.appendChild(thead);
+
+      const tbody=document.createElement('tbody');
+      json.data.forEach(row=>{
+        const tr=document.createElement('tr');
+        Object.values(row).forEach(val=>{
+          const td=document.createElement('td');
+          td.className="border border-gray-400 px-2 py-1";
+          td.textContent=val===null?"—":val;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      section.appendChild(table);
+    } else {
+      section.innerHTML+=`<p class="text-gray-500">(No data)</p>`;
+    }
+    wrap.appendChild(section);
   }
 }
 
 async function init(){
   log("page loaded");
-
   const params=new URLSearchParams(window.location.search);
   roleId=params.get('role_id');
   if(roleId){
@@ -54,12 +83,11 @@ async function init(){
     const ctxJson=await ctxRes.json();
     log("get-role-context result",ctxJson);
     if(ctxJson.success){
-      const ctx=ctxJson.context;
-      iterId=ctx.iterId;
+      const c=ctxJson.context;
       document.getElementById('context').textContent=
-        `User: ${ctx.user} — Role: ${ctx.roleType} — Unit: ${ctx.unitName} — Iteration: ${ctx.iterName} (ID: ${ctx.iterId}) — Question Set: ${ctx.qset}`;
+        `User: ${c.user} — Role: ${c.roleType} — Unit: ${c.unitName} — Iteration: ${c.iterName} (ID: ${c.iterId}) — Question Set: ${c.qset}`;
     }
-  }else{
+  } else {
     document.getElementById('context').textContent="Admin mode (full database view)";
   }
   await loadAll();

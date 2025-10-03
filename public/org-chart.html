@@ -6,43 +6,40 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="p-6 bg-gray-100">
-  <div class="max-w-4xl mx-auto bg-white p-4 rounded shadow">
-    <h1 class="text-2xl font-bold mb-4">Organization Manager</h1>
-    <div id="context" class="mb-4 text-sm text-gray-700"></div>
-    <div id="orgTree" class="space-y-2 mb-4"></div>
+<div class="max-w-4xl mx-auto bg-white p-4 rounded shadow">
+  <h1 class="text-2xl font-bold mb-4">Organization Manager</h1>
+  <div id="context" class="mb-4 text-sm text-gray-700"></div>
+  <div id="orgTree" class="space-y-2 mb-4"></div>
 
-    <div class="mt-4">
-      <input id="rootName" type="text" placeholder="New root unit name"
-             class="border p-1 rounded mr-2"/>
-      <button id="createRoot" class="bg-blue-500 text-white px-3 py-1 rounded">Create Root Unit</button>
-    </div>
-
-    <div class="mt-6">
-      <a href="admin.html" class="text-blue-600">&larr; Back to Admin Portal</a>
-    </div>
-
-    <details class="mt-4">
-      <summary>Debug log (open to view)</summary>
-      <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
-    </details>
+  <div class="mt-4">
+    <input id="rootName" type="text" placeholder="New root unit name"
+           class="border p-1 rounded mr-2"/>
+    <button id="createRoot" class="bg-blue-500 text-white px-3 py-1 rounded">Create Root Unit</button>
   </div>
 
+  <div class="mt-6">
+    <a href="admin.html" class="text-blue-600">&larr; Back to Admin Portal</a>
+  </div>
+
+  <details class="mt-4">
+    <summary>Debug log (open to view)</summary>
+    <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
+  </details>
+</div>
+
 <script>
-const log = (msg,obj=null)=>{const el=document.getElementById('debug');el.textContent+=`[org-chart] ${msg} ${obj?JSON.stringify(obj):''}\n`;};
+const log=(msg,obj=null)=>{document.getElementById('debug').textContent+=`[org-chart] ${msg} ${obj?JSON.stringify(obj):''}\n`;};
 
 async function loadData(){
   log("page loaded");
-
   const params=new URLSearchParams(window.location.search);
   const roleId=params.get('role_id');
   if(!roleId){log("Missing role_id");return;}
-
   log("Using role_id="+roleId);
 
   const ctxRes=await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
   const ctxJson=await ctxRes.json();
   log("get-role-context result",ctxJson);
-
   if(!ctxJson.success)return;
   const ctx=ctxJson.context;
   document.getElementById('context').textContent=
@@ -51,29 +48,27 @@ async function loadData(){
   const dataRes=await fetch(`/api/admin/org-data?iteration_id=${ctx.iterId}`);
   const dataJson=await dataRes.json();
   log("org-data result",dataJson);
-
   if(!dataJson.success)return;
+
   renderTree(dataJson.units,dataJson.roles);
 }
 
 function renderTree(units,roles){
   const container=document.getElementById('orgTree');
   container.innerHTML='';
-
   const map={};
   units.forEach(u=>map[u.id]={...u,children:[]});
-  units.forEach(u=>{if(u.parent_id && map[u.parent_id])map[u.parent_id].children.push(u);});
+  units.forEach(u=>{if(u.parent_id&&map[u.parent_id])map[u.parent_id].children.push(map[u.id]);});
 
   function renderUnit(u,depth=0){
     const div=document.createElement('div');
-    div.className=`ml-${depth*4} border-l pl-2`;
+    div.className=`ml-${depth*4}`;
     div.innerHTML=`<strong>${u.name}</strong><br>`+
-      roles.filter(r=>r.org_unit_id===u.id)
-           .map(r=>`${r.people.name} — ${r.is_manager?"Manager":"Member"}`).join("<br>");
+      roles.filter(r=>r.org_unit_id===u.id).map(r=>`${r.people.name} — ${r.is_manager?"Manager":"Member"}`).join("<br>");
     container.appendChild(div);
     u.children.forEach(c=>renderUnit(c,depth+1));
   }
-  units.filter(u=>!u.parent_id).forEach(u=>renderUnit(u));
+  units.filter(u=>!u.parent_id).forEach(u=>renderUnit(map[u.id]));
 }
 
 window.addEventListener('load',loadData);
