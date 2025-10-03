@@ -5,106 +5,75 @@
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-6">
-  <div class="max-w-5xl mx-auto bg-white shadow rounded p-6">
-    <h1 class="text-2xl font-bold mb-2">Database Table Viewer</h1>
-    <p id="context" class="text-sm text-gray-600 mb-4"></p>
-
-    <div id="tables" class="space-y-6"></div>
-
-    <div class="mt-6">
-      <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Refresh Now</button>
-    </div>
-
-    <div class="mt-6">
-      <a href="admin.html" class="text-blue-600 hover:underline">&larr; Back to Admin Portal</a>
-    </div>
+<body class="bg-gray-100">
+  <div class="max-w-5xl mx-auto p-6 bg-white rounded shadow">
+    <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
+    <div id="context" class="mb-4 text-gray-700"></div>
+    <div id="tables"></div>
+    <button id="refreshBtn" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded">Refresh Now</button>
+    <a href="admin.html" class="ml-4 text-blue-600">← Back to Admin Portal</a>
   </div>
 
-  <!-- Debug -->
-  <details class="max-w-5xl mx-auto mt-4 bg-gray-900 text-green-400 p-3 rounded">
+  <details class="max-w-5xl mx-auto mt-4">
     <summary class="cursor-pointer">Debug log (open to view)</summary>
-    <pre id="debug" class="text-xs whitespace-pre-wrap"></pre>
+    <pre id="debug" class="bg-gray-900 text-green-400 p-2 rounded text-sm"></pre>
   </details>
 
   <script>
     const debug = (msg, obj=null) => {
-      const line = `[${new Date().toISOString()}] [table-viewer] ${msg}` + (obj ? " " + JSON.stringify(obj) : "");
-      console.log(line);
-      document.getElementById("debug").textContent += line + "\n";
+      const line = `[${new Date().toISOString()}] [table-viewer] ${msg}`;
+      console.log(line, obj ?? '');
+      document.getElementById('debug').textContent += line + (obj ? ' ' + JSON.stringify(obj) : '') + "\n";
     };
 
-    let context = null;
-    const tables = ["organization_units","iterations","people","person_roles","surveys","app_data"];
+    let roleId = null;
+    let iterContext = null;
 
-    async function init() {
-      debug("page loaded");
+    async function loadContext() {
       const params = new URLSearchParams(window.location.search);
-      const roleId = params.get("role_id");
-
+      roleId = params.get('role_id');
       if (roleId) {
-        debug("Using role_id=" + roleId);
-        const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-        const data = await res.json();
-        debug("get-role-context result", data);
-
-        if (data.success) {
-          context = data.context;
-          document.getElementById("context").textContent =
-            `User: ${context.user} — Role: ${context.roleType} — Unit: ${context.unitName} — ` +
-            `Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
+        debug("Using role_id="+roleId);
+        const resp = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+        const json = await resp.json();
+        debug("get-role-context result", json);
+        if (json.success) {
+          iterContext = json.context;
+          document.getElementById('context').innerText =
+            `User: ${iterContext.user} — Role: ${iterContext.roleType} — Unit: ${iterContext.unitName} — Iteration: ${iterContext.iterName} (ID: ${iterContext.iterId}) — Question Set: ${iterContext.qset}`;
         }
       } else {
-        debug("No role_id → using Admin mode via active-iteration");
-        const res = await fetch(`/api/admin/active-iteration`);
-        const data = await res.json();
-        debug("active-iteration result", data);
-
-        if (data.success && data.iteration) {
-          context = {
-            user: "Admin",
-            roleType: "Administrator",
-            unitName: "(all units)",
-            iterName: data.iteration.name,
-            iterId: data.iteration.id,
-            qset: data.iteration.question_set
-          };
-          document.getElementById("context").textContent =
-            `Admin mode — Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
-        }
+        debug("Admin mode (no role_id)");
+        document.getElementById('context').innerText = "Admin Mode — Viewing full database (all iterations)";
       }
+    }
 
-      await loadAll();
-      document.getElementById("refreshBtn").onclick = loadAll;
+    async function fetchTable(name) {
+      debug("Fetching table: "+name);
+      const resp = await fetch(`/api/admin/table-viewer?table=${name}${roleId ? "&role_id="+roleId : ""}`);
+      const json = await resp.json();
+      debug("Response for "+name, json);
+      const div = document.createElement('div');
+      div.className = "mb-6";
+      div.innerHTML = `<h2 class="text-xl font-semibold mb-2">${name}</h2><pre class="bg-gray-200 p-2 rounded text-sm">${JSON.stringify(json.data, null, 2)}</pre>`;
+      document.getElementById('tables').appendChild(div);
     }
 
     async function loadAll() {
-      debug("Loading all tables...");
-      const container = document.getElementById("tables");
-      container.innerHTML = "";
-
+      document.getElementById('tables').innerHTML = "";
+      const tables = ["organization_units","iterations","people","person_roles","surveys","app_data"];
       for (const t of tables) {
-        await fetchTable(t, container);
+        await fetchTable(t);
       }
     }
 
-    async function fetchTable(table, container) {
-      debug("Fetching table: " + table);
-      const res = await fetch(`/api/admin/table-viewer?table=${table}`);
-      const data = await res.json();
-      debug("Response for " + table, data);
+    document.getElementById('refreshBtn').onclick = () => loadAll();
 
-      const div = document.createElement("div");
-      div.innerHTML = `<h2 class="text-lg font-semibold mb-2">${table}</h2>`;
-      const pre = document.createElement("pre");
-      pre.className = "bg-gray-100 p-2 rounded text-xs overflow-x-auto";
-      pre.textContent = JSON.stringify(data.success ? data.data : data, null, 2);
-      div.appendChild(pre);
-
-      container.appendChild(div);
-    }
-
-    init();
+    (async function init() {
+      debug("page loaded");
+      await loadContext();
+      await loadAll();
+    })();
   </script>
 </body>
 </html>
