@@ -1,64 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>User Portal</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 text-gray-900">
-  <div class="max-w-4xl mx-auto my-10 p-6 bg-white rounded-xl shadow">
+  <div class="max-w-2xl mx-auto my-10 p-6 bg-white rounded-xl shadow">
     <header class="mb-6">
-      <h1 class="text-3xl font-bold">User Portal</h1>
+      <h1 class="text-2xl font-bold">User Portal</h1>
       <p class="text-gray-600">Welcome to the cognitive tools and analysis portal.</p>
     </header>
 
-    <section id="context" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-      <div class="p-4 border rounded">
-        <h2 class="text-lg font-semibold mb-2">User Context</h2>
-        <p><span class="font-medium">User:</span> <span id="ctx-user">—</span></p>
-        <p><span class="font-medium">Role:</span> <span id="ctx-role">—</span></p>
-        <p><span class="font-medium">Unit:</span> <span id="ctx-unit">—</span></p>
-      </div>
-      <div class="p-4 border rounded">
-        <h2 class="text-lg font-semibold mb-2">Iteration Context</h2>
-        <p><span class="font-medium">Iteration:</span> <span id="ctx-iter-name">—</span></p>
-        <p><span class="font-medium">Iteration ID:</span> <span id="ctx-iter-id">—</span></p>
-        <p><span class="font-medium">Question Set:</span> <span id="ctx-qset">—</span></p>
+    <section class="mb-6">
+      <p><span class="font-medium">User:</span> <span id="ctx-user">—</span></p>
+      <p><span class="font-medium">Role:</span> <span id="ctx-role">—</span></p>
+      <p><span class="font-medium">Unit:</span> <span id="ctx-unit">—</span></p>
+      <p><span class="font-medium">Iteration:</span> <span id="ctx-iter-name">—</span></p>
+      <p><span class="font-medium">Iteration ID:</span> <span id="ctx-iter-id">—</span></p>
+      <p><span class="font-medium">Question Set:</span> <span id="ctx-qset">—</span></p>
+    </section>
+
+    <section class="mb-6">
+      <h2 class="font-semibold mb-2">Tools</h2>
+      <div class="flex flex-col gap-2">
+        <a href="/cognitive-tool.html" class="px-4 py-2 bg-blue-600 text-white rounded text-center">Cognitive Tool</a>
+        <a href="/analyze.html" class="px-4 py-2 bg-blue-600 text-white rounded text-center">Analyzer</a>
       </div>
     </section>
 
-    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <a id="link-cog" href="#" class="block p-6 rounded-lg border hover:shadow transition">
-        <h3 class="text-xl font-semibold mb-1">Cognitive Tool</h3>
-        <p class="text-gray-600">Explore and manage cognitive processes.</p>
-      </a>
+    <a href="/index.html" class="px-4 py-2 border rounded">← Back to Welcome</a>
 
-      <a id="link-anl" href="#" class="block p-6 rounded-lg border hover:shadow transition">
-        <h3 class="text-xl font-semibold mb-1">Analyzer</h3>
-        <p class="text-gray-600">Perform and review research analyses.</p>
-      </a>
-
-      <a href="/org-chart.html" class="block p-6 rounded-lg border hover:shadow transition">
-        <h3 class="text-xl font-semibold mb-1">Organization Manager</h3>
-        <p class="text-gray-600">Manage org units and roles (admin/managers).</p>
-      </a>
-
-      <a href="/table-viewer.html" class="block p-6 rounded-lg border hover:shadow transition">
-        <h3 class="text-xl font-semibold mb-1">Database Table Viewer</h3>
-        <p class="text-gray-600">Read-only view of database tables.</p>
-      </a>
-    </section>
-
-    <div class="mt-8 flex items-center justify-between">
-      <a href="/index.html" class="text-blue-600 hover:underline">← Back to Welcome</a>
-
-      <details class="w-full md:w-auto ml-4">
-        <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-        <pre id="debug" class="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto"></pre>
-      </details>
-    </div>
+    <details class="mt-6">
+      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
+      <pre id="debug" class="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto"></pre>
+    </details>
   </div>
 
   <script>
@@ -67,64 +45,27 @@
         const stamp = new Date().toISOString();
         console.log(...args);
         const el = document.getElementById('debug');
-        if (el) el.textContent += `[${stamp}] ${args.map(a=>typeof a==='string'?a:JSON.stringify(a)).join(' ')}\n`;
+        if (el) el.textContent += `[${stamp}] ${args.map(a => typeof a==='string'?a:JSON.stringify(a)).join(' ')}\n`;
       };
 
       const params = new URLSearchParams(location.search);
-      const roleId = params.get('role_id');
+      const user = params.get('user_name');
+      const roleType = params.get('role_type');
+      const unitName = params.get('unit_name');
+      const iterName = params.get('iteration_name');
+      const iterId = params.get('iteration_id');
+      const qset = params.get('question_set');
 
-      const ctxUser = document.getElementById('ctx-user');
-      const ctxRole = document.getElementById('ctx-role');
-      const ctxUnit = document.getElementById('ctx-unit');
-      const ctxIterName = document.getElementById('ctx-iter-name');
-      const ctxIterId = document.getElementById('ctx-iter-id');
-      const ctxQset = document.getElementById('ctx-qset');
+      document.getElementById('ctx-user').textContent = user || '—';
+      document.getElementById('ctx-role').textContent = roleType || '—';
+      document.getElementById('ctx-unit').textContent = unitName || '—';
+      document.getElementById('ctx-iter-name').textContent = iterName || '—';
+      document.getElementById('ctx-iter-id').textContent = iterId || '—';
+      document.getElementById('ctx-qset').textContent = qset || '—';
 
-      const linkCog = document.getElementById('link-cog');
-      const linkAnl = document.getElementById('link-anl');
-
-      async function loadContext() {
-        if (!roleId) {
-          dlog('[portal] Missing role_id in query.');
-          return;
-        }
-
-        dlog('[portal] Fetching role context for role_id=' + roleId);
-
-        try {
-          const resp = await fetch(`/api/admin/get-role-context?role_id=${encodeURIComponent(roleId)}`);
-          dlog('[portal] GET status', resp.status);
-          const data = await resp.json();
-          dlog('[portal] GET result', data);
-
-          if (!resp.ok || !data.success) {
-            return;
-          }
-
-          const c = data.context || {};
-          ctxUser.textContent = c.person_name || '—';
-          ctxRole.textContent = c.is_manager ? 'Manager' : 'Coworker';
-          ctxUnit.textContent = c.unit_name || '—';
-          ctxIterName.textContent = c.iteration_name || '—';
-          ctxIterId.textContent = c.iteration_id ?? '—';
-          ctxQset.textContent = c.question_set || '—';
-
-          // Build links to cognitive-tool and analysis with context
-          // We’ll pass personRoleId, iterationId, userUnitId as query params (as your cognitive-tool expects).
-          const q = new URLSearchParams({
-            personRoleId: String(roleId),
-            iterationId: String(c.iteration_id || ''),
-            userUnitId: String(c.unit_id || ''),
-          }).toString();
-
-          linkCog.href = `/cognitive-tool.html?${q}`;
-          linkAnl.href  = `/analyze.html?${q}`;
-        } catch (e) {
-          dlog('[portal] Error fetching role context', String(e));
-        }
-      }
-
-      loadContext();
+      dlog('[portal] Context loaded', {
+        user, roleType, unitName, iterName, iterId, qset
+      });
     })();
   </script>
 </body>
