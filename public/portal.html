@@ -1,85 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>User Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg">
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-3xl mx-auto mt-10 p-6 bg-white shadow rounded">
     <h1 class="text-2xl font-bold mb-4">User Portal</h1>
-    <p class="mb-4">Welcome to the cognitive tools and analysis portal.</p>
+    <p class="mb-6">Welcome to the cognitive tools and analysis portal.</p>
 
-    <div id="context" class="mb-4 text-sm text-gray-700">
-      <p>User: <span id="userName">—</span></p>
-      <p>Role: <span id="roleType">—</span></p>
-      <p>Unit: <span id="unitName">—</span></p>
-      <p>Iteration: <span id="iterName">—</span></p>
-      <p>Iteration ID: <span id="iterId">—</span></p>
-      <p>Question Set: <span id="qset">—</span></p>
+    <div id="context" class="mb-6 text-sm text-gray-700">
+      <p><strong>User:</strong> <span id="userName">—</span></p>
+      <p><strong>Role:</strong> <span id="roleType">—</span></p>
+      <p><strong>Unit:</strong> <span id="unitName">—</span></p>
+      <p><strong>Iteration:</strong> <span id="iterName">—</span></p>
+      <p><strong>Iteration ID:</strong> <span id="iterId">—</span></p>
+      <p><strong>Question Set:</strong> <span id="qset">—</span></p>
     </div>
 
-    <div class="space-y-2">
-      <a id="cogBtn" class="block bg-blue-600 text-white px-4 py-2 rounded text-center cursor-pointer">Cognitive Tool</a>
-      <a id="anaBtn" class="block bg-green-600 text-white px-4 py-2 rounded text-center cursor-pointer">Analyzer</a>
-      <a id="orgBtn" class="block bg-purple-600 text-white px-4 py-2 rounded text-center cursor-pointer">Organization Manager</a>
-      <a id="dbBtn" class="block bg-gray-600 text-white px-4 py-2 rounded text-center cursor-pointer">Database Table Viewer</a>
+    <div class="space-y-3">
+      <a href="cognitive-tool.html" id="cogBtn" class="block bg-blue-600 text-white px-4 py-2 rounded text-center">Cognitive Tool</a>
+      <a href="analyze.html" id="analyzeBtn" class="block bg-green-600 text-white px-4 py-2 rounded text-center">Analyzer</a>
+      <a href="org-chart.html" id="orgBtn" class="block bg-purple-600 text-white px-4 py-2 rounded text-center">Organization Manager</a>
+      <a href="table-viewer.html" id="tableBtn" class="block bg-gray-700 text-white px-4 py-2 rounded text-center">Database Table Viewer</a>
     </div>
 
-    <a href="index.html" class="block mt-4 text-sm text-gray-500">← Back to Welcome</a>
-
-    <!-- Debug -->
-    <details class="mt-6">
-      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debug" class="bg-black text-green-400 text-xs p-2 rounded h-40 overflow-y-auto"></pre>
-    </details>
+    <div class="mt-6">
+      <a href="index.html" class="text-blue-600">&larr; Back to Welcome</a>
+    </div>
   </div>
 
+  <!-- Debug log -->
+  <details class="max-w-3xl mx-auto mt-6 bg-black text-green-400 p-4 rounded">
+    <summary class="cursor-pointer">Debug log (open to view)</summary>
+    <pre id="debugLog" class="whitespace-pre-wrap text-xs"></pre>
+  </details>
+
   <script>
-    const debug = (msg, obj) => {
-      const el = document.getElementById("debug");
-      el.textContent += `[${new Date().toISOString()}] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
-      el.scrollTop = el.scrollHeight;
-      console.log(msg, obj || "");
+    const log = (...args) => {
+      console.log(...args);
+      const pre = document.getElementById("debugLog");
+      pre.textContent += args.map(a => 
+        typeof a === "object" ? JSON.stringify(a) : String(a)
+      ).join(" ") + "\\n";
     };
 
-    const params = new URLSearchParams(window.location.search);
-    const roleId = params.get("role_id");
-    if (!roleId) {
-      debug("[portal] No role_id in query string");
-    }
-
-    async function loadContext() {
+    async function loadContext(roleId) {
       try {
-        debug("[portal] Fetching role context for role_id=" + roleId);
-        const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
+        log("[portal] Fetching role context for role_id=" + roleId);
+        const res = await fetch(`/api/admin/get-role-context?role_id=${encodeURIComponent(roleId)}`);
         const json = await res.json();
-        debug("[portal] GET result", json);
+        log("[portal] GET result", json);
 
         if (!json.success) {
-          alert("Error loading context: " + json.message);
+          alert("Failed to load context: " + json.message);
           return;
         }
 
         const ctx = json.context;
-        document.getElementById("userName").textContent = ctx.user;
-        document.getElementById("roleType").textContent = ctx.roleType;
-        document.getElementById("unitName").textContent = ctx.unitName;
-        document.getElementById("iterName").textContent = ctx.iterName;
-        document.getElementById("iterId").textContent = ctx.iterId;
-        document.getElementById("qset").textContent = ctx.qset;
+        document.getElementById("userName").textContent = ctx.user || "—";
+        document.getElementById("roleType").textContent = ctx.roleType || "—";
+        document.getElementById("unitName").textContent = ctx.unitName || "—";
+        document.getElementById("iterName").textContent = ctx.iterName || "—";
+        document.getElementById("iterId").textContent = ctx.iterId || "—";
+        document.getElementById("qset").textContent = ctx.qset || "—";
 
-        // Links
+        // Fix all tool links to include role_id
         document.getElementById("cogBtn").href = `cognitive-tool.html?role_id=${roleId}`;
-        document.getElementById("anaBtn").href = `analysis.html?role_id=${roleId}`;
+        document.getElementById("analyzeBtn").href = `analyze.html?role_id=${roleId}`;
         document.getElementById("orgBtn").href = `org-chart.html?role_id=${roleId}`;
-        document.getElementById("dbBtn").href = `table-viewer.html`;
+        document.getElementById("tableBtn").href = `table-viewer.html?role_id=${roleId}`;
       } catch (err) {
-        debug("[portal] ERROR", err);
+        log("[portal] Error fetching context", { error: String(err) });
       }
     }
 
-    loadContext();
+    // On load: get ?role_id= from URL
+    const params = new URLSearchParams(window.location.search);
+    const roleId = params.get("role_id");
+    if (!roleId) {
+      log("[portal] No role_id in query string");
+    } else {
+      loadContext(roleId);
+    }
   </script>
 </body>
 </html>

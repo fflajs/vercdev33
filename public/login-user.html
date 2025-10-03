@@ -1,90 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Login - Select Role</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg">
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-2xl mx-auto mt-10 p-6 bg-white shadow rounded">
     <h1 class="text-2xl font-bold mb-4">Select Your Role</h1>
     <p class="mb-4">Choose which organization unit and role you want to use for the current active iteration.</p>
 
-    <label for="roleSelect" class="block text-sm font-medium mb-1">Available Roles</label>
-    <select id="roleSelect" class="w-full border rounded p-2 mb-4"></select>
+    <div class="mb-4">
+      <label class="block font-semibold mb-1">Available Roles</label>
+      <select id="roleSelect" class="w-full border rounded p-2"></select>
+    </div>
 
     <div id="context" class="mb-4 text-sm text-gray-700">
-      <p>User: <span id="userName">—</span></p>
-      <p>Iteration: <span id="iterName">—</span></p>
-      <p>Iteration ID: <span id="iterId">—</span></p>
-      <p>Question Set: <span id="qset">—</span></p>
+      <p><strong>User:</strong> <span id="userName">—</span></p>
+      <p><strong>Iteration:</strong> <span id="iterName">—</span></p>
+      <p><strong>Iteration ID:</strong> <span id="iterId">—</span></p>
+      <p><strong>Question Set:</strong> <span id="qset">—</span></p>
     </div>
 
-    <div class="flex gap-2">
+    <div class="flex space-x-4">
       <button id="continueBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Continue to Portal</button>
-      <a href="index.html" class="bg-gray-300 px-4 py-2 rounded">Back</a>
+      <a href="index.html" class="bg-gray-500 text-white px-4 py-2 rounded">Back</a>
     </div>
-
-    <!-- Debug -->
-    <details class="mt-6">
-      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debug" class="bg-black text-green-400 text-xs p-2 rounded h-40 overflow-y-auto"></pre>
-    </details>
   </div>
 
+  <!-- Debug log -->
+  <details class="max-w-2xl mx-auto mt-6 bg-black text-green-400 p-4 rounded">
+    <summary class="cursor-pointer">Debug log (open to view)</summary>
+    <pre id="debugLog" class="whitespace-pre-wrap text-xs"></pre>
+  </details>
+
   <script>
-    const debug = (msg, obj) => {
-      const el = document.getElementById("debug");
-      el.textContent += `[${new Date().toISOString()}] ${msg} ${obj ? JSON.stringify(obj) : ""}\n`;
-      el.scrollTop = el.scrollHeight;
-      console.log(msg, obj || "");
+    const log = (...args) => {
+      console.log(...args);
+      const pre = document.getElementById("debugLog");
+      pre.textContent += args.map(a => 
+        typeof a === "object" ? JSON.stringify(a) : String(a)
+      ).join(" ") + "\\n";
     };
 
-    const params = new URLSearchParams(window.location.search);
-    const userName = params.get("name");
-    debug("[login-user] page loaded for", { userName });
-
-    async function loadRoles() {
+    async function loadRoles(userName) {
       try {
-        debug("[login-user] GET /api/admin/get-user-roles?name=" + userName);
+        log("[login-user] GET /api/admin/get-user-roles?name=" + userName);
         const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(userName)}`);
         const json = await res.json();
-        debug("[login-user] GET result", json);
+        log("[login-user] GET result", json);
 
         if (!json.success) {
-          alert("Error loading roles: " + json.message);
+          alert("Failed to load roles: " + json.message);
           return;
         }
 
+        // Fill context
         document.getElementById("userName").textContent = json.user.name;
         document.getElementById("iterName").textContent = json.iteration.name;
         document.getElementById("iterId").textContent = json.iteration.id;
         document.getElementById("qset").textContent = json.iteration.question_set;
 
+        // Populate role dropdown
         const sel = document.getElementById("roleSelect");
         sel.innerHTML = "";
         json.roles.forEach(r => {
           const opt = document.createElement("option");
           opt.value = r.id;
-          opt.textContent = `${r.unit?.name || "??"} - ${r.is_manager ? "Manager" : "Coworker"}`;
+          opt.textContent = `${r.organization_units?.name || "??"} - ${r.is_manager ? "Manager" : "Coworker"}`;
           sel.appendChild(opt);
         });
       } catch (err) {
-        debug("[login-user] ERROR loading roles", err);
+        log("[login-user] Error", err);
+        alert("Error loading roles");
       }
     }
 
     document.getElementById("continueBtn").onclick = () => {
       const roleId = document.getElementById("roleSelect").value;
       if (!roleId) {
-        alert("Please select a role");
+        alert("Please select a role first.");
         return;
       }
-      debug("[login-user] continue with role_id=" + roleId);
+      log("[login-user] continuing with role_id=" + roleId);
       window.location.href = `portal.html?role_id=${roleId}`;
     };
 
-    loadRoles();
+    // On load: get ?name= from URL
+    const params = new URLSearchParams(window.location.search);
+    const userName = params.get("name");
+    log("[login-user] page loaded for", { userName });
+    if (userName) {
+      loadRoles(userName);
+    } else {
+      alert("No username specified in query string.");
+    }
   </script>
 </body>
 </html>
