@@ -1,87 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 font-sans">
-  <div class="max-w-5xl mx-auto mt-8 p-6 bg-white shadow rounded">
-    <h1 class="text-2xl font-bold mb-2">Database Table Viewer</h1>
-    <p class="text-gray-600 mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
+<body class="bg-gray-100 text-gray-900 min-h-screen">
+  <div class="max-w-5xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
+    <p class="mb-6">View current data stored in the database. Read-only mode for testing/debugging.</p>
 
-    <div id="tables-container" class="space-y-6"></div>
+    <div id="tables"></div>
 
-    <div class="flex justify-between items-center mt-6">
-      <button id="refresh-btn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Refresh Now</button>
-      <a href="admin.html" class="text-blue-600 hover:underline">← Back to Admin Portal</a>
-    </div>
+    <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded mt-4">Refresh Now</button>
+    <a href="portal.html" class="ml-6 text-blue-600">← Back to Admin Portal</a>
 
-    <details class="mt-4">
-      <summary class="cursor-pointer font-mono">Debug log (open to view)</summary>
-      <pre id="debug-log" class="bg-gray-100 p-2 mt-2 text-xs h-64 overflow-y-auto"></pre>
+    <!-- Debug -->
+    <details class="mt-6">
+      <summary class="cursor-pointer font-bold">Debug log (open to view)</summary>
+      <pre id="debug" class="bg-black text-green-400 p-2 mt-2 rounded text-sm"></pre>
     </details>
   </div>
 
-<script>
-  const debug = (msg, obj=null) => {
-    const line = `[${new Date().toISOString()}] ${msg}`;
-    document.getElementById("debug-log").textContent += line + (obj ? " " + JSON.stringify(obj) : "") + "\n";
-    console.log(line, obj || "");
-  };
+  <script>
+    const tables = ["organization_units", "iterations", "people", "person_roles", "surveys", "app_data"];
+    const tablesEl = document.getElementById("tables");
+    const debugEl = document.getElementById("debug");
+    function log(...args) {
+      const msg = `[${new Date().toISOString()}] ${args.join(" ")}\n`;
+      debugEl.textContent += msg;
+      console.log(...args);
+    }
 
-  const tables = ["organization_units","iterations","people","person_roles","surveys","app_data"];
-
-  async function fetchTable(table) {
-    try {
-      debug(`Fetching table: ${table}`);
+    async function fetchTable(table) {
+      log("Fetching table:", table);
       const res = await fetch(`/api/admin/table-viewer?table=${table}`);
-      const data = await res.json();
-      debug(`Response for ${table}`, data);
+      const json = await res.json();
+      log("Response for", table, JSON.stringify(json));
 
-      const container = document.getElementById(`table-${table}`);
-      if (!data.success) {
-        container.innerHTML = `<p class="text-red-500">${data.message || "Error"}</p>`;
-        return;
+      const container = document.createElement("div");
+      container.className = "mb-6";
+      container.innerHTML = `<h2 class="text-xl font-semibold mb-2">${table}</h2>`;
+
+      if (!json.success || !json.rows || json.rows.length === 0) {
+        container.innerHTML += `<p class="text-gray-600">(No data)</p>`;
+      } else {
+        const keys = Object.keys(json.rows[0]);
+        const tableEl = document.createElement("table");
+        tableEl.className = "min-w-full border border-gray-300 text-sm";
+        tableEl.innerHTML = `
+          <thead><tr>${keys.map(k => `<th class="border px-2 py-1">${k}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${json.rows.map(r => `<tr>${keys.map(k => `<td class="border px-2 py-1">${r[k] ?? ""}</td>`).join("")}</tr>`).join("")}
+          </tbody>
+        `;
+        container.appendChild(tableEl);
       }
-      if (!data.rows || data.rows.length === 0) {
-        container.innerHTML = `<p class="text-gray-500">(No data)</p>`;
-        return;
+      tablesEl.appendChild(container);
+    }
+
+    async function loadAll() {
+      tablesEl.innerHTML = "";
+      for (const t of tables) {
+        await fetchTable(t);
       }
-
-      const cols = Object.keys(data.rows[0]);
-      let html = `<div class="overflow-x-auto"><table class="min-w-full text-xs border"><thead><tr>`;
-      cols.forEach(c => html += `<th class="px-2 py-1 border bg-gray-100">${c}</th>`);
-      html += "</tr></thead><tbody>";
-      data.rows.forEach(r => {
-        html += "<tr>";
-        cols.forEach(c => html += `<td class="px-2 py-1 border">${r[c]}</td>`);
-        html += "</tr>";
-      });
-      html += "</tbody></table></div>";
-      container.innerHTML = html;
-    } catch (err) {
-      debug(`Error loading ${table}`, err);
     }
-  }
 
-  async function loadAll() {
-    const container = document.getElementById("tables-container");
-    container.innerHTML = "";
-    for (const t of tables) {
-      container.innerHTML += `<div><h2 class="text-lg font-semibold mb-2">${t}</h2><div id="table-${t}" class="text-sm"></div></div>`;
-      await fetchTable(t);
-    }
-  }
+    document.getElementById("refreshBtn").addEventListener("click", loadAll);
 
-  document.getElementById("refresh-btn").addEventListener("click", loadAll);
-
-  window.addEventListener("DOMContentLoaded", () => {
-    debug("table-viewer.html loaded.");
+    log("table-viewer.html loaded.");
     loadAll();
-  });
-</script>
+  </script>
 </body>
 </html>
 

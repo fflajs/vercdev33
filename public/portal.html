@@ -1,90 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>User Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
-  <div class="flex-grow container mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-4">User Portal</h1>
-    <p class="mb-6">Welcome to the cognitive tools and analysis portal.</p>
+<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
+  <header class="bg-gray-900 text-white p-4 text-xl font-bold">
+    User Portal
+  </header>
 
-    <div id="context" class="mb-6 bg-white p-4 rounded shadow">
-      <p><strong>User:</strong> <span id="ctxUser">—</span></p>
-      <p><strong>Role:</strong> <span id="ctxRole">—</span></p>
-      <p><strong>Unit:</strong> <span id="ctxUnit">—</span></p>
-      <p><strong>Iteration:</strong> <span id="ctxIter">—</span></p>
-      <p><strong>Iteration ID:</strong> <span id="ctxIterId">—</span></p>
-      <p><strong>Question Set:</strong> <span id="ctxQset">—</span></p>
-    </div>
+  <main class="flex-grow p-6 space-y-6 max-w-3xl mx-auto">
+    <h2 class="text-lg font-semibold">Welcome to the cognitive tools and analysis portal.</h2>
 
-    <div class="space-y-4">
-      <button onclick="goTool('cognitive-tool.html')" class="w-full bg-blue-500 text-white px-4 py-2 rounded">Cognitive Tool</button>
-      <button onclick="goTool('analyze.html')" class="w-full bg-green-500 text-white px-4 py-2 rounded">Analyzer</button>
-      <button onclick="goTool('org-chart.html')" class="w-full bg-purple-500 text-white px-4 py-2 rounded">Organization Manager</button>
-      <button onclick="goTool('table-viewer.html')" class="w-full bg-gray-700 text-white px-4 py-2 rounded">Database Table Viewer</button>
-    </div>
+    <section class="p-4 border rounded bg-white shadow">
+      <h3 class="font-bold mb-2">Context</h3>
+      <p><b>User:</b> <span id="ctxUser">—</span></p>
+      <p><b>Role:</b> <span id="ctxRole">—</span></p>
+      <p><b>Unit:</b> <span id="ctxUnit">—</span></p>
+      <p><b>Iteration:</b> <span id="ctxIter">—</span></p>
+      <p><b>Iteration ID:</b> <span id="ctxIterId">—</span></p>
+      <p><b>Question Set:</b> <span id="ctxQset">—</span></p>
+    </section>
 
-    <div class="mt-6">
-      <a href="index.html" class="text-blue-600">← Back to Welcome</a>
-    </div>
-  </div>
+    <section class="grid gap-4">
+      <a id="linkCognitive" class="p-3 bg-blue-600 text-white rounded shadow hover:bg-blue-700 block text-center">Cognitive Tool</a>
+      <a id="linkAnalyzer" class="p-3 bg-blue-600 text-white rounded shadow hover:bg-blue-700 block text-center">Analyzer</a>
+      <a id="linkOrg" class="p-3 bg-blue-600 text-white rounded shadow hover:bg-blue-700 block text-center">Organization Manager</a>
+      <a id="linkTable" class="p-3 bg-blue-600 text-white rounded shadow hover:bg-blue-700 block text-center">Database Table Viewer</a>
+    </section>
 
-  <!-- Debug -->
-  <details class="bg-gray-200 p-4 mt-6">
-    <summary class="cursor-pointer">Debug log (open to view)</summary>
-    <pre id="debugLog" class="text-sm"></pre>
+    <a href="index.html" class="text-blue-600 hover:underline block mt-6">← Back to Welcome</a>
+  </main>
+
+  <!-- Debug section -->
+  <details class="bg-gray-100 border-t p-3 text-sm">
+    <summary class="cursor-pointer font-semibold">Debug log (open to view)</summary>
+    <pre id="debugLog" class="whitespace-pre-wrap"></pre>
   </details>
 
   <script>
-    const debug = (...args) => {
-      console.log(...args);
-      const log = document.getElementById('debugLog');
-      log.textContent += args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ') + "\n";
-    };
-
-    const params = new URLSearchParams(window.location.search);
-    const roleId = params.get("role_id");
+    function log(msg, obj) {
+      const out = document.getElementById("debugLog");
+      const line = `[${new Date().toISOString()}] [portal] ${msg}`;
+      console.log(line, obj || "");
+      out.textContent += line + (obj ? " " + JSON.stringify(obj) : "") + "\n";
+    }
 
     async function loadContext() {
+      const params = new URLSearchParams(window.location.search);
+      const roleId = params.get("role_id");
+
       if (!roleId) {
-        debug("[portal] No role_id in query string");
+        log("No role_id in query string");
         return;
       }
-      debug("[portal] Fetching role context for role_id=" + roleId);
 
+      log("Fetching role context for role_id=" + roleId);
       try {
         const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
         const data = await res.json();
-        debug("[portal] GET result", data);
+        log("GET result", data);
 
         if (data.success && data.context) {
           const ctx = data.context;
+          document.getElementById("ctxUser").textContent = ctx.user;
+          document.getElementById("ctxRole").textContent = ctx.roleType;
+          document.getElementById("ctxUnit").textContent = ctx.unitName;
+          document.getElementById("ctxIter").textContent = ctx.iterName;
+          document.getElementById("ctxIterId").textContent = ctx.iterId;
+          document.getElementById("ctxQset").textContent = ctx.qset;
 
-          // ✅ Use flat structure
-          document.getElementById("ctxUser").textContent = ctx.user || "—";
-          document.getElementById("ctxRole").textContent = ctx.roleType || "—";
-          document.getElementById("ctxUnit").textContent = ctx.unitName || "—";
-          document.getElementById("ctxIter").textContent = ctx.iterName || "—";
-          document.getElementById("ctxIterId").textContent = ctx.iterId || "—";
-          document.getElementById("ctxQset").textContent = ctx.qset || "—";
-
-          debug("[portal] Context displayed", ctx);
+          // Wire up links with role_id handoff
+          document.getElementById("linkCognitive").href = `cognitive-tool.html?role_id=${roleId}`;
+          document.getElementById("linkAnalyzer").href = `analyze.html?role_id=${roleId}`;
+          document.getElementById("linkOrg").href = `org-chart.html?role_id=${roleId}`;
+          document.getElementById("linkTable").href = `table-viewer.html?role_id=${roleId}`;
         } else {
-          debug("[portal] Error fetching context", data);
+          log("Error fetching context", data);
         }
       } catch (err) {
-        debug("[portal] Exception", err);
+        log("Exception", { error: err.message });
       }
-    }
-
-    function goTool(page) {
-      if (!roleId) {
-        alert("Missing role_id context");
-        return;
-      }
-      window.location.href = `${page}?role_id=${roleId}`;
     }
 
     loadContext();
