@@ -9,12 +9,11 @@
   <div class="max-w-6xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">Database Table Viewer</h1>
-      <p class="text-sm text-gray-600">Inspect current database state (debugging tool).</p>
+      <p class="text-sm text-gray-600">Inspect all database tables (debugging tool).</p>
     </header>
 
     <div class="bg-white p-6 rounded shadow">
-      <div id="context" class="mb-4 text-sm text-gray-700"></div>
-      <div id="tables" class="space-y-6"></div>
+      <div id="tables" class="space-y-8"></div>
 
       <div class="mt-6 flex gap-3">
         <button onclick="loadAll()" class="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">
@@ -23,7 +22,7 @@
         <a href="admin.html" class="text-blue-600 hover:underline self-center">&larr; Back to Admin Portal</a>
       </div>
 
-      <details class="mt-4">
+      <details class="mt-6">
         <summary class="cursor-pointer">Debug log (open to view)</summary>
         <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
       </details>
@@ -31,7 +30,73 @@
   </div>
 
   <script>
-    // (Keep your table-viewer JS code unchanged)
+    const debug = document.getElementById("debug");
+    function log(msg, obj=null) {
+      debug.textContent += `[viewer] ${msg} ${obj? JSON.stringify(obj):""}\n`;
+    }
+
+    async function fetchTable(name, action, params={}) {
+      log(`Fetching ${name}...`);
+      try {
+        let url = `/api/admin/${action}`;
+        if (params && Object.keys(params).length > 0) {
+          url += "?" + new URLSearchParams(params).toString();
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || "Failed");
+        log(`${name} loaded`, data);
+        return data;
+      } catch (e) {
+        log(`Error loading ${name}: ${e.message}`);
+        return null;
+      }
+    }
+
+    async function loadAll() {
+      document.getElementById("tables").innerHTML = "";
+
+      // Define which tables to load (map to actions we have in [action].js)
+      const loaders = [
+        { name: "People", action: "people-all" },
+        { name: "Organization Units", action: "org-units-all" },
+        { name: "Person Roles", action: "roles-all" },
+        { name: "Iterations", action: "iterations-all" },
+      ];
+
+      for (const { name, action } of loaders) {
+        const data = await fetchTable(name, action);
+        if (data && data.rows) {
+          renderTable(name, data.rows);
+        }
+      }
+    }
+
+    function renderTable(title, rows) {
+      const div = document.createElement("div");
+      div.innerHTML = `<h2 class="text-lg font-semibold mb-2">${title}</h2>`;
+      if (!rows || rows.length === 0) {
+        div.innerHTML += `<p class="text-gray-500 text-sm">No rows.</p>`;
+      } else {
+        const table = document.createElement("table");
+        table.className = "min-w-full border border-gray-300 text-sm";
+        const thead = document.createElement("thead");
+        const headers = Object.keys(rows[0]);
+        thead.innerHTML = `<tr class="bg-gray-100">${headers.map(h => `<th class="border px-2 py-1">${h}</th>`).join("")}</tr>`;
+        table.appendChild(thead);
+        const tbody = document.createElement("tbody");
+        rows.forEach(r => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = headers.map(h => `<td class="border px-2 py-1">${r[h]}</td>`).join("");
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        div.appendChild(table);
+      }
+      document.getElementById("tables").appendChild(div);
+    }
+
+    window.addEventListener("load", loadAll);
   </script>
 </body>
 </html>

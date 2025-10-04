@@ -115,6 +115,36 @@ export default async function handler(req, res) {
         break;
       }
 
+      // 🆕 Table Viewer endpoints (return ALL rows)
+
+      case "people-all": {
+        const { data, error } = await supabase.from("people").select("*");
+        if (error) throw error;
+        res.status(200).json({ success: true, rows: data });
+        break;
+      }
+
+      case "org-units-all": {
+        const { data, error } = await supabase.from("organization_units").select("*");
+        if (error) throw error;
+        res.status(200).json({ success: true, rows: data });
+        break;
+      }
+
+      case "roles-all": {
+        const { data, error } = await supabase.from("person_roles").select("*");
+        if (error) throw error;
+        res.status(200).json({ success: true, rows: data });
+        break;
+      }
+
+      case "iterations-all": {
+        const { data, error } = await supabase.from("iterations").select("*");
+        if (error) throw error;
+        res.status(200).json({ success: true, rows: data });
+        break;
+      }
+
       default:
         res.status(400).json({ success: false, message: `Unknown action: ${action}` });
     }
