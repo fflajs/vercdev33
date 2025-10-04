@@ -1,58 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>User Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] summary .tw-caret { transform: rotate(90deg); }
+  </style>
 </head>
-<body class="p-6 bg-gray-100">
-<div class="max-w-4xl mx-auto bg-white p-4 rounded shadow">
-  <h1 class="text-2xl font-bold mb-4">User Portal</h1>
-  <p class="mb-4">Welcome to the cognitive tools and analysis portal.</p>
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-4xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">User Portal</h1>
+      <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
+    </header>
 
-  <div id="context" class="mb-4 text-sm text-gray-700"></div>
+    <div id="user-content" class="hidden space-y-6">
+      <div class="rounded-lg bg-white p-4 border border-gray-200">
+        <h2 class="text-lg font-semibold mb-2">Welcome, <span id="user-name" class="text-blue-700"></span></h2>
+        <p class="text-sm text-gray-700" id="user-details"></p>
+      </div>
 
-  <div class="space-y-3">
-    <a id="cognitive" href="#" class="block bg-blue-500 text-white px-3 py-2 rounded text-center">Cognitive Tool</a>
-    <a id="analyzer" href="#" class="block bg-green-500 text-white px-3 py-2 rounded text-center">Analyzer</a>
+      <div class="flex flex-wrap gap-3">
+        <a href="/cognitive-tool.html" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700">Go to Cognitive Tool</a>
+        <a href="/analyze.html" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
+        <a href="/index.html" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">Logout</a>
+      </div>
+    </div>
+
+    <div id="no-roles" class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded">
+      <p class="text-sm text-yellow-800">You have no assigned roles in the current iteration. Please contact your administrator.</p>
+    </div>
+
+    <!-- Debug toggler -->
+    <details class="mt-6 w-full bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer select-none flex items-center gap-2">
+        <span class="tw-caret inline-block transition-transform">▶</span>
+        <span class="font-semibold">Debug log (open to view)</span>
+      </summary>
+      <pre id="debug" class="mt-2 whitespace-pre-wrap text-xs"></pre>
+    </details>
   </div>
 
-  <div class="mt-6">
-    <a href="index.html" class="text-blue-600">&larr; Back to Welcome</a>
-  </div>
+  <script>
+    (function() {
+      const qs = new URLSearchParams(window.location.search);
+      const userName = qs.get('name');
+      const debugEl = document.getElementById('debug');
+      const contextEl = document.getElementById('context-line');
+      const userEl = document.getElementById('user-content');
+      const nameEl = document.getElementById('user-name');
+      const detailsEl = document.getElementById('user-details');
+      const noRolesEl = document.getElementById('no-roles');
 
-  <details class="mt-4">
-    <summary>Debug log (open to view)</summary>
-    <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
-  </details>
-</div>
+      const log = (msg, obj) => {
+        const line = `[${new Date().toISOString()}] ${msg}`;
+        if (obj !== undefined) {
+          try { debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`; }
+          catch { debugEl.textContent += `${line}\n`; }
+        } else {
+          debugEl.textContent += `${line}\n`;
+        }
+        if (debugEl.textContent.length > 40000)
+          debugEl.textContent = debugEl.textContent.slice(-30000);
+      };
 
-<script>
-const log=(msg,obj=null)=>{document.getElementById('debug').textContent+=`[portal] ${msg} ${obj?JSON.stringify(obj):''}\n`;};
+      const api = {
+        async getUserRoles(name) {
+          log('[portal] GET /api/admin/get-user-roles', { name });
+          const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
+          const data = await res.json().catch(() => ({}));
+          log('[portal] get-user-roles result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
+          return data;
+        }
+      };
 
-async function init(){
-  log("page loaded");
-  const params=new URLSearchParams(window.location.search);
-  const roleId=params.get('role_id');
-  if(!roleId){log("Missing role_id");return;}
-  log("Fetching role context for role_id="+roleId);
+      async function init() {
+        if (!userName) {
+          contextEl.textContent = 'No user specified. Please log in first.';
+          return;
+        }
 
-  const res=await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-  const json=await res.json();
-  log("GET result",json);
-  if(!json.success){log("Error fetching context",json);return;}
-  const c=json.context;
+        try {
+          const { user, roles } = await api.getUserRoles(userName);
+          if (!roles || roles.length === 0) {
+            nameEl.textContent = user.name;
+            noRolesEl.classList.remove('hidden');
+            return;
+          }
 
-  document.getElementById('context').textContent=
-    `User: ${c.user} — Role: ${c.roleType} — Unit: ${c.unitName} — Iteration: ${c.iterName} (ID: ${c.iterId}) — Question Set: ${c.qset}`;
+          // For simplicity, pick the first active role (in current iteration)
+          const role = roles[0];
+          const iter = role.iterations || {};
+          const unit = role.organization_units || {};
 
-  // Wire links
-  document.getElementById('cognitive').href=`cognitive.html?role_id=${roleId}`;
-  document.getElementById('analyzer').href=`analyze.html?role_id=${roleId}`;
-}
+          nameEl.textContent = user.name;
+          userEl.classList.remove('hidden');
 
-window.addEventListener('load',init);
-</script>
+          const roleType = role.is_manager ? 'Manager' : 'Member';
+          const iterInfo = `Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'})`;
+          const qsetInfo = iter.question_set ? `Question Set: ${iter.question_set}` : '';
+          const startDate = iter.start_date ? new Date(iter.start_date).toLocaleString() : '(start unknown)';
+          const orgUnit = unit.name || '—';
+
+          detailsEl.textContent = `${roleType} of "${orgUnit}" | ${iterInfo} | Start: ${startDate} | ${qsetInfo}`;
+          contextEl.textContent = `User: ${user.name} — Role: ${roleType} — Unit: ${orgUnit} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
+        } catch (e) {
+          contextEl.textContent = `Error: ${e.message}`;
+          log('[portal] load error', { message: e.message });
+        }
+      }
+
+      log('[portal] page loaded');
+      init();
+    })();
+  </script>
 </body>
 </html>
 

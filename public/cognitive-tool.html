@@ -1,167 +1,142 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Cognitive Tool</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] summary .tw-caret { transform: rotate(90deg); }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
-  <div class="flex-grow container mx-auto p-6">
-    <h1 class="text-2xl font-bold mb-4">Cognitive Tool</h1>
-    <p class="mb-6">Explore and manage cognitive processes.</p>
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-5xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">Cognitive Tool</h1>
+      <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
+    </header>
 
-    <!-- Context -->
-    <div id="context" class="mb-6 bg-white p-4 rounded shadow">
-      <p><strong>User:</strong> <span id="ctxUser">—</span></p>
-      <p><strong>Role:</strong> <span id="ctxRole">—</span></p>
-      <p><strong>Unit:</strong> <span id="ctxUnit">—</span></p>
-      <p><strong>Iteration:</strong> <span id="ctxIter">—</span></p>
-      <p><strong>Iteration ID:</strong> <span id="ctxIterId">—</span></p>
-      <p><strong>Question Set:</strong> <span id="ctxQset">—</span></p>
-    </div>
+    <div id="content" class="space-y-6 hidden">
+      <div class="rounded-lg bg-white p-4 border border-gray-200">
+        <h2 class="text-lg font-semibold mb-3">Active Question Set</h2>
+        <p id="question-set-info" class="text-sm text-gray-700 mb-2"></p>
+        <div id="question-list" class="space-y-2 text-sm text-gray-800"></div>
+      </div>
 
-    <!-- Survey -->
-    <div class="mb-6 bg-white p-4 rounded shadow">
-      <h2 class="text-xl font-semibold mb-2">Survey</h2>
-      <p class="text-gray-600 mb-2">Use the sliders below and save your answers.</p>
-      <div id="surveyArea" class="space-y-4"></div>
-
-      <div class="flex space-x-2 mt-4">
-        <button id="saveSurvey" class="flex-1 bg-green-500 text-white px-4 py-2 rounded">Save Survey</button>
-        <button id="loadSurvey" class="flex-1 bg-blue-500 text-white px-4 py-2 rounded">Load Survey</button>
+      <div class="flex flex-wrap gap-3">
+        <a href="/portal.html" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">← Back to Portal</a>
+        <a href="/analyze.html" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
       </div>
     </div>
 
-    <div>
-      <a href="portal.html" class="text-blue-600">← Back to Portal</a>
+    <div id="no-data" class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded">
+      <p class="text-sm text-yellow-800">No question set found for the active iteration.</p>
     </div>
+
+    <!-- Debug toggler -->
+    <details class="mt-6 w-full bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer select-none flex items-center gap-2">
+        <span class="tw-caret inline-block transition-transform">▶</span>
+        <span class="font-semibold">Debug log (open to view)</span>
+      </summary>
+      <pre id="debug" class="mt-2 whitespace-pre-wrap text-xs"></pre>
+    </details>
   </div>
 
-  <!-- Debug -->
-  <details class="bg-gray-200 p-4 mt-6">
-    <summary class="cursor-pointer">Debug log (open to view)</summary>
-    <pre id="debugLog" class="text-sm"></pre>
-  </details>
-
   <script>
-    const debug = (...args) => {
-      console.log(...args);
-      const log = document.getElementById('debugLog');
-      log.textContent += args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ') + "\n";
-    };
+    (function() {
+      const qs = new URLSearchParams(window.location.search);
+      const userName = qs.get('name');
+      const debugEl = document.getElementById('debug');
+      const contextEl = document.getElementById('context-line');
+      const contentEl = document.getElementById('content');
+      const questionInfoEl = document.getElementById('question-set-info');
+      const questionListEl = document.getElementById('question-list');
+      const noDataEl = document.getElementById('no-data');
 
-    const params = new URLSearchParams(window.location.search);
-    const roleId = params.get("role_id");
+      let currentIteration = null;
+      let currentUser = null;
 
-    let context = null;
-    let surveyValues = [];
-
-    async function loadContext() {
-      if (!roleId) {
-        debug("[cognitive-tool] Missing role_id param");
-        return;
-      }
-      debug("[cognitive-tool] Fetching context for role_id=" + roleId);
-
-      try {
-        const res = await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-        const data = await res.json();
-        debug("[cognitive-tool] Context loaded", data);
-
-        if (data.success && data.context) {
-          context = data.context;
-          document.getElementById("ctxUser").textContent = context.user || "—";
-          document.getElementById("ctxRole").textContent = context.roleType || "—";
-          document.getElementById("ctxUnit").textContent = context.unitName || "—";
-          document.getElementById("ctxIter").textContent = context.iterName || "—";
-          document.getElementById("ctxIterId").textContent = context.iterId || "—";
-          document.getElementById("ctxQset").textContent = context.qset || "—";
-        }
-      } catch (err) {
-        debug("[cognitive-tool] Exception", err);
-      }
-    }
-
-    function renderSurvey() {
-      const surveyArea = document.getElementById("surveyArea");
-      surveyArea.innerHTML = "";
-
-      // Example: 3 dimensions with 3 sliders each (9 total)
-      const questions = [
-        "Knowledge density", "Knowledge detail", "Knowledge clarity",
-        "Familiarity with task", "Familiarity with tools", "Familiarity with context",
-        "Cognitive load effort", "Cognitive load stress", "Cognitive load complexity"
-      ];
-
-      surveyValues = new Array(questions.length).fill(4);
-
-      questions.forEach((q, i) => {
-        const div = document.createElement("div");
-        div.innerHTML = `
-          <label class="block font-medium text-sm mb-1">${q}: <span id="val-${i}">4</span></label>
-          <input type="range" min="1" max="8" value="4" class="w-full" id="slider-${i}">
-        `;
-        surveyArea.appendChild(div);
-
-        const slider = div.querySelector("input");
-        slider.addEventListener("input", e => {
-          surveyValues[i] = parseInt(e.target.value);
-          document.getElementById("val-" + i).textContent = e.target.value;
-        });
-      });
-    }
-
-    async function saveSurvey() {
-      if (!context) return;
-      debug("[cognitive-tool] Saving survey", surveyValues);
-
-      try {
-        const res = await fetch("/api/admin/surveys", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            person_role_id: roleId,
-            iteration_id: context.iterId,
-            survey_results: surveyValues
-          })
-        });
-        const data = await res.json();
-        debug("[cognitive-tool] Save result", data);
-        alert(data.message || "Survey saved.");
-      } catch (err) {
-        debug("[cognitive-tool] Save exception", err);
-      }
-    }
-
-    async function loadSurvey() {
-      if (!context) return;
-      debug("[cognitive-tool] Loading survey for role", roleId);
-
-      try {
-        const res = await fetch(`/api/admin/surveys?person_role_id=${roleId}&iteration_id=${context.iterId}`);
-        const data = await res.json();
-        debug("[cognitive-tool] Load result", data);
-
-        if (data.success && data.survey) {
-          surveyValues = data.survey.survey_results;
-          surveyValues.forEach((val, i) => {
-            document.getElementById("slider-" + i).value = val;
-            document.getElementById("val-" + i).textContent = val;
-          });
-          alert("Survey loaded.");
+      const log = (msg, obj) => {
+        const line = `[${new Date().toISOString()}] ${msg}`;
+        if (obj !== undefined) {
+          try { debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`; }
+          catch { debugEl.textContent += `${line}\n`; }
         } else {
-          alert("No saved survey found.");
+          debugEl.textContent += `${line}\n`;
         }
-      } catch (err) {
-        debug("[cognitive-tool] Load exception", err);
+        if (debugEl.textContent.length > 40000)
+          debugEl.textContent = debugEl.textContent.slice(-30000);
+      };
+
+      const api = {
+        async getUserRoles(name) {
+          log('[cog] GET /api/admin/get-user-roles', { name });
+          const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
+          const data = await res.json().catch(() => ({}));
+          log('[cog] get-user-roles result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
+          return data;
+        },
+        async loadQuestionSet(fileName) {
+          log('[cog] Loading question set file', fileName);
+          const res = await fetch(`/data/${fileName}`);
+          if (!res.ok) throw new Error('Failed to load question set file');
+          const data = await res.json();
+          return data;
+        }
+      };
+
+      async function init() {
+        if (!userName) {
+          contextEl.textContent = 'No user specified. Please log in first.';
+          return;
+        }
+
+        try {
+          const { user, roles } = await api.getUserRoles(userName);
+          if (!roles || roles.length === 0) {
+            contextEl.textContent = `User: ${user.name} — No active roles found.`;
+            noDataEl.classList.remove('hidden');
+            return;
+          }
+
+          currentUser = user;
+          const role = roles[0];
+          const iter = role.iterations || {};
+          currentIteration = iter;
+
+          contextEl.textContent = `User: ${user.name} — Role: ${role.is_manager ? 'Manager' : 'Member'} — Unit: ${role.organization_units?.name || '—'} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
+          
+          if (!iter.question_set) {
+            noDataEl.classList.remove('hidden');
+            return;
+          }
+
+          const questions = await api.loadQuestionSet(iter.question_set);
+          questionInfoEl.textContent = `Loaded set: ${iter.question_set} — Total items: ${questions.length}`;
+          renderQuestions(questions);
+          contentEl.classList.remove('hidden');
+        } catch (e) {
+          contextEl.textContent = `Error: ${e.message}`;
+          log('[cog] load error', { message: e.message });
+        }
       }
-    }
 
-    document.getElementById("saveSurvey").addEventListener("click", saveSurvey);
-    document.getElementById("loadSurvey").addEventListener("click", loadSurvey);
+      function renderQuestions(questions) {
+        questionListEl.innerHTML = '';
+        questions.forEach((q, i) => {
+          const item = document.createElement('div');
+          item.className = 'p-2 border border-gray-200 rounded hover:bg-gray-50';
+          item.innerHTML = `<strong>Q${i + 1}:</strong> ${q.text || JSON.stringify(q)}`;
+          questionListEl.appendChild(item);
+        });
+      }
 
-    // --- init ---
-    loadContext().then(renderSurvey);
+      log('[cog] page loaded');
+      init();
+    })();
   </script>
 </body>
 </html>
