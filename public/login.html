@@ -1,121 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <meta charset="UTF-8">
-    <title>Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8" />
+  <title>Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center h-screen">
-    <div class="w-full max-w-sm bg-white p-8 rounded-lg shadow-lg">
-        <h1 class="text-3xl font-bold mb-2 text-center">Cognitive Visualizer Login</h1>
-        <p id="iteration-display" class="text-gray-600 mb-6 text-center">Please enter your details for the active iteration.</p>
-        
-        <form id="login-form">
-            <div class="mb-4">
-                <label for="name" class="block text-gray-700 text-sm font-bold mb-2">Name</label>
-                <input type="text" id="name" name="name" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
-            </div>
-             <div class="mb-4">
-                <label for="org-unit" class="block text-gray-700 text-sm font-bold mb-2">Organizational Unit</label>
-                <select id="org-unit" class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
-                    <option value="">Loading units...</option>
-                </select>
-            </div>
-             <div class="mb-6">
-                <label for="role" class="block text-gray-700 text-sm font-bold mb-2">Role</label>
-                <select id="role" class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
-                    <option value="false">Coworker</option>
-                    <option value="true">Manager</option>
-                </select>
-            </div>
-            <div class="flex items-center justify-between">
-                <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-                    Login
-                </button>
-                <a href="/portal.html" class="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
-                    Back to Portal
-                </a>
-            </div>
-        </form>
-        <p id="error-message" class="text-red-500 text-xs italic mt-4 text-center"></p>
-    </div>
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+    <h1 class="text-2xl font-bold mb-4 text-center">Login</h1>
+    <p class="text-gray-600 text-center mb-6">Enter your name to continue.</p>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const orgUnitSelect = document.getElementById('org-unit');
-            const errorMessage = document.getElementById('error-message');
-            const iterationDisplay = document.getElementById('iteration-display');
-            let activeIterationId = null;
+    <form id="login-form" class="space-y-4">
+      <input type="text" id="name" placeholder="Full Name"
+        class="w-full border rounded px-3 py-2" required />
+      <button type="submit"
+        class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+        Continue
+      </button>
+    </form>
 
-            try {
-                const iterationResponse = await fetch('/api/active-iteration');
-                if (!iterationResponse.ok) throw new Error('No active iteration found. Please contact an administrator.');
-                const activeIteration = await iterationResponse.json();
-                activeIterationId = activeIteration.id;
+    <p id="message" class="mt-4 text-center text-sm"></p>
 
-                // Update the subtitle with the active iteration name
-                iterationDisplay.textContent = `Please enter your details for the active iteration: ${activeIteration.name} (ID: ${activeIteration.id})`;
+    <a href="/index.html"
+       class="block text-center mt-6 text-blue-500 hover:text-blue-700">
+       Back to Welcome
+    </a>
+  </div>
 
-                const orgDataResponse = await fetch(`/api/org-data/${activeIterationId}`);
-                if (!orgDataResponse.ok) throw new Error('Could not load organizational units for the active iteration.');
-                const data = await orgDataResponse.json();
+  <script>
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("name").value.trim();
+      const message = document.getElementById("message");
 
-                orgUnitSelect.innerHTML = '<option value="">Select a unit</option>';
-                data.units.forEach(unit => {
-                    const option = document.createElement('option');
-                    option.value = unit.id;
-                    option.textContent = unit.name;
-                    orgUnitSelect.appendChild(option);
-                });
-            } catch (error) {
-                iterationDisplay.textContent = `Error: ${error.message}`;
-                iterationDisplay.classList.remove('text-gray-600');
-                iterationDisplay.classList.add('text-red-600');
-                orgUnitSelect.innerHTML = `<option value="">Could not load units</option>`;
-                orgUnitSelect.disabled = true;
-                document.querySelector('button[type="submit"]').disabled = true;
-            }
+      if (!name) {
+        message.textContent = "Name is required.";
+        message.className = "mt-4 text-center text-sm text-red-500";
+        return;
+      }
 
-            document.getElementById('login-form').addEventListener('submit', async function(event) {
-                event.preventDefault();
-                
-                const name = document.getElementById('name').value.trim();
-                const orgUnitId = document.getElementById('org-unit').value;
-                const isManager = document.getElementById('role').value;
-                errorMessage.textContent = '';
+      try {
+        // Check if this user exists in DB
+        const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
 
-                if (!name || !orgUnitId || isManager === '' || !activeIterationId) {
-                    errorMessage.textContent = 'Please fill out all fields.';
-                    return;
-                }
-
-                try {
-                    const response = await fetch('/api/login', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, orgUnitId, isManager: isManager === 'true', iterationId: activeIterationId })
-                    });
-
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.message || 'Login failed.');
-
-                    const user = data;
-                    
-                    const url = new URL('/cognitive-tool.html', window.location.origin);
-                    url.searchParams.set('personRoleId', user.personRoleId);
-                    url.searchParams.set('iterationId', activeIterationId);
-                    url.searchParams.set('userUnitId', user.org_unit_id);
-
-                    window.location.href = url.href;
-
-                } catch (error) {
-                    errorMessage.textContent = error.message;
-                }
-            });
-        });
-    </script>
+        if (res.ok && data.success && data.roles && data.roles.length > 0) {
+          // Redirect into login-user.html to select role
+          window.location.href = `/login-user.html?name=${encodeURIComponent(name)}`;
+        } else {
+          message.textContent = `No roles found for "${name}". Please register first.`;
+          message.className = "mt-4 text-center text-sm text-red-500";
+        }
+      } catch (err) {
+        console.error("Login fetch error:", err);
+        message.textContent = "Login failed: Network error.";
+        message.className = "mt-4 text-center text-sm text-red-500";
+      }
+    });
+  </script>
 </body>
 </html>
-
 
