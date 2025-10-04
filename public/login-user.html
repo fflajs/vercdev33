@@ -3,33 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Login - Select Role</title>
+  <title>Select Your Role</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     details > summary::-webkit-details-marker { display: none; }
     details[open] summary .tw-caret { transform: rotate(90deg); }
   </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
+<body class="bg-gray-50 text-gray-900">
   <div class="max-w-lg mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">Select Your Role</h1>
-      <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
+      <p id="subtitle" class="text-sm text-gray-600 mt-1"></p>
     </header>
 
-    <div id="roles-container" class="hidden space-y-4"></div>
+    <div id="roles" class="space-y-3"></div>
+    <a href="/index.html" class="inline-block mt-6 text-sm text-blue-600 hover:underline">← Back</a>
 
-    <div id="no-roles" class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-      No roles assigned. Please contact your administrator.
-    </div>
-
-    <div class="mt-6">
-      <a href="/index.html" class="text-sm text-blue-600 hover:underline">← Back</a>
-    </div>
-
-    <!-- Debug log -->
-    <details class="mt-6 w-full bg-gray-900 text-gray-100 rounded-lg p-3">
-      <summary class="cursor-pointer select-none flex items-center gap-2">
+    <details class="mt-6 bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer flex items-center gap-2 select-none">
         <span class="tw-caret inline-block transition-transform">▶</span>
         <span class="font-semibold">Debug log (open to view)</span>
       </summary>
@@ -38,87 +30,99 @@
   </div>
 
   <script>
-    (function () {
+    (async function () {
       const qs = new URLSearchParams(window.location.search);
-      const userName = qs.get('name');
-      const debugEl = document.getElementById('debug');
-      const contextEl = document.getElementById('context-line');
-      const rolesContainer = document.getElementById('roles-container');
-      const noRolesEl = document.getElementById('no-roles');
+      const name = qs.get("name");
+      const debugEl = document.getElementById("debug");
+      const rolesEl = document.getElementById("roles");
+      const subtitleEl = document.getElementById("subtitle");
 
       const log = (msg, obj) => {
-        const line = `[${new Date().toISOString()}] ${msg}`;
+        const line = `[${new Date().toISOString()}] [login-user] ${msg}`;
         if (obj !== undefined) {
-          try {
-            debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`;
-          } catch {
-            debugEl.textContent += `${line}\n`;
-          }
-        } else {
-          debugEl.textContent += `${line}\n`;
-        }
-        if (debugEl.textContent.length > 40000)
-          debugEl.textContent = debugEl.textContent.slice(-30000);
+          try { debugEl.textContent += line + " " + JSON.stringify(obj) + "\n"; }
+          catch { debugEl.textContent += line + "\n"; }
+        } else debugEl.textContent += line + "\n";
       };
 
-      const api = {
-        async getUserRoles(name) {
-          log('[login-user] GET /api/admin/get-user-roles', { name });
-          const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
-          const data = await res.json().catch(() => ({}));
-          log('[login-user] get-user-roles result', data);
-          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
-          return data;
-        }
-      };
+      async function fetchJson(url) {
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        log(`GET ${url}`, data);
+        if (!res.ok || !data.success) throw new Error(data.message || `Request failed: ${url}`);
+        return data;
+      }
 
-      async function init() {
-        if (!userName) {
-          contextEl.textContent = 'Missing user name. Please go back and enter your name.';
+      log("page loaded");
+
+      if (!name) {
+        rolesEl.innerHTML = `<p class="text-red-600">Error: Missing user name in query.</p>`;
+        return;
+      }
+
+      try {
+        subtitleEl.textContent = `Welcome, ${name}! Choose one of your assigned roles to continue.`;
+
+        // 1️⃣ Get active iteration
+        const active = await fetchJson("/api/admin/active-iteration");
+        const activeIteration = active.iteration;
+        if (!activeIteration) {
+          rolesEl.innerHTML = `<p class="text-red-600">No active iteration found. Please contact an administrator.</p>`;
           return;
         }
 
-        contextEl.textContent = `Welcome, ${userName}! Choose one of your assigned roles to continue.`;
+        // 2️⃣ Get user roles
+        const roleData = await fetchJson(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
 
-        try {
-          const { user, roles } = await api.getUserRoles(userName);
+        // 3️⃣ Filter roles by active iteration only
+        const filtered = (roleData.roles || []).filter(r => r.iterations.id === activeIteration.id);
 
-          if (!roles || roles.length === 0) {
-            noRolesEl.classList.remove('hidden');
-            return;
-          }
-
-          rolesContainer.innerHTML = '';
-          roles.forEach((r) => {
-            const iter = r.iterations || {};
-            const unit = r.organization_units || {};
-            const roleType = r.is_manager ? 'Manager' : 'Member';
-
-            const btn = document.createElement('button');
-            btn.className =
-              'w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:bg-blue-50 transition';
-            btn.innerHTML = `
-              <div class="font-medium text-gray-900">${roleType} in ${unit.name || '(unknown unit)'}</div>
-              <div class="text-sm text-gray-600">Iteration: ${iter.name || '(unknown)'} (ID: ${iter.id || '—'})</div>
-              <div class="text-xs text-gray-500">Question Set: ${iter.question_set || '—'}</div>
-            `;
-            btn.onclick = () => {
-              log('[login-user] Selected role', r);
-              const url = `/portal.html?name=${encodeURIComponent(user.name)}&role_id=${encodeURIComponent(r.id)}`;
-              window.location.href = url;
-            };
-            rolesContainer.appendChild(btn);
-          });
-
-          rolesContainer.classList.remove('hidden');
-        } catch (e) {
-          contextEl.textContent = `Error: ${e.message}`;
-          log('[login-user] load error', { message: e.message });
+        if (filtered.length === 0) {
+          rolesEl.innerHTML = `<p class="text-gray-700">No roles found for the active iteration (${activeIteration.name}).</p>`;
+          return;
         }
-      }
 
-      log('[login-user] page loaded');
-      init();
+        // 4️⃣ Render role cards
+        rolesEl.innerHTML = "";
+        filtered.forEach(role => {
+          const roleDiv = document.createElement("div");
+          roleDiv.className = "rounded-lg border border-gray-200 bg-white p-4 hover:shadow";
+
+          const roleType = role.is_manager ? "Manager" : "Member";
+          const orgName = role.organization_units?.name || "Unknown";
+          const iterName = role.iterations?.name || "Unknown";
+          const iterId = role.iterations?.id || "?";
+          const qset = role.iterations?.question_set || "Unknown";
+
+          roleDiv.innerHTML = `
+            <div class="font-semibold">${roleType} in ${orgName}</div>
+            <div class="text-sm text-gray-600">Iteration: ${iterName} (ID: ${iterId})</div>
+            <div class="text-sm text-gray-500">Question Set: ${qset}</div>
+            <button class="mt-3 rounded bg-blue-600 text-white text-sm px-3 py-1 hover:bg-blue-700">
+              Continue
+            </button>
+          `;
+
+          roleDiv.querySelector("button").onclick = () => {
+            const params = new URLSearchParams({
+              name,
+              role_id: role.id,
+              org_name: orgName,
+              role_type: roleType,
+              iter_id: iterId,
+              iter_name: iterName,
+              qset
+            });
+            window.location.href = `/portal.html?${params.toString()}`;
+          };
+
+          rolesEl.appendChild(roleDiv);
+        });
+
+      } catch (err) {
+        log("load error", { message: err.message });
+        rolesEl.innerHTML = `<p class="text-red-600">Error: ${err.message}</p>`;
+      }
     })();
   </script>
 </body>

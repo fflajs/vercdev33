@@ -10,33 +10,29 @@
     details[open] summary .tw-caret { transform: rotate(90deg); }
   </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="max-w-4xl mx-auto p-6">
+<body class="bg-gray-50 text-gray-900">
+  <div class="max-w-3xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">User Portal</h1>
       <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
     </header>
 
-    <div id="user-content" class="hidden space-y-6">
-      <div class="rounded-lg bg-white p-4 border border-gray-200">
-        <h2 class="text-lg font-semibold mb-2">Welcome, <span id="user-name" class="text-blue-700"></span></h2>
-        <p class="text-sm text-gray-700" id="user-details"></p>
-      </div>
-
-      <div class="flex flex-wrap gap-3">
-        <a id="to-cog" href="#" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700">Go to Cognitive Tool</a>
-        <a id="to-analyze" href="#" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
-        <a href="/index.html" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">Logout</a>
-      </div>
+    <div id="welcome-box" class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+      <h2 id="welcome-title" class="text-lg font-semibold mb-1">Welcome</h2>
+      <p id="welcome-desc" class="text-sm text-gray-700"></p>
     </div>
 
-    <div id="no-roles" class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded">
-      <p class="text-sm text-yellow-800">You have no assigned roles in the current iteration. Please contact your administrator.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <button id="btn-cognitive" class="rounded bg-blue-600 text-white px-4 py-2 hover:bg-blue-700">Go to Cognitive Tool</button>
+      <button id="btn-analyze" class="rounded bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">Go to Analyzer</button>
     </div>
 
-    <!-- Debug toggler -->
-    <details class="mt-6 w-full bg-gray-900 text-gray-100 rounded-lg p-3">
-      <summary class="cursor-pointer select-none flex items-center gap-2">
+    <div class="mt-6">
+      <a href="/index.html" class="text-sm text-blue-600 hover:underline">← Logout</a>
+    </div>
+
+    <details class="mt-6 bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer flex items-center gap-2 select-none">
         <span class="tw-caret inline-block transition-transform">▶</span>
         <span class="font-semibold">Debug log (open to view)</span>
       </summary>
@@ -45,93 +41,85 @@
   </div>
 
   <script>
-    (function() {
+    (async function () {
       const qs = new URLSearchParams(window.location.search);
-      const userName = qs.get('name');
-      const roleId = qs.get('role_id');
-      const debugEl = document.getElementById('debug');
-      const contextEl = document.getElementById('context-line');
-      const userEl = document.getElementById('user-content');
-      const nameEl = document.getElementById('user-name');
-      const detailsEl = document.getElementById('user-details');
-      const noRolesEl = document.getElementById('no-roles');
-      const cogLink = document.getElementById('to-cog');
-      const analyzeLink = document.getElementById('to-analyze');
+      const name = qs.get("name");
+      const roleId = qs.get("role_id");
+      const debugEl = document.getElementById("debug");
+      const contextEl = document.getElementById("context-line");
+      const welcomeTitle = document.getElementById("welcome-title");
+      const welcomeDesc = document.getElementById("welcome-desc");
 
       const log = (msg, obj) => {
-        const line = `[${new Date().toISOString()}] ${msg}`;
+        const line = `[${new Date().toISOString()}] [portal] ${msg}`;
         if (obj !== undefined) {
-          try { debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`; }
-          catch { debugEl.textContent += `${line}\n`; }
-        } else {
-          debugEl.textContent += `${line}\n`;
-        }
-        if (debugEl.textContent.length > 40000)
-          debugEl.textContent = debugEl.textContent.slice(-30000);
+          try { debugEl.textContent += line + " " + JSON.stringify(obj) + "\n"; }
+          catch { debugEl.textContent += line + "\n"; }
+        } else debugEl.textContent += line + "\n";
       };
 
-      const api = {
-        async getUserRoles(name) {
-          log('[portal] GET /api/admin/get-user-roles', { name });
-          const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
-          const data = await res.json().catch(() => ({}));
-          log('[portal] get-user-roles result', data);
-          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
-          return data;
-        }
-      };
+      async function fetchJson(url) {
+        const res = await fetch(url);
+        const data = await res.json().catch(() => ({}));
+        log(`GET ${url}`, data);
+        if (!res.ok || !data.success) throw new Error(data.message || `Request failed: ${url}`);
+        return data;
+      }
 
-      async function init() {
-        if (!userName) {
-          contextEl.textContent = 'No user specified. Please log in first.';
+      log("page loaded");
+
+      if (!name || !roleId) {
+        contextEl.textContent = "Error: Missing user context.";
+        return;
+      }
+
+      try {
+        const data = await fetchJson(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
+        const activeRole = (data.roles || []).find(r => r.id == roleId);
+
+        if (!activeRole) {
+          contextEl.textContent = "Error: Role not found for this user.";
           return;
         }
 
-        try {
-          const { user, roles } = await api.getUserRoles(userName);
-          if (!roles || roles.length === 0) {
-            nameEl.textContent = user.name;
-            noRolesEl.classList.remove('hidden');
-            return;
-          }
+        const roleType = activeRole.is_manager ? "Manager" : "Member";
+        const orgName = activeRole.organization_units?.name || "Unknown Unit";
+        const iterName = activeRole.iterations?.name || "Unknown Iteration";
+        const iterId = activeRole.iterations?.id || "?";
+        const qset = activeRole.iterations?.question_set || "Unknown";
+        const startDate = activeRole.iterations?.start_date 
+          ? new Date(activeRole.iterations.start_date).toLocaleDateString()
+          : "(no start date)";
 
-          let selectedRole = null;
-          if (roleId) {
-            selectedRole = roles.find(r => String(r.id) === String(roleId));
-          }
-          if (!selectedRole) selectedRole = roles[0]; // fallback to first
+        contextEl.textContent = `User: ${name} — Role: ${roleType} — Unit: ${orgName} — Iteration: ${iterName} (ID: ${iterId}) — Question Set: ${qset}`;
+        welcomeTitle.textContent = `Welcome, ${name}`;
+        welcomeDesc.textContent = `${roleType} of "${orgName}" | Iteration: ${iterName} (ID: ${iterId}) | Start: ${startDate} | Question Set: ${qset}`;
 
-          const iter = selectedRole.iterations || {};
-          const unit = selectedRole.organization_units || {};
-          const roleType = selectedRole.is_manager ? 'Manager' : 'Member';
+        // Navigation buttons
+        document.getElementById("btn-cognitive").onclick = () => {
+          const params = new URLSearchParams({
+            name,
+            role_id: roleId,
+            iter_id: iterId,
+            qset
+          });
+          window.location.href = `/cognitive-tool.html?${params.toString()}`;
+        };
 
-          nameEl.textContent = user.name;
-          userEl.classList.remove('hidden');
+        document.getElementById("btn-analyze").onclick = () => {
+          const params = new URLSearchParams({
+            name,
+            role_id: roleId,
+            iter_id: iterId,
+            qset
+          });
+          window.location.href = `/analyze.html?${params.toString()}`;
+        };
 
-          const startDate = iter.start_date
-            ? new Date(iter.start_date).toLocaleString()
-            : '(unknown)';
-          const iterInfo = `Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'})`;
-          const qsetInfo = iter.question_set
-            ? `Question Set: ${iter.question_set}`
-            : '';
-          const orgUnit = unit.name || '—';
-
-          detailsEl.textContent = `${roleType} of "${orgUnit}" | ${iterInfo} | Start: ${startDate} | ${qsetInfo}`;
-          contextEl.textContent = `User: ${user.name} — Role: ${roleType} — Unit: ${orgUnit} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
-
-          // Update navigation links with propagated params
-          const baseParams = `?name=${encodeURIComponent(user.name)}&role_id=${encodeURIComponent(selectedRole.id)}`;
-          cogLink.href = `/cognitive-tool.html${baseParams}`;
-          analyzeLink.href = `/analyze.html${baseParams}`;
-        } catch (e) {
-          contextEl.textContent = `Error: ${e.message}`;
-          log('[portal] load error', { message: e.message });
-        }
+      } catch (err) {
+        contextEl.textContent = `Error: ${err.message}`;
+        log("load error", { message: err.message });
       }
-
-      log('[portal] page loaded');
-      init();
     })();
   </script>
 </body>

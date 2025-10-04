@@ -10,33 +10,25 @@
     details[open] summary .tw-caret { transform: rotate(90deg); }
   </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="max-w-5xl mx-auto p-6">
+<body class="bg-gray-50 text-gray-900">
+  <div class="max-w-4xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">Cognitive Tool</h1>
       <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
     </header>
 
-    <div id="content" class="space-y-6 hidden">
-      <div class="rounded-lg bg-white p-4 border border-gray-200">
-        <h2 class="text-lg font-semibold mb-3">Active Question Set</h2>
-        <p id="question-set-info" class="text-sm text-gray-700 mb-2"></p>
-        <div id="question-list" class="space-y-2 text-sm text-gray-800"></div>
-      </div>
-
-      <div class="flex flex-wrap gap-3">
-        <a id="to-portal" href="#" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">← Back to Portal</a>
-        <a id="to-analyze" href="#" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
-      </div>
+    <div id="content-box" class="rounded-lg border border-gray-200 bg-white p-4 mb-6">
+      <h2 class="font-semibold mb-2">Loaded Question Set</h2>
+      <p id="qs-summary" class="text-sm text-gray-700">Loading...</p>
+      <ul id="qs-list" class="mt-3 list-disc list-inside text-sm text-gray-800"></ul>
     </div>
 
-    <div id="no-data" class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded">
-      <p class="text-sm text-yellow-800">No question set found for the active iteration.</p>
+    <div class="flex items-center justify-between">
+      <a href="/portal.html" class="text-sm text-blue-600 hover:underline">← Back to Portal</a>
     </div>
 
-    <!-- Debug toggler -->
-    <details class="mt-6 w-full bg-gray-900 text-gray-100 rounded-lg p-3">
-      <summary class="cursor-pointer select-none flex items-center gap-2">
+    <details class="mt-6 bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer flex items-center gap-2 select-none">
         <span class="tw-caret inline-block transition-transform">▶</span>
         <span class="font-semibold">Debug log (open to view)</span>
       </summary>
@@ -45,108 +37,55 @@
   </div>
 
   <script>
-    (function() {
+    (async function () {
       const qs = new URLSearchParams(window.location.search);
-      const userName = qs.get('name');
-      const roleId = qs.get('role_id');
-      const debugEl = document.getElementById('debug');
-      const contextEl = document.getElementById('context-line');
-      const contentEl = document.getElementById('content');
-      const questionInfoEl = document.getElementById('question-set-info');
-      const questionListEl = document.getElementById('question-list');
-      const noDataEl = document.getElementById('no-data');
-      const portalLink = document.getElementById('to-portal');
-      const analyzeLink = document.getElementById('to-analyze');
+      const name = qs.get("name");
+      const roleId = qs.get("role_id");
+      const iterId = qs.get("iter_id");
+      const qset = qs.get("qset");
+
+      const debugEl = document.getElementById("debug");
+      const contextEl = document.getElementById("context-line");
+      const summaryEl = document.getElementById("qs-summary");
+      const listEl = document.getElementById("qs-list");
 
       const log = (msg, obj) => {
-        const line = `[${new Date().toISOString()}] ${msg}`;
+        const line = `[${new Date().toISOString()}] [cog] ${msg}`;
         if (obj !== undefined) {
-          try { debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`; }
-          catch { debugEl.textContent += `${line}\n`; }
-        } else {
-          debugEl.textContent += `${line}\n`;
-        }
-        if (debugEl.textContent.length > 40000)
-          debugEl.textContent = debugEl.textContent.slice(-30000);
+          try { debugEl.textContent += line + " " + JSON.stringify(obj) + "\n"; }
+          catch { debugEl.textContent += line + "\n"; }
+        } else debugEl.textContent += line + "\n";
       };
 
-      const api = {
-        async getUserRoles(name) {
-          log('[cog] GET /api/admin/get-user-roles', { name });
-          const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
-          const data = await res.json().catch(() => ({}));
-          log('[cog] get-user-roles result', data);
-          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
-          return data;
-        },
-        async loadQuestionSet(fileName) {
-          log('[cog] Loading question set', fileName);
-          const res = await fetch(`/data/${fileName}`);
-          if (!res.ok) throw new Error('Failed to load question set file');
-          const data = await res.json();
-          return data;
-        }
-      };
+      log("page loaded");
 
-      async function init() {
-        if (!userName) {
-          contextEl.textContent = 'No user specified. Please log in first.';
-          return;
-        }
-
-        try {
-          const { user, roles } = await api.getUserRoles(userName);
-          if (!roles || roles.length === 0) {
-            contextEl.textContent = `User: ${user.name} — No active roles found.`;
-            noDataEl.classList.remove('hidden');
-            return;
-          }
-
-          let selectedRole = null;
-          if (roleId) {
-            selectedRole = roles.find(r => String(r.id) === String(roleId));
-          }
-          if (!selectedRole) selectedRole = roles[0];
-
-          const iter = selectedRole.iterations || {};
-          const unit = selectedRole.organization_units || {};
-          const roleType = selectedRole.is_manager ? 'Manager' : 'Member';
-
-          contextEl.textContent = 
-            `User: ${user.name} — Role: ${roleType} — Unit: ${unit.name || '—'} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
-
-          if (!iter.question_set) {
-            noDataEl.classList.remove('hidden');
-            return;
-          }
-
-          const questions = await api.loadQuestionSet(iter.question_set);
-          questionInfoEl.textContent = `Loaded set: ${iter.question_set} — Total items: ${questions.length}`;
-          renderQuestions(questions);
-          contentEl.classList.remove('hidden');
-
-          // Link propagation
-          const params = `?name=${encodeURIComponent(user.name)}&role_id=${encodeURIComponent(selectedRole.id)}`;
-          portalLink.href = `/portal.html${params}`;
-          analyzeLink.href = `/analyze.html${params}`;
-        } catch (e) {
-          contextEl.textContent = `Error: ${e.message}`;
-          log('[cog] load error', { message: e.message });
-        }
+      if (!name || !iterId || !qset) {
+        contextEl.textContent = "Error: Missing context data.";
+        return;
       }
 
-      function renderQuestions(questions) {
-        questionListEl.innerHTML = '';
-        questions.forEach((q, i) => {
-          const item = document.createElement('div');
-          item.className = 'p-2 border border-gray-200 rounded hover:bg-gray-50';
-          item.innerHTML = `<strong>Q${i + 1}:</strong> ${q.text || JSON.stringify(q)}`;
-          questionListEl.appendChild(item);
+      contextEl.textContent = `User: ${name} — Role ID: ${roleId} — Iteration ID: ${iterId} — Question Set: ${qset}`;
+      log("GET /api/admin/get-user-roles", { name });
+
+      try {
+        const res = await fetch(`/data/${qset}`);
+        if (!res.ok) throw new Error("Failed to load question set file");
+        const data = await res.json();
+        log("Question set loaded", { count: data.length });
+
+        summaryEl.textContent = `Loaded ${data.length} questions from ${qset}. Showing first 5:`;
+
+        listEl.innerHTML = "";
+        data.slice(0, 5).forEach((q, i) => {
+          const li = document.createElement("li");
+          li.textContent = typeof q === "string" ? q : q.title || JSON.stringify(q);
+          listEl.appendChild(li);
         });
-      }
 
-      log('[cog] page loaded');
-      init();
+      } catch (err) {
+        summaryEl.textContent = `Error: ${err.message}`;
+        log("load error", { message: err.message });
+      }
     })();
   </script>
 </body>
