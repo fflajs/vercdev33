@@ -25,8 +25,8 @@
       </div>
 
       <div class="flex flex-wrap gap-3">
-        <a href="/portal.html" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">← Back to Portal</a>
-        <a href="/analyze.html" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
+        <a id="to-portal" href="#" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">← Back to Portal</a>
+        <a id="to-analyze" href="#" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
       </div>
     </div>
 
@@ -48,15 +48,15 @@
     (function() {
       const qs = new URLSearchParams(window.location.search);
       const userName = qs.get('name');
+      const roleId = qs.get('role_id');
       const debugEl = document.getElementById('debug');
       const contextEl = document.getElementById('context-line');
       const contentEl = document.getElementById('content');
       const questionInfoEl = document.getElementById('question-set-info');
       const questionListEl = document.getElementById('question-list');
       const noDataEl = document.getElementById('no-data');
-
-      let currentIteration = null;
-      let currentUser = null;
+      const portalLink = document.getElementById('to-portal');
+      const analyzeLink = document.getElementById('to-analyze');
 
       const log = (msg, obj) => {
         const line = `[${new Date().toISOString()}] ${msg}`;
@@ -80,7 +80,7 @@
           return data;
         },
         async loadQuestionSet(fileName) {
-          log('[cog] Loading question set file', fileName);
+          log('[cog] Loading question set', fileName);
           const res = await fetch(`/data/${fileName}`);
           if (!res.ok) throw new Error('Failed to load question set file');
           const data = await res.json();
@@ -102,13 +102,19 @@
             return;
           }
 
-          currentUser = user;
-          const role = roles[0];
-          const iter = role.iterations || {};
-          currentIteration = iter;
+          let selectedRole = null;
+          if (roleId) {
+            selectedRole = roles.find(r => String(r.id) === String(roleId));
+          }
+          if (!selectedRole) selectedRole = roles[0];
 
-          contextEl.textContent = `User: ${user.name} — Role: ${role.is_manager ? 'Manager' : 'Member'} — Unit: ${role.organization_units?.name || '—'} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
-          
+          const iter = selectedRole.iterations || {};
+          const unit = selectedRole.organization_units || {};
+          const roleType = selectedRole.is_manager ? 'Manager' : 'Member';
+
+          contextEl.textContent = 
+            `User: ${user.name} — Role: ${roleType} — Unit: ${unit.name || '—'} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
+
           if (!iter.question_set) {
             noDataEl.classList.remove('hidden');
             return;
@@ -118,6 +124,11 @@
           questionInfoEl.textContent = `Loaded set: ${iter.question_set} — Total items: ${questions.length}`;
           renderQuestions(questions);
           contentEl.classList.remove('hidden');
+
+          // Link propagation
+          const params = `?name=${encodeURIComponent(user.name)}&role_id=${encodeURIComponent(selectedRole.id)}`;
+          portalLink.href = `/portal.html${params}`;
+          analyzeLink.href = `/analyze.html${params}`;
         } catch (e) {
           contextEl.textContent = `Error: ${e.message}`;
           log('[cog] load error', { message: e.message });

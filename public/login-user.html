@@ -1,63 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Select Role</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login - Select Role</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] summary .tw-caret { transform: rotate(90deg); }
+  </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-    <h1 class="text-2xl font-bold mb-4 text-center">Select Your Role</h1>
-    <p class="text-gray-600 text-center mb-6">Choose a role to continue.</p>
+<body class="bg-gray-100 text-gray-900">
+  <div class="max-w-lg mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">Select Your Role</h1>
+      <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
+    </header>
 
-    <div id="role-box" class="space-y-3"></div>
+    <div id="roles-container" class="hidden space-y-4"></div>
 
-    <p id="message" class="mt-4 text-center text-sm"></p>
+    <div id="no-roles" class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+      No roles assigned. Please contact your administrator.
+    </div>
 
-    <a href="/index.html"
-       class="block text-center mt-6 text-blue-500 hover:text-blue-700">
-       &larr; Back
-    </a>
+    <div class="mt-6">
+      <a href="/index.html" class="text-sm text-blue-600 hover:underline">← Back</a>
+    </div>
+
+    <!-- Debug log -->
+    <details class="mt-6 w-full bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer select-none flex items-center gap-2">
+        <span class="tw-caret inline-block transition-transform">▶</span>
+        <span class="font-semibold">Debug log (open to view)</span>
+      </summary>
+      <pre id="debug" class="mt-2 whitespace-pre-wrap text-xs"></pre>
+    </details>
   </div>
 
   <script>
-    async function init() {
-      const params = new URLSearchParams(window.location.search);
-      const name = params.get("name");
-      const message = document.getElementById("message");
+    (function () {
+      const qs = new URLSearchParams(window.location.search);
+      const userName = qs.get('name');
+      const debugEl = document.getElementById('debug');
+      const contextEl = document.getElementById('context-line');
+      const rolesContainer = document.getElementById('roles-container');
+      const noRolesEl = document.getElementById('no-roles');
 
-      if (!name) {
-        message.textContent = "Missing user name.";
-        message.className = "text-red-500";
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
-        const data = await res.json();
-
-        if (res.ok && data.success && data.roles && data.roles.length > 0) {
-          const box = document.getElementById("role-box");
-          data.roles.forEach(role => {
-            const btn = document.createElement("a");
-            btn.href = `/portal.html?role_id=${role.id}`;
-            btn.textContent = `${role.roleType} in ${role.unitName}`;
-            btn.className =
-              "block w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 text-center";
-            box.appendChild(btn);
-          });
+      const log = (msg, obj) => {
+        const line = `[${new Date().toISOString()}] ${msg}`;
+        if (obj !== undefined) {
+          try {
+            debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`;
+          } catch {
+            debugEl.textContent += `${line}\n`;
+          }
         } else {
-          message.textContent = `No roles found for "${name}". Please contact your administrator.`;
-          message.className = "text-red-500";
+          debugEl.textContent += `${line}\n`;
         }
-      } catch (err) {
-        console.error("Login-user fetch error:", err);
-        message.textContent = "Failed to load roles. Network error.";
-        message.className = "text-red-500";
-      }
-    }
+        if (debugEl.textContent.length > 40000)
+          debugEl.textContent = debugEl.textContent.slice(-30000);
+      };
 
-    window.addEventListener("load", init);
+      const api = {
+        async getUserRoles(name) {
+          log('[login-user] GET /api/admin/get-user-roles', { name });
+          const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
+          const data = await res.json().catch(() => ({}));
+          log('[login-user] get-user-roles result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
+          return data;
+        }
+      };
+
+      async function init() {
+        if (!userName) {
+          contextEl.textContent = 'Missing user name. Please go back and enter your name.';
+          return;
+        }
+
+        contextEl.textContent = `Welcome, ${userName}! Choose one of your assigned roles to continue.`;
+
+        try {
+          const { user, roles } = await api.getUserRoles(userName);
+
+          if (!roles || roles.length === 0) {
+            noRolesEl.classList.remove('hidden');
+            return;
+          }
+
+          rolesContainer.innerHTML = '';
+          roles.forEach((r) => {
+            const iter = r.iterations || {};
+            const unit = r.organization_units || {};
+            const roleType = r.is_manager ? 'Manager' : 'Member';
+
+            const btn = document.createElement('button');
+            btn.className =
+              'w-full text-left rounded-lg border border-gray-200 bg-white p-3 hover:bg-blue-50 transition';
+            btn.innerHTML = `
+              <div class="font-medium text-gray-900">${roleType} in ${unit.name || '(unknown unit)'}</div>
+              <div class="text-sm text-gray-600">Iteration: ${iter.name || '(unknown)'} (ID: ${iter.id || '—'})</div>
+              <div class="text-xs text-gray-500">Question Set: ${iter.question_set || '—'}</div>
+            `;
+            btn.onclick = () => {
+              log('[login-user] Selected role', r);
+              const url = `/portal.html?name=${encodeURIComponent(user.name)}&role_id=${encodeURIComponent(r.id)}`;
+              window.location.href = url;
+            };
+            rolesContainer.appendChild(btn);
+          });
+
+          rolesContainer.classList.remove('hidden');
+        } catch (e) {
+          contextEl.textContent = `Error: ${e.message}`;
+          log('[login-user] load error', { message: e.message });
+        }
+      }
+
+      log('[login-user] page loaded');
+      init();
+    })();
   </script>
 </body>
 </html>

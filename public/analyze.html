@@ -21,17 +21,12 @@
       <div class="rounded-lg bg-white p-4 border border-gray-200">
         <h2 class="text-lg font-semibold mb-2">Active Analysis Context</h2>
         <p id="iteration-info" class="text-sm text-gray-700 mb-3"></p>
-
-        <div id="analysis-area" class="space-y-3">
-          <div class="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-700">
-            <p>Analysis results will appear here after cognitive interactions are recorded.</p>
-          </div>
-        </div>
+        <div id="analysis-area" class="space-y-3"></div>
       </div>
 
       <div class="flex flex-wrap gap-3">
-        <a href="/cognitive-tool.html" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700">← Back to Cognitive Tool</a>
-        <a href="/portal.html" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">Back to Portal</a>
+        <a id="to-cog" href="#" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700">← Back to Cognitive Tool</a>
+        <a id="to-portal" href="#" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">Back to Portal</a>
       </div>
     </div>
 
@@ -53,12 +48,15 @@
     (function() {
       const qs = new URLSearchParams(window.location.search);
       const userName = qs.get('name');
+      const roleId = qs.get('role_id');
       const debugEl = document.getElementById('debug');
       const contextEl = document.getElementById('context-line');
       const contentEl = document.getElementById('content');
       const iterInfoEl = document.getElementById('iteration-info');
       const analysisAreaEl = document.getElementById('analysis-area');
       const noDataEl = document.getElementById('no-data');
+      const cogLink = document.getElementById('to-cog');
+      const portalLink = document.getElementById('to-portal');
 
       const log = (msg, obj) => {
         const line = `[${new Date().toISOString()}] ${msg}`;
@@ -104,10 +102,15 @@
             return;
           }
 
-          const role = roles[0];
-          const iter = role.iterations || {};
-          const org = role.organization_units || {};
-          const roleType = role.is_manager ? 'Manager' : 'Member';
+          let selectedRole = null;
+          if (roleId) {
+            selectedRole = roles.find(r => String(r.id) === String(roleId));
+          }
+          if (!selectedRole) selectedRole = roles[0];
+
+          const iter = selectedRole.iterations || {};
+          const org = selectedRole.organization_units || {};
+          const roleType = selectedRole.is_manager ? 'Manager' : 'Member';
 
           contextEl.textContent =
             `User: ${user.name} — Role: ${roleType} — Unit: ${org.name || '—'} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
@@ -123,6 +126,10 @@
           const questions = await api.getIterationData(iter.question_set);
           renderAnalysis(questions);
           contentEl.classList.remove('hidden');
+
+          const params = `?name=${encodeURIComponent(user.name)}&role_id=${encodeURIComponent(selectedRole.id)}`;
+          cogLink.href = `/cognitive-tool.html${params}`;
+          portalLink.href = `/portal.html${params}`;
         } catch (e) {
           contextEl.textContent = `Error: ${e.message}`;
           log('[analyze] load error', { message: e.message });
@@ -132,26 +139,15 @@
       function renderAnalysis(questions) {
         analysisAreaEl.innerHTML = '';
 
-        // Placeholder visualization
         const statsBox = document.createElement('div');
         statsBox.className = 'p-3 bg-blue-50 border border-blue-200 rounded';
         statsBox.innerHTML = `
           <p class="text-sm text-blue-900">
-            This is a placeholder for analysis output.<br>
-            Question set loaded: <strong>${questions.length}</strong> items.<br>
-            Future versions will calculate scores, visualize responses, and display insights.
+            Placeholder for analysis output.<br>
+            Loaded question set: <strong>${questions.length}</strong> items.<br>
+            Future versions will show computed metrics and visual cognitive maps.
           </p>`;
         analysisAreaEl.appendChild(statsBox);
-
-        const list = document.createElement('div');
-        list.className = 'grid gap-1 mt-3';
-        questions.forEach((q, i) => {
-          const item = document.createElement('div');
-          item.className = 'text-xs border-b border-gray-100 pb-1';
-          item.textContent = `Q${i + 1}: ${q.text || JSON.stringify(q)}`;
-          list.appendChild(item);
-        });
-        analysisAreaEl.appendChild(list);
       }
 
       log('[analyze] page loaded');

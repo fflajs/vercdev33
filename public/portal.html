@@ -24,8 +24,8 @@
       </div>
 
       <div class="flex flex-wrap gap-3">
-        <a href="/cognitive-tool.html" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700">Go to Cognitive Tool</a>
-        <a href="/analyze.html" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
+        <a id="to-cog" href="#" class="rounded bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700">Go to Cognitive Tool</a>
+        <a id="to-analyze" href="#" class="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Go to Analyzer</a>
         <a href="/index.html" class="rounded bg-gray-600 px-4 py-2 text-sm text-white hover:bg-gray-700">Logout</a>
       </div>
     </div>
@@ -48,12 +48,15 @@
     (function() {
       const qs = new URLSearchParams(window.location.search);
       const userName = qs.get('name');
+      const roleId = qs.get('role_id');
       const debugEl = document.getElementById('debug');
       const contextEl = document.getElementById('context-line');
       const userEl = document.getElementById('user-content');
       const nameEl = document.getElementById('user-name');
       const detailsEl = document.getElementById('user-details');
       const noRolesEl = document.getElementById('no-roles');
+      const cogLink = document.getElementById('to-cog');
+      const analyzeLink = document.getElementById('to-analyze');
 
       const log = (msg, obj) => {
         const line = `[${new Date().toISOString()}] ${msg}`;
@@ -92,22 +95,35 @@
             return;
           }
 
-          // For simplicity, pick the first active role (in current iteration)
-          const role = roles[0];
-          const iter = role.iterations || {};
-          const unit = role.organization_units || {};
+          let selectedRole = null;
+          if (roleId) {
+            selectedRole = roles.find(r => String(r.id) === String(roleId));
+          }
+          if (!selectedRole) selectedRole = roles[0]; // fallback to first
+
+          const iter = selectedRole.iterations || {};
+          const unit = selectedRole.organization_units || {};
+          const roleType = selectedRole.is_manager ? 'Manager' : 'Member';
 
           nameEl.textContent = user.name;
           userEl.classList.remove('hidden');
 
-          const roleType = role.is_manager ? 'Manager' : 'Member';
+          const startDate = iter.start_date
+            ? new Date(iter.start_date).toLocaleString()
+            : '(unknown)';
           const iterInfo = `Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'})`;
-          const qsetInfo = iter.question_set ? `Question Set: ${iter.question_set}` : '';
-          const startDate = iter.start_date ? new Date(iter.start_date).toLocaleString() : '(start unknown)';
+          const qsetInfo = iter.question_set
+            ? `Question Set: ${iter.question_set}`
+            : '';
           const orgUnit = unit.name || '—';
 
           detailsEl.textContent = `${roleType} of "${orgUnit}" | ${iterInfo} | Start: ${startDate} | ${qsetInfo}`;
           contextEl.textContent = `User: ${user.name} — Role: ${roleType} — Unit: ${orgUnit} — Iteration: ${iter.name || '—'} (ID: ${iter.id || '—'}) — Question Set: ${iter.question_set || '—'}`;
+
+          // Update navigation links with propagated params
+          const baseParams = `?name=${encodeURIComponent(user.name)}&role_id=${encodeURIComponent(selectedRole.id)}`;
+          cogLink.href = `/cognitive-tool.html${baseParams}`;
+          analyzeLink.href = `/analyze.html${baseParams}`;
         } catch (e) {
           contextEl.textContent = `Error: ${e.message}`;
           log('[portal] load error', { message: e.message });
