@@ -38,7 +38,6 @@ module.exports = async function handler(req, res) {
           return res.status(400).json({ success: false, message: "Name and question_set are required." });
         }
 
-        // prevent duplicate active iterations
         const { data: active, error: activeErr } = await supabase
           .from("iterations")
           .select("*")
@@ -49,7 +48,6 @@ module.exports = async function handler(req, res) {
           return res.status(400).json({ success: false, message: "An active iteration already exists." });
         }
 
-        // create new iteration
         const { data: newIter, error: createErr } = await supabase
           .from("iterations")
           .insert([{ name, question_set, start_date: new Date().toISOString() }])
@@ -59,7 +57,6 @@ module.exports = async function handler(req, res) {
 
         const newIterId = newIter.id;
 
-        // find most recently closed iteration
         const { data: prevIter, error: prevErr } = await supabase
           .from("iterations")
           .select("*")
@@ -67,62 +64,45 @@ module.exports = async function handler(req, res) {
           .order("end_date", { ascending: false })
           .limit(1)
           .single();
-
         if (prevErr && prevErr.code !== "PGRST116") throw prevErr;
 
         if (prevIter) {
-          console.log(`[create-iteration] Cloning structure from iteration ${prevIter.id}`);
-
-          // clone organization_units
-          const { data: oldUnits, error: unitsErr } = await supabase
+          const { data: oldUnits } = await supabase
             .from("organization_units")
             .select("*")
             .eq("iteration_id", prevIter.id);
-          if (unitsErr) throw unitsErr;
 
           const idMap = new Map();
           for (const u of oldUnits) {
-            const { data: ins, error: insErr } = await supabase
+            const { data: ins } = await supabase
               .from("organization_units")
               .insert([{ name: u.name, parent_id: null, iteration_id: newIterId }])
               .select()
               .single();
-            if (insErr) throw insErr;
             idMap.set(u.id, ins.id);
           }
 
-          // update parent links
           for (const u of oldUnits) {
             if (u.parent_id) {
               const newParent = idMap.get(u.parent_id);
               const newId = idMap.get(u.id);
               if (newParent && newId) {
-                const { error: updErr } = await supabase
-                  .from("organization_units")
-                  .update({ parent_id: newParent })
-                  .eq("id", newId);
-                if (updErr) throw updErr;
+                await supabase.from("organization_units").update({ parent_id: newParent }).eq("id", newId);
               }
             }
           }
 
-          // clone person_roles with remapping
-          const { data: oldRoles, error: rolesErr } = await supabase
+          const { data: oldRoles } = await supabase
             .from("person_roles")
             .select("*")
             .eq("iteration_id", prevIter.id);
-          if (rolesErr) throw rolesErr;
-
           for (const r of oldRoles) {
             const newOrgId = idMap.get(r.org_unit_id);
             if (!newOrgId) continue;
-            const { error: insRoleErr } = await supabase
+            await supabase
               .from("person_roles")
               .insert([{ person_id: r.person_id, org_unit_id: newOrgId, is_manager: r.is_manager, iteration_id: newIterId }]);
-            if (insRoleErr) throw insRoleErr;
           }
-
-          console.log(`[create-iteration] Cloned ${oldUnits.length} units & ${oldRoles.length} roles.`);
         }
 
         res.status(200).json({ success: true, iteration: newIter });
@@ -165,46 +145,95 @@ module.exports = async function handler(req, res) {
 
       case "get-user-roles": {
         const { name } = req.query;
-        if (!name) {
-          return res.status(400).json({ success: false, message: "Name is required." });
-        }
+        if (!name) return res.status(400).json({ success: false, message: "Name is required." });
 
-        const { data: person, error: personErr } = await supabase
-          .from("people")
-          .select("*")
-          .ilike("name", name)
-          .maybeSingle();
-        if (personErr) throw personErr;
-        if (!person) {
-          return res.status(404).json({ success: false, message: "User not found." });
-        }
+        const { data: person } = await supabase.from("people").select("*").ilike("name", name).maybeSingle();
+        if (!person) return res.status(404).json({ success: false, message: "User not found." });
 
-        const { data: roles, error: rolesErr } = await supabase
+        const { data: roles } = await supabase
           .from("person_roles")
           .select("*, organization_units(name), iterations(name, id, question_set)")
           .eq("person_id", person.id);
-        if (rolesErr) throw rolesErr;
 
         res.status(200).json({ success: true, user: person, roles });
         break;
       }
 
       // ==========================================================
-      // 🧱 ORGANIZATION MANAGEMENT (for org-chart.html)
+      // 🧱 ORGANIZATION MANAGEMENT (new complete)
       // ==========================================================
-      // Note: ready placeholders; recheck org-chart later
 
       case "org-data": {
         const { iteration_id } = req.query;
-        if (!iteration_id) return res.status(400).json({ success: false, message: "iteration_id required." });
+        if (!iteration_id)
+          return res.status(400).json({ success: false, message: "iteration_id required." });
         const [units, roles, people] = await Promise.all([
           supabase.from("organization_units").select("*").eq("iteration_id", iteration_id),
           supabase.from("person_roles").select("*").eq("iteration_id", iteration_id),
           supabase.from("people").select("*"),
         ]);
-        if (units.error || roles.error || people.error)
-          throw units.error || roles.error || people.error;
         res.status(200).json({ success: true, units: units.data, roles: roles.data, people: people.data });
+        break;
+      }
+
+      case "create-org-unit": {
+        const { name, parent_id, iteration_id } = req.body;
+        if (!name || !iteration_id)
+          return res.status(400).json({ success: false, message: "Missing fields." });
+        const { data, error } = await supabase
+          .from("organization_units")
+          .insert([{ name, parent_id: parent_id || null, iteration_id }])
+          .select()
+          .single();
+        if (error) throw error;
+        res.status(200).json({ success: true, unit: data });
+        break;
+      }
+
+      case "update-org-unit": {
+        const { id, name } = req.body;
+        const { error } = await supabase.from("organization_units").update({ name }).eq("id", id);
+        if (error) throw error;
+        res.status(200).json({ success: true });
+        break;
+      }
+
+      case "delete-org-unit": {
+        const { id } = req.query;
+        if (!id) return res.status(400).json({ success: false, message: "Missing id" });
+
+        const deleteRecursive = async (unitId) => {
+          const { data: children } = await supabase
+            .from("organization_units")
+            .select("id")
+            .eq("parent_id", unitId);
+          for (const child of children) await deleteRecursive(child.id);
+          await supabase.from("person_roles").delete().eq("org_unit_id", unitId);
+          await supabase.from("organization_units").delete().eq("id", unitId);
+        };
+
+        await deleteRecursive(Number(id));
+        res.status(200).json({ success: true });
+        break;
+      }
+
+      case "assign-person": {
+        const { person_id, org_unit_id, is_manager, iteration_id } = req.body;
+        const { data, error } = await supabase
+          .from("person_roles")
+          .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
+          .select()
+          .single();
+        if (error) throw error;
+        res.status(200).json({ success: true, role: data });
+        break;
+      }
+
+      case "remove-person": {
+        const { role_id } = req.query;
+        const { error } = await supabase.from("person_roles").delete().eq("id", role_id);
+        if (error) throw error;
+        res.status(200).json({ success: true });
         break;
       }
 
@@ -212,38 +241,32 @@ module.exports = async function handler(req, res) {
       // 🧩 TABLE VIEWER ENDPOINTS
       // ==========================================================
       case "people-all": {
-        const { data, error } = await supabase.from("people").select("*");
-        if (error) throw error;
+        const { data } = await supabase.from("people").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }
       case "org-units-all": {
-        const { data, error } = await supabase.from("organization_units").select("*");
-        if (error) throw error;
+        const { data } = await supabase.from("organization_units").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }
       case "roles-all": {
-        const { data, error } = await supabase.from("person_roles").select("*");
-        if (error) throw error;
+        const { data } = await supabase.from("person_roles").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }
       case "iterations-all": {
-        const { data, error } = await supabase.from("iterations").select("*");
-        if (error) throw error;
+        const { data } = await supabase.from("iterations").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }
       case "app-data-all": {
-        const { data, error } = await supabase.from("app_data").select("*");
-        if (error) throw error;
+        const { data } = await supabase.from("app_data").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }
       case "surveys-all": {
-        const { data, error } = await supabase.from("surveys").select("*");
-        if (error) throw error;
+        const { data } = await supabase.from("surveys").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }

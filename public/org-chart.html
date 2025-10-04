@@ -1,44 +1,355 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Organization Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] summary .tw-caret { transform: rotate(90deg); }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gray-100 text-gray-900">
   <div class="max-w-5xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">Organization Manager</h1>
       <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
     </header>
 
+    <!-- Empty state (when no units for the active iteration) -->
     <div id="empty-state" class="hidden mb-6 rounded-lg border border-gray-200 bg-white p-4">
-      <h2 class="font-semibold mb-2">No organization units defined yet.</h2>
+      <h2 class="font-semibold mb-2">No organization units defined yet for this iteration.</h2>
       <div class="flex gap-2 items-center">
         <input id="new-root-name" type="text" placeholder="New root unit name"
-          class="w-72 rounded border border-gray-300 px-3 py-2 text-sm"/>
+               class="w-72 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring focus:ring-blue-200" />
         <button id="create-root-btn"
-          class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                class="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
           Create Root Unit
         </button>
       </div>
     </div>
 
+    <!-- Tree container -->
     <div id="tree" class="space-y-3"></div>
 
-    <div class="mt-6">
-      <a href="admin.html" class="text-blue-600 hover:underline">&larr; Back to Admin Portal</a>
+    <div class="mt-8">
+      <a href="/admin.html" class="text-sm text-blue-600 hover:underline">← Back to Admin Portal</a>
     </div>
 
-    <details class="mt-4">
-      <summary class="cursor-pointer">Debug log (open to view)</summary>
-      <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
+    <!-- Debug toggler -->
+    <details class="mt-4 w-full bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer select-none flex items-center gap-2">
+        <span class="tw-caret inline-block transition-transform">▶</span>
+        <span class="font-semibold">Debug log (open to view)</span>
+      </summary>
+      <pre id="debug" class="mt-2 whitespace-pre-wrap text-xs"></pre>
     </details>
   </div>
 
   <script>
-    // (Keep your org-chart JS here, unchanged except header/container styles)
+    (function () {
+      const debugEl = document.getElementById('debug');
+      const contextEl = document.getElementById('context-line');
+      const emptyStateEl = document.getElementById('empty-state');
+      const treeEl = document.getElementById('tree');
+      const createRootBtn = document.getElementById('create-root-btn');
+      const newRootNameInput = document.getElementById('new-root-name');
+
+      let currentIteration = null;
+      let allUnits = [];
+      let allRoles = [];
+      let allPeople = [];
+
+      const log = (msg, obj) => {
+        const line = `[${new Date().toISOString()}] ${msg}`;
+        if (obj !== undefined) {
+          try { debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`; }
+          catch { debugEl.textContent += `${line}\n`; }
+        } else {
+          debugEl.textContent += `${line}\n`;
+        }
+        if (debugEl.textContent.length > 40000) {
+          debugEl.textContent = debugEl.textContent.slice(-30000);
+        }
+      };
+
+      const api = {
+        async getActiveIteration() {
+          log('[org] GET /api/admin/active-iteration');
+          const res = await fetch('/api/admin/active-iteration');
+          const data = await res.json().catch(() => ({}));
+          log('[org] active-iteration result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load active iteration');
+          return data.iteration; // may be null
+        },
+        async getOrgData(iterationId) {
+          log('[org] GET /api/admin/org-data', { iteration_id: iterationId });
+          const res = await fetch(`/api/admin/org-data?iteration_id=${encodeURIComponent(iterationId)}`);
+          const data = await res.json().catch(() => ({}));
+          log('[org] org-data result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load org data');
+          return data; // {units, roles, people}
+        },
+        async createUnit(name, parentId, iterationId) {
+          log('[org] POST /api/admin/create-org-unit', { name, parent_id: parentId, iteration_id: iterationId });
+          const res = await fetch('/api/admin/create-org-unit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, parent_id: parentId, iteration_id: iterationId })
+          });
+          const data = await res.json().catch(() => ({}));
+          log('[org] create-org-unit result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Create unit failed');
+          return data.unit;
+        },
+        async renameUnit(id, name) {
+          log('[org] PUT /api/admin/update-org-unit', { id, name });
+          const res = await fetch('/api/admin/update-org-unit', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, name })
+          });
+          const data = await res.json().catch(() => ({}));
+          log('[org] update-org-unit result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Rename unit failed');
+          return true;
+        },
+        async deleteUnit(id) {
+          log('[org] DELETE /api/admin/delete-org-unit', { id });
+          const res = await fetch(`/api/admin/delete-org-unit?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+          const data = await res.json().catch(() => ({}));
+          log('[org] delete-org-unit result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Delete unit failed');
+          return true;
+        },
+        async assignPerson(person_id, org_unit_id, is_manager, iteration_id) {
+          log('[org] POST /api/admin/assign-person', { person_id, org_unit_id, is_manager, iteration_id });
+          const res = await fetch('/api/admin/assign-person', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ person_id, org_unit_id, is_manager, iteration_id })
+          });
+          const data = await res.json().catch(() => ({}));
+          log('[org] assign-person result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Assign person failed');
+          return data.role;
+        },
+        async removePerson(role_id) {
+          log('[org] DELETE /api/admin/remove-person', { role_id });
+          const res = await fetch(`/api/admin/remove-person?role_id=${encodeURIComponent(role_id)}`, { method: 'DELETE' });
+          const data = await res.json().catch(() => ({}));
+          log('[org] remove-person result', data);
+          if (!res.ok || !data.success) throw new Error(data.message || 'Remove person failed');
+          return true;
+        }
+      };
+
+      function byParent(units) {
+        const map = new Map();
+        units.forEach(u => {
+          const key = u.parent_id ?? 'ROOT';
+          if (!map.has(key)) map.set(key, []);
+          map.get(key).push(u);
+        });
+        for (const list of map.values()) {
+          list.sort((a, b) => (a.name || '').localeCompare(b.name || '') || a.id - b.id);
+        }
+        return map;
+      }
+
+      function renderTree() {
+        treeEl.innerHTML = '';
+        const groups = byParent(allUnits);
+
+        const roots = groups.get('ROOT') || [];
+        if (roots.length === 0) {
+          emptyStateEl.classList.remove('hidden');
+          return;
+        }
+        emptyStateEl.classList.add('hidden');
+
+        roots.forEach(root => treeEl.appendChild(renderUnit(root, groups, 0)));
+      }
+
+      function renderUnit(unit, groups, depth) {
+        const container = document.createElement('div');
+        container.className = `rounded-lg border border-gray-200 bg-white ${depth === 0 ? 'p-4' : 'p-3'} ${depth > 0 ? 'ml-6' : ''}`;
+
+        // Header row
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between gap-3';
+        const title = document.createElement('div');
+        title.className = 'font-semibold';
+        title.textContent = unit.name;
+        header.appendChild(title);
+
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center gap-2';
+
+        const btnAdd = document.createElement('button');
+        btnAdd.className = 'text-xs rounded bg-blue-600 text-white px-2 py-1 hover:bg-blue-700';
+        btnAdd.textContent = 'Add Subunit';
+        btnAdd.onclick = async () => {
+          const name = prompt('Subunit name?');
+          if (!name) return;
+          try {
+            await api.createUnit(name.trim(), unit.id, currentIteration.id);
+            await loadData();
+          } catch (e) { alert(e.message); }
+        };
+
+        const btnRename = document.createElement('button');
+        btnRename.className = 'text-xs rounded bg-gray-600 text-white px-2 py-1 hover:bg-gray-700';
+        btnRename.textContent = 'Rename';
+        btnRename.onclick = async () => {
+          const name = prompt('New unit name:', unit.name);
+          if (!name || name.trim() === unit.name) return;
+          try {
+            await api.renameUnit(unit.id, name.trim());
+            await loadData();
+          } catch (e) { alert(e.message); }
+        };
+
+        const btnDelete = document.createElement('button');
+        btnDelete.className = 'text-xs rounded bg-red-600 text-white px-2 py-1 hover:bg-red-700';
+        btnDelete.textContent = 'Delete';
+        btnDelete.onclick = async () => {
+          if (!confirm(`Delete unit "${unit.name}" and all nested subunits and role assignments?`)) return;
+          try {
+            await api.deleteUnit(unit.id);
+            await loadData();
+          } catch (e) { alert(e.message); }
+        };
+
+        actions.append(btnAdd, btnRename, btnDelete);
+        header.appendChild(actions);
+        container.appendChild(header);
+
+        // People assignments in this unit
+        const unitRoles = allRoles.filter(r => r.org_unit_id === unit.id);
+        if (unitRoles.length > 0) {
+          const peopleList = document.createElement('div');
+          peopleList.className = 'mt-3 grid gap-1';
+
+          unitRoles
+            .sort((a, b) => (b.is_manager - a.is_manager) || a.id - b.id)
+            .forEach(role => {
+              const person = allPeople.find(p => p.id === role.person_id);
+              const line = document.createElement('div');
+              line.className = 'flex items-center justify-between text-sm';
+              const tag = role.is_manager ? 'Manager' : 'Member';
+              line.innerHTML = `
+                <div>
+                  <span class="font-medium">${person ? person.name : 'Unknown'}</span>
+                  <span class="text-gray-500">— ${tag}</span>
+                </div>
+              `;
+              const rmBtn = document.createElement('button');
+              rmBtn.className = 'text-xs rounded border border-red-200 px-2 py-0.5 text-red-700 hover:bg-red-50';
+              rmBtn.textContent = 'Remove';
+              rmBtn.onclick = async () => {
+                try {
+                  await api.removePerson(role.id);
+                  await loadData();
+                } catch (e) { alert(e.message); }
+              };
+              const right = document.createElement('div');
+              right.appendChild(rmBtn);
+              line.appendChild(right);
+              peopleList.appendChild(line);
+            });
+
+          container.appendChild(peopleList);
+        }
+
+        // Assign person controls
+        const assignBox = document.createElement('div');
+        assignBox.className = 'mt-3 flex flex-wrap gap-2 items-center';
+
+        const personSel = document.createElement('select');
+        personSel.className = 'rounded border border-gray-300 px-2 py-1 text-sm';
+        personSel.innerHTML = `<option value="">Select person…</option>` + allPeople
+          .map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+        const roleSel = document.createElement('select');
+        roleSel.className = 'rounded border border-gray-300 px-2 py-1 text-sm';
+        roleSel.innerHTML = `
+          <option value="member">Member</option>
+          <option value="manager">Manager</option>
+        `;
+
+        const assignBtn = document.createElement('button');
+        assignBtn.className = 'text-xs rounded bg-emerald-600 text-white px-3 py-1 hover:bg-emerald-700';
+        assignBtn.textContent = 'Assign';
+        assignBtn.onclick = async () => {
+          const pid = personSel.value ? Number(personSel.value) : null;
+          if (!pid) return alert('Select a person');
+          const isManager = roleSel.value === 'manager';
+          try {
+            await api.assignPerson(pid, unit.id, isManager, currentIteration.id);
+            await loadData();
+          } catch (e) { alert(e.message); }
+        };
+
+        assignBox.append(personSel, roleSel, assignBtn);
+        container.appendChild(assignBox);
+
+        // Render children
+        const kids = groups.get(unit.id) || [];
+        if (kids.length > 0) {
+          const childrenBox = document.createElement('div');
+          childrenBox.className = 'mt-3 space-y-3';
+          kids.forEach(child => childrenBox.appendChild(renderUnit(child, groups, depth + 1)));
+          container.appendChild(childrenBox);
+        }
+
+        return container;
+      }
+
+      async function loadData() {
+        try {
+          const iter = await api.getActiveIteration();
+          if (!iter) {
+            contextEl.textContent = 'No active iteration — you must create one first in the Iteration Manager.';
+            treeEl.innerHTML = '';
+            emptyStateEl.classList.add('hidden');
+            return;
+          }
+          currentIteration = iter;
+          contextEl.textContent = `Admin mode — Active Iteration: ${iter.name} (ID: ${iter.id}) — Question Set: ${iter.question_set}`;
+
+          const payload = await api.getOrgData(currentIteration.id);
+          allUnits = payload.units || [];
+          allRoles = payload.roles || [];
+          allPeople = payload.people || [];
+
+          renderTree();
+        } catch (e) {
+          contextEl.textContent = `Error: ${e.message}`;
+          treeEl.innerHTML = '';
+          emptyStateEl.classList.add('hidden');
+          log('[org] load error', { message: e.message });
+        }
+      }
+
+      // Create first root
+      createRootBtn.addEventListener('click', async () => {
+        const name = (newRootNameInput.value || '').trim();
+        if (!name) return alert('Enter a root unit name.');
+        try {
+          await api.createUnit(name, null, currentIteration.id);
+          newRootNameInput.value = '';
+          await loadData();
+        } catch (e) {
+          alert(e.message);
+        }
+      });
+
+      // INIT
+      log('[org] page loaded');
+      loadData();
+    })();
   </script>
 </body>
 </html>
