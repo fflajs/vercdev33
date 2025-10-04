@@ -24,7 +24,7 @@
       <p id="ctx" class="mt-1 text-sm text-gray-600">Loading…</p>
     </header>
 
-    <!-- Root creation (always visible) -->
+    <!-- Root creation -->
     <div class="card mb-4">
       <div class="flex flex-col md:flex-row md:items-end gap-3">
         <div class="flex-1">
@@ -70,7 +70,7 @@
   const btnCreateRoot = document.getElementById('btnCreateRoot');
   const rootNameInput = document.getElementById('rootName');
 
-  let context = null; // {iterId, iterName, qset, isAdminMode, user, roleType, unitName}
+  let context = null; 
   let units = [];
   let roles = [];
   let people = [];
@@ -129,12 +129,12 @@
         <span class="text-sm text-gray-500">Parent: ${u.parent_id ?? '—'}</span>
       </div>
       <div class="flex items-center gap-2">
-        ${renderDeleteUnitButtonHTML(u)}
+        <button data-del="${u.id}" class="btn btn-danger">Delete (Cascade)</button>
       </div>
     `;
     card.appendChild(header);
 
-    // Managers / Members lists
+    // Managers / Members
     const unitRoles = rolesByUnit.get(u.id) || [];
     const managers = unitRoles.filter(r => r.is_manager);
     const members  = unitRoles.filter(r => !r.is_manager);
@@ -161,7 +161,6 @@
       for (const k of kids) {
         childrenWrap.appendChild(renderUnit(k));
       }
-
       const details = document.createElement('details');
       details.open = true;
       const summary = document.createElement('summary');
@@ -173,19 +172,6 @@
     }
 
     return card;
-  }
-
-  function renderDeleteUnitButtonHTML(u) {
-    // Determine if deletable (no children, no roles)
-    const kids = childrenByParent.get(u.id) || [];
-    const unitRoles = rolesByUnit.get(u.id) || [];
-    const canDelete = kids.length === 0 && unitRoles.length === 0;
-
-    return `
-      <button data-del="${u.id}" class="btn ${canDelete ? 'btn-danger' : 'btn-neutral'}"
-        ${canDelete ? '' : 'disabled title="Remove subunits and roles first"'}
-      >Delete Unit</button>
-    `;
   }
 
   function renderRoleList(title, items) {
@@ -239,7 +225,6 @@
       await assignRole(u.id, personId, type === 'manager');
     });
 
-    // labels
     const col1 = document.createElement('div');
     col1.className = 'flex-1';
     col1.innerHTML = `<label class="block text-sm font-medium text-gray-700">Person</label>`;
@@ -281,13 +266,12 @@
   }
 
   function wireGlobalButtons() {
-    // Delete unit (event delegation)
     treeEl.addEventListener('click', async (e) => {
       const delBtn = e.target.closest('button[data-del]');
       if (delBtn) {
         const id = +delBtn.getAttribute('data-del');
         if (!Number.isFinite(id)) return;
-        if (!confirm('Delete this unit? It must have no subunits and no roles.')) return;
+        if (!confirm('Delete this unit and ALL its subunits and roles?')) return;
         await deleteUnit(id);
       }
       const remBtn = e.target.closest('button[data-remove-role]');
@@ -312,36 +296,24 @@
 
   async function assignRole(orgUnitId, personId, isManager) {
     dbg('Assigning role', { orgUnitId, personId, isManager });
-    const payload = {
-      person_id: personId,
-      org_unit_id: orgUnitId,
-      is_manager: !!isManager,
-      iteration_id: context.iterId
-    };
+    const payload = { person_id: personId, org_unit_id: orgUnitId, is_manager: !!isManager, iteration_id: context.iterId };
     const { ok, json } = await sendJSON('/api/admin/add-role', 'POST', payload);
     dbg('add-role result', json);
     if (!ok || !json.success) {
       alert(json.message || 'Failed to assign role');
       return;
     }
-    await loadData(); // refresh
+    await loadData();
   }
 
   async function removeRole(roleId) {
     dbg('Removing role', { roleId });
-    const { ok, json } = await getJSON(`/api/admin/remove-role?role_id=${encodeURIComponent(roleId)}`);
-    // DELETE with fetch+query: use method DELETE explicitly to be strict
-    if (!ok || !json.success) {
-      // Try explicit DELETE if hosting blocks DELETE with query in GET helper
-      const r = await fetch(`/api/admin/remove-role?role_id=${encodeURIComponent(roleId)}`, { method: 'DELETE' });
-      const j = await r.json().catch(()=>({}));
-      dbg('remove-role result (DELETE)', j);
-      if (!r.ok || !j.success) {
-        alert((j && j.message) || (json && json.message) || 'Failed to remove role');
-        return;
-      }
-    } else {
-      dbg('remove-role result', json);
+    const r = await fetch(`/api/admin/remove-role?role_id=${encodeURIComponent(roleId)}`, { method: 'DELETE' });
+    const j = await r.json().catch(()=>({}));
+    dbg('remove-role result', j);
+    if (!r.ok || !j.success) {
+      alert(j.message || 'Failed to remove role');
+      return;
     }
     await loadData();
   }
@@ -359,7 +331,7 @@
   }
 
   async function deleteUnit(unitId) {
-    dbg('Deleting unit', { unitId });
+    dbg('Cascade deleting unit (with subunits & roles)', { unitId });
     const r = await fetch(`/api/admin/delete-unit?unit_id=${encodeURIComponent(unitId)}`, { method: 'DELETE' });
     const j = await r.json().catch(()=>({}));
     dbg('delete-unit result', j);
@@ -376,27 +348,14 @@
       const { ok, json } = await getJSON(`/api/admin/get-role-context?role_id=${encodeURIComponent(roleId)}`);
       dbg('get-role-context result', json);
       if (!ok || !json.success) throw new Error(json.message || 'Role context failed');
-      context = {
-        isAdminMode: false,
-        user: json.context.user,
-        roleType: json.context.roleType,
-        unitName: json.context.unitName,
-        iterId: json.context.iterId,
-        iterName: json.context.iterName,
-        qset: json.context.qset
-      };
+      context = { isAdminMode: false, user: json.context.user, roleType: json.context.roleType, unitName: json.context.unitName, iterId: json.context.iterId, iterName: json.context.iterName, qset: json.context.qset };
       ctxLine.textContent = `User: ${context.user} — Role: ${context.roleType} — Unit: ${context.unitName} — Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
     } else {
       dbg('Admin mode (no role_id)');
       const { ok, json } = await getJSON('/api/admin/active-iteration');
       dbg('active-iteration result', json);
       if (!ok || !json.success) throw new Error(json.message || 'No active iteration');
-      context = {
-        isAdminMode: true,
-        iterId: json.iteration.id,
-        iterName: json.iteration.name,
-        qset: json.iteration.question_set
-      };
+      context = { isAdminMode: true, iterId: json.iteration.id, iterName: json.iteration.name, qset: json.iteration.question_set };
       ctxLine.textContent = `Admin mode — Active Iteration: ${context.iterName} (ID: ${context.iterId}) — Question Set: ${context.qset}`;
     }
   }
