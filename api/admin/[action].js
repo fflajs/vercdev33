@@ -126,31 +126,5 @@ export default async function handler(req, res) {
 
       case "org-units-all": {
         const { data, error } = await supabase.from("organization_units").select("*");
-        if (error) throw error;
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-
-      case "roles-all": {
-        const { data, error } = await supabase.from("person_roles").select("*");
-        if (error) throw error;
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-
-      case "iterations-all": {
-        const { data, error } = await supabase.from("iterations").select("*");
-        if (error) throw error;
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-
-      default:
-        res.status(400).json({ success: false, message: `Unknown action: ${action}` });
-    }
-  } catch (err) {
-    console.error("API error:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-}
+        if (error)
 

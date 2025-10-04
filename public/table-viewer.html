@@ -56,12 +56,14 @@
     async function loadAll() {
       document.getElementById("tables").innerHTML = "";
 
-      // Define which tables to load (map to actions we have in [action].js)
+      // Full list of project tables
       const loaders = [
         { name: "People", action: "people-all" },
         { name: "Organization Units", action: "org-units-all" },
         { name: "Person Roles", action: "roles-all" },
         { name: "Iterations", action: "iterations-all" },
+        { name: "App Data", action: "app-data-all" },
+        { name: "Surveys", action: "surveys-all" },
       ];
 
       for (const { name, action } of loaders) {
@@ -84,20 +86,4 @@
         const headers = Object.keys(rows[0]);
         thead.innerHTML = `<tr class="bg-gray-100">${headers.map(h => `<th class="border px-2 py-1">${h}</th>`).join("")}</tr>`;
         table.appendChild(thead);
-        const tbody = document.createElement("tbody");
-        rows.forEach(r => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = headers.map(h => `<td class="border px-2 py-1">${r[h]}</td>`).join("");
-          tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        div.appendChild(table);
-      }
-      document.getElementById("tables").appendChild(div);
-    }
-
-    window.addEventListener("load", loadAll);
-  </script>
-</body>
-</html>
 
