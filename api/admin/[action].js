@@ -11,41 +11,51 @@ module.exports = async function handler(req, res) {
 
   try {
     switch (action) {
-      // ✅ Get the current active iteration
+      // ✅ ACTIVE ITERATION (end_date IS NULL)
       case "active-iteration": {
         const { data, error } = await supabase
           .from("iterations")
           .select("*")
-          .is("end_date", null)   // active = where end_date IS NULL
+          .is("end_date", null)
+          .order("start_date", { ascending: false })
+          .limit(1)
           .single();
-
-        if (error) {
-          if (error.code === "PGRST116") {
-            // no rows found
-            return res.status(200).json({ success: true, iteration: null });
-          }
-          throw error;
-        }
-        res.status(200).json({ success: true, iteration: data });
+        if (error && error.code !== "PGRST116") throw error;
+        res.status(200).json({ success: true, iteration: data || null });
         break;
       }
 
-      // ✅ Return all iterations (for Table Viewer)
-      case "iterations-all": {
-        const { data, error } = await supabase.from("iterations").select("*");
-        if (error) throw error;
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-
-      // ✅ Create a new iteration
+      // ✅ CREATE NEW ITERATION
       case "create-iteration": {
         if (req.method !== "POST") {
           return res.status(405).json({ success: false, message: "Method not allowed" });
         }
+
+        const { name, question_set } = req.body;
+        if (!name || !question_set) {
+          return res.status(400).json({
+            success: false,
+            message: "Name and question_set are required.",
+          });
+        }
+
+        // check if another active iteration exists
+        const { data: active, error: activeError } = await supabase
+          .from("iterations")
+          .select("*")
+          .is("end_date", null)
+          .maybeSingle();
+        if (activeError) throw activeError;
+        if (active) {
+          return res.status(400).json({
+            success: false,
+            message: "An active iteration already exists.",
+          });
+        }
+
         const { data, error } = await supabase
           .from("iterations")
-          .insert([{ start_date: new Date().toISOString() }])
+          .insert([{ name, question_set, start_date: new Date().toISOString() }])
           .select()
           .single();
         if (error) throw error;
@@ -53,11 +63,12 @@ module.exports = async function handler(req, res) {
         break;
       }
 
-      // ✅ Close the current active iteration
+      // ✅ CLOSE ACTIVE ITERATION
       case "close-iteration": {
         if (req.method !== "POST") {
           return res.status(405).json({ success: false, message: "Method not allowed" });
         }
+
         const { error } = await supabase
           .from("iterations")
           .update({ end_date: new Date().toISOString() })
@@ -67,29 +78,7 @@ module.exports = async function handler(req, res) {
         break;
       }
 
-      // 🧑 People registration
-      case "people": {
-        if (req.method !== "POST") {
-          return res.status(405).json({ success: false, message: "Method not allowed" });
-        }
-        const { name } = req.body;
-        if (!name) {
-          return res.status(400).json({ success: false, message: "Name required" });
-        }
-        if (name.trim().toLowerCase() === "admin") {
-          return res.status(400).json({ success: false, message: "The name 'Admin' is reserved." });
-        }
-        const { data, error } = await supabase
-          .from("people")
-          .insert([{ name }])
-          .select()
-          .single();
-        if (error) throw error;
-        res.status(200).json({ success: true, person: data });
-        break;
-      }
-
-      // ✅ All-rows fetchers for Table Viewer
+      // ✅ ALL TABLE FETCHERS (for Table Viewer)
       case "people-all": {
         const { data, error } = await supabase.from("people").select("*");
         if (error) throw error;
@@ -104,6 +93,12 @@ module.exports = async function handler(req, res) {
       }
       case "roles-all": {
         const { data, error } = await supabase.from("person_roles").select("*");
+        if (error) throw error;
+        res.status(200).json({ success: true, rows: data });
+        break;
+      }
+      case "iterations-all": {
+        const { data, error } = await supabase.from("iterations").select("*");
         if (error) throw error;
         res.status(200).json({ success: true, rows: data });
         break;
