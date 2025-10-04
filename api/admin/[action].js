@@ -86,17 +86,25 @@ export default async function handler(req, res) {
         break;
       }
 
-      // 🆕 NEW: Register a person
+      // 🆕 Register a new person
       case "people": {
         if (req.method !== "POST") {
           res.status(405).json({ success: false, message: "Method not allowed" });
           break;
         }
+
         const { name } = req.body;
         if (!name) {
           res.status(400).json({ success: false, message: "Name required" });
           break;
         }
+
+        // Prevent reserved name "admin"
+        if (name.trim().toLowerCase() === "admin") {
+          res.status(400).json({ success: false, message: "The name 'Admin' is reserved." });
+          break;
+        }
+
         const { data, error } = await supabase
           .from("people")
           .insert([{ name }])
