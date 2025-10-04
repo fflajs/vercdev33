@@ -3,150 +3,67 @@
 <head>
   <meta charset="UTF-8" />
   <title>Iteration Manager</title>
-  <link rel="icon" href="/favicon.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="w-full max-w-2xl bg-white p-8 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold mb-2 text-center">Iteration Manager</h1>
-    <p class="text-gray-600 mb-6 text-center">Manage the active iteration and create new ones when none is active.</p>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-5xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">Iteration Manager</h1>
+      <p class="text-gray-600 text-sm">Create and close iterations.</p>
+    </header>
 
-    <div id="status" class="mb-6 text-center text-blue-600 font-semibold">Loading...</div>
-
-    <div id="activeBox" class="hidden mb-6">
-      <h2 class="text-xl font-bold mb-2">Current Active Iteration</h2>
-      <p id="activeInfo" class="text-gray-700 mb-4"></p>
-      <button id="closeBtn"
-              class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">
-        Close Current Iteration
-      </button>
+    <div class="bg-white rounded shadow p-6 space-y-4">
+      <div id="current" class="text-sm text-gray-700"></div>
+      <div class="flex gap-3">
+        <button id="close" 
+          class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+          Close Iteration
+        </button>
+        <button id="create" 
+          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+          Create New Iteration
+        </button>
+      </div>
     </div>
 
-    <div id="createBox" class="hidden mb-6">
-      <h2 class="text-xl font-bold mb-2">Create New Iteration</h2>
-      <label for="iterName" class="block text-sm font-medium text-gray-700">Iteration Name</label>
-      <input id="iterName" type="text" class="mt-1 mb-3 w-full border rounded px-3 py-2" placeholder="e.g. Iteration 7" />
-
-      <label for="qset" class="block text-sm font-medium text-gray-700">Question Set</label>
-      <select id="qset" class="mt-1 mb-4 w-full border rounded px-3 py-2">
-        <option value="Deep_Analysis_120.json">Deep_Analysis_120.json</option>
-        <option value="Normal_Analysis_60.json">Normal_Analysis_60.json</option>
-        <option value="Pulse_Check_12.json">Pulse_Check_12.json</option>
-      </select>
-
-      <button id="createBtn"
-              class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-        Create Iteration
-      </button>
-      <p id="createHint" class="mt-2 text-sm text-gray-500"></p>
+    <div class="mt-6">
+      <a href="admin.html" class="text-blue-600 hover:underline">&larr; Back to Admin Portal</a>
     </div>
 
-    <div class="mt-6 text-center">
-      <a href="/admin.html" class="text-blue-500 hover:text-blue-700">← Back to Admin Portal</a>
-    </div>
-
-    <details class="mt-6">
-      <summary class="cursor-pointer text-sm text-gray-500">Debug log (open to view)</summary>
-      <pre id="debug" class="text-xs text-gray-600 bg-gray-50 p-3 rounded border mt-2 whitespace-pre-wrap"></pre>
+    <details class="mt-4">
+      <summary class="cursor-pointer">Debug log (open to view)</summary>
+      <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
     </details>
   </div>
 
   <script>
-    const debugEl = document.getElementById('debug');
-    const statusEl = document.getElementById('status');
-    const activeBox = document.getElementById('activeBox');
-    const activeInfo = document.getElementById('activeInfo');
-    const closeBtn  = document.getElementById('closeBtn');
-    const createBox = document.getElementById('createBox');
-    const createBtn = document.getElementById('createBtn');
-    const createHint = document.getElementById('createHint');
-    const iterName  = document.getElementById('iterName');
-    const qset      = document.getElementById('qset');
+    const log = (msg, obj=null) => {
+      document.getElementById("debug").textContent += `[iteration] ${msg} ${obj?JSON.stringify(obj):""}\n`;
+    };
 
-    function log(msg, obj) {
-      const line = `[${new Date().toISOString()}] ${msg}` + (obj ? `\n${JSON.stringify(obj)}` : '');
-      console.log(line);
-      debugEl.textContent += line + '\n';
-    }
-
-    async function loadActive() {
-      log('[loadActive] Fetching /api/admin/active-iteration');
-      const res = await fetch('/api/admin/active-iteration');
-      log('[loadActive] response.ok:', res.ok);
-      const data = await res.json().catch(() => ({}));
-      log('[loadActive] JSON:', data);
-
-      if (res.ok && data?.success && data?.iteration) {
-        statusEl.textContent = `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
-        activeInfo.textContent = `${data.iteration.name} (ID: ${data.iteration.id})`;
-        activeBox.classList.remove('hidden');
-
-        // While active exists => you can only close
-        createBox.classList.remove('hidden');
-        createBtn.disabled = true;
-        createHint.textContent = 'Creation disabled while an iteration is active. Close it first.';
+    async function loadCurrent() {
+      const res = await fetch("/api/admin/active-iteration");
+      const data = await res.json();
+      if (data.success && data.iteration) {
+        document.getElementById("current").textContent = 
+          `Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
       } else {
-        statusEl.textContent = 'No active iteration found. You can create a new one below.';
-        activeBox.classList.add('hidden');
-
-        // No active => allow create
-        createBox.classList.remove('hidden');
-        createBtn.disabled = false;
-        createHint.textContent = '';
+        document.getElementById("current").textContent = "No active iteration.";
       }
+      log("Active iteration", data);
     }
 
-    closeBtn.onclick = async () => {
-      // We pass the active ID to the backend (and backend can also infer if omitted)
-      const idText = activeInfo.textContent.match(/ID:\s*(\d+)/);
-      const id = idText ? Number(idText[1]) : null;
+    document.getElementById("close").addEventListener("click", async () => {
+      await fetch("/api/admin/close-iteration", { method: "POST" });
+      await loadCurrent();
+    });
 
-      log('[closeBtn] Closing iteration...', { id });
-      const res = await fetch('/api/admin/close-iteration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(id ? { id } : {})  // send id if we have it; backend can infer if absent
-      });
-      log('[closeBtn] response.ok:', res.ok);
-      const data = await res.json().catch(() => ({}));
-      log('[closeBtn] JSON:', data);
+    document.getElementById("create").addEventListener("click", async () => {
+      await fetch("/api/admin/create-iteration", { method: "POST" });
+      await loadCurrent();
+    });
 
-      if (!res.ok || !data.success) {
-        alert(data.message || 'Failed to close iteration.');
-      }
-      await loadActive();
-    };
-
-    createBtn.onclick = async () => {
-      const name = (iterName.value || '').trim();
-      const set  = qset.value;
-      if (!name) {
-        alert('Please enter an iteration name.');
-        return;
-      }
-      log('[createBtn] Creating iteration', { name, set });
-
-      const res = await fetch('/api/admin/create-iteration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, question_set: set })
-      });
-      log('[createBtn] response.ok:', res.ok);
-      const data = await res.json().catch(() => ({}));
-      log('[createBtn] JSON:', data);
-
-      if (!res.ok || !data.success) {
-        alert(data.message || 'Failed to create iteration.');
-        return;
-      }
-      iterName.value = '';
-      await loadActive();
-    };
-
-    (async function init() {
-      log('[init] iteration-manager.html loaded.');
-      await loadActive();
-    })();
+    window.addEventListener("load", loadCurrent);
   </script>
 </body>
 </html>

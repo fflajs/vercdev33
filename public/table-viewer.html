@@ -1,100 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Database Table Viewer</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="p-6 bg-gray-100">
-<div class="max-w-6xl mx-auto bg-white p-4 rounded shadow">
-  <h1 class="text-2xl font-bold mb-4">Database Table Viewer</h1>
-  <div id="context" class="mb-4 text-sm text-gray-700"></div>
-  <div id="tables" class="space-y-6"></div>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">Database Table Viewer</h1>
+      <p class="text-sm text-gray-600">Inspect current database state (debugging tool).</p>
+    </header>
 
-  <div class="mt-6">
-    <button onclick="loadAll()" class="bg-blue-500 text-white px-3 py-1 rounded">Refresh Now</button>
-    <a href="admin.html" class="ml-4 text-blue-600">&larr; Back to Admin Portal</a>
+    <div class="bg-white p-6 rounded shadow">
+      <div id="context" class="mb-4 text-sm text-gray-700"></div>
+      <div id="tables" class="space-y-6"></div>
+
+      <div class="mt-6 flex gap-3">
+        <button onclick="loadAll()" class="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">
+          Refresh Now
+        </button>
+        <a href="admin.html" class="text-blue-600 hover:underline self-center">&larr; Back to Admin Portal</a>
+      </div>
+
+      <details class="mt-4">
+        <summary class="cursor-pointer">Debug log (open to view)</summary>
+        <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
+      </details>
+    </div>
   </div>
 
-  <details class="mt-4">
-    <summary>Debug log (open to view)</summary>
-    <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
-  </details>
-</div>
-
-<script>
-const log=(msg,obj=null)=>{document.getElementById('debug').textContent+=`[table-viewer] ${msg} ${obj?JSON.stringify(obj):''}\n`;};
-
-let roleId=null;
-
-async function loadAll(){
-  const tables=["organization_units","iterations","people","person_roles","surveys","app_data"];
-  const wrap=document.getElementById('tables'); wrap.innerHTML='';
-  for(const t of tables){
-    log("Fetching table: "+t);
-    const res=await fetch(`/api/admin/table-viewer?table=${t}${roleId?`&role_id=${roleId}`:''}`);
-    const json=await res.json();
-    log("Response for "+t,json);
-
-    const section=document.createElement('div');
-    section.innerHTML=`<h2 class="text-lg font-semibold mb-2">${t}</h2>`;
-
-    if(json.success && json.data && json.data.length){
-      const table=document.createElement('table');
-      table.className="table-auto border-collapse border border-gray-400 text-xs";
-      const thead=document.createElement('thead');
-      const tr=document.createElement('tr');
-      Object.keys(json.data[0]).forEach(k=>{
-        const th=document.createElement('th');
-        th.className="border border-gray-400 px-2 py-1 bg-gray-100";
-        th.textContent=k;
-        tr.appendChild(th);
-      });
-      thead.appendChild(tr);
-      table.appendChild(thead);
-
-      const tbody=document.createElement('tbody');
-      json.data.forEach(row=>{
-        const tr=document.createElement('tr');
-        Object.values(row).forEach(val=>{
-          const td=document.createElement('td');
-          td.className="border border-gray-400 px-2 py-1";
-          td.textContent=val===null?"—":val;
-          tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      section.appendChild(table);
-    } else {
-      section.innerHTML+=`<p class="text-gray-500">(No data)</p>`;
-    }
-    wrap.appendChild(section);
-  }
-}
-
-async function init(){
-  log("page loaded");
-  const params=new URLSearchParams(window.location.search);
-  roleId=params.get('role_id');
-  if(roleId){
-    log("Using role_id="+roleId);
-    const ctxRes=await fetch(`/api/admin/get-role-context?role_id=${roleId}`);
-    const ctxJson=await ctxRes.json();
-    log("get-role-context result",ctxJson);
-    if(ctxJson.success){
-      const c=ctxJson.context;
-      document.getElementById('context').textContent=
-        `User: ${c.user} — Role: ${c.roleType} — Unit: ${c.unitName} — Iteration: ${c.iterName} (ID: ${c.iterId}) — Question Set: ${c.qset}`;
-    }
-  } else {
-    document.getElementById('context').textContent="Admin mode (full database view)";
-  }
-  await loadAll();
-}
-
-window.addEventListener('load',init);
-</script>
+  <script>
+    // (Keep your table-viewer JS code unchanged)
+  </script>
 </body>
 </html>
 

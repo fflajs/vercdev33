@@ -1,66 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Administration Portal</title>
-  <link rel="icon" href="/favicon.ico">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-  <div class="text-center bg-white p-12 rounded-lg shadow-lg">
-    <h1 class="text-4xl font-bold mb-2">Administration Portal</h1>
-    <p id="iteration-display" class="text-blue-600 font-semibold mb-6">
-      Loading active iteration...
-    </p>
-    <p class="text-gray-600 mb-6">Welcome, Admin. Please select a tool.</p>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-5xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold">Administration Portal</h1>
+      <p class="text-gray-600 text-sm">Manage iterations, organization, and database state.</p>
+    </header>
 
-    <div class="space-y-4">
-      <a href="/iteration-manager.html"
-        class="block w-full bg-blue-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-blue-600 transition">
-        Launch Iteration Manager
+    <div class="bg-white rounded shadow p-6 space-y-4">
+      <a href="iteration-manager.html" 
+         class="block bg-blue-600 text-white px-4 py-3 rounded text-center hover:bg-blue-700">
+         Iteration Manager
       </a>
-      <a href="/org-chart.html"
-        class="block w-full bg-red-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-red-600 transition">
-        Launch Organization Manager
+      <a href="org-chart.html" 
+         class="block bg-blue-600 text-white px-4 py-3 rounded text-center hover:bg-blue-700">
+         Organization Manager
       </a>
-      <a href="/table-viewer.html"
-        class="block w-full bg-gray-500 text-white font-bold py-4 px-8 rounded-lg hover:bg-gray-600 transition">
-        Launch Table Viewer
+      <a href="table-viewer.html" 
+         class="block bg-blue-600 text-white px-4 py-3 rounded text-center hover:bg-blue-700">
+         Database Table Viewer
       </a>
     </div>
 
-    <div class="mt-6 space-x-4">
-      <a href="/portal.html"
-        class="inline-block font-bold text-sm text-green-600 hover:text-green-800">
-        ← Back to Portal
-      </a>
-      <a href="/index.html"
-        class="inline-block font-bold text-sm text-blue-500 hover:text-blue-800">
-        Logout
-      </a>
+    <div class="mt-6">
+      <a href="index.html" class="text-blue-600 hover:underline">&larr; Back to Welcome</a>
     </div>
+
+    <details class="mt-4">
+      <summary class="cursor-pointer">Debug log (open to view)</summary>
+      <pre id="debug" class="bg-gray-100 p-2 text-xs overflow-auto h-40"></pre>
+    </details>
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      const iterationDisplay = document.getElementById('iteration-display');
-      try {
-        const res = await fetch('/api/admin/active-iteration');
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          iterationDisplay.textContent = 'No active iteration found';
-          iterationDisplay.classList.remove('text-blue-600');
-          iterationDisplay.classList.add('text-red-600');
-          return;
-        }
-        iterationDisplay.textContent =
-          `Current Active Iteration: ${data.iteration.name} (ID: ${data.iteration.id})`;
-      } catch (err) {
-        iterationDisplay.textContent = `Error: ${err.message}`;
-        iterationDisplay.classList.remove('text-blue-600');
-        iterationDisplay.classList.add('text-red-600');
-      }
-    });
+    const log = (msg, obj=null) => {
+      document.getElementById("debug").textContent += 
+        `[admin] ${msg} ${obj?JSON.stringify(obj):""}\n`;
+    };
+    async function init() {
+      log("page loaded");
+      const res = await fetch("/api/admin/active-iteration");
+      const data = await res.json();
+      log("Active iteration", data);
+    }
+    window.addEventListener("load", init);
   </script>
 </body>
 </html>
