@@ -17,14 +17,18 @@
       <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
     </header>
 
-    <div id="welcome-box" class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+    <div id="welcome-box" class="rounded-lg border border-gray-200 bg-white p-4 mb-6">
       <h2 id="welcome-title" class="text-lg font-semibold mb-1">Welcome</h2>
       <p id="welcome-desc" class="text-sm text-gray-700"></p>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <button id="btn-cognitive" class="rounded bg-blue-600 text-white px-4 py-2 hover:bg-blue-700">Go to Cognitive Tool</button>
-      <button id="btn-analyze" class="rounded bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">Go to Analyzer</button>
+      <button id="btn-cognitive" class="rounded bg-blue-600 text-white px-4 py-2 hover:bg-blue-700">
+        Go to Cognitive Tool
+      </button>
+      <button id="btn-analyze" class="rounded bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">
+        Go to Analyzer
+      </button>
     </div>
 
     <div class="mt-6">
@@ -45,6 +49,7 @@
       const qs = new URLSearchParams(window.location.search);
       const name = qs.get("name");
       const roleId = qs.get("role_id");
+
       const debugEl = document.getElementById("debug");
       const contextEl = document.getElementById("context-line");
       const welcomeTitle = document.getElementById("welcome-title");
@@ -74,6 +79,7 @@
       }
 
       try {
+        // Get user + role info
         const data = await fetchJson(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
         const activeRole = (data.roles || []).find(r => r.id == roleId);
 
@@ -84,35 +90,29 @@
 
         const roleType = activeRole.is_manager ? "Manager" : "Member";
         const orgName = activeRole.organization_units?.name || "Unknown Unit";
-        const iterName = activeRole.iterations?.name || "Unknown Iteration";
-        const iterId = activeRole.iterations?.id || "?";
-        const qset = activeRole.iterations?.question_set || "Unknown";
-        const startDate = activeRole.iterations?.start_date 
-          ? new Date(activeRole.iterations.start_date).toLocaleDateString()
+        const iter = activeRole.iterations || {};
+        const iterName = iter.name || "Unknown Iteration";
+        const iterId = iter.id || "?";
+        const qset = iter.question_set || "Unknown";
+        const startDate = iter.start_date
+          ? new Date(iter.start_date).toLocaleDateString()
           : "(no start date)";
 
-        contextEl.textContent = `User: ${name} — Role: ${roleType} — Unit: ${orgName} — Iteration: ${iterName} (ID: ${iterId}) — Question Set: ${qset}`;
+        // Update backend log context
+        contextEl.textContent = `Active iteration: ${iterName} (ID: ${iterId}) — Question Set: ${qset}`;
+
+        // Welcome box
         welcomeTitle.textContent = `Welcome, ${name}`;
         welcomeDesc.textContent = `${roleType} of "${orgName}" | Iteration: ${iterName} (ID: ${iterId}) | Start: ${startDate} | Question Set: ${qset}`;
 
-        // Navigation buttons
+        // Buttons
         document.getElementById("btn-cognitive").onclick = () => {
-          const params = new URLSearchParams({
-            name,
-            role_id: roleId,
-            iter_id: iterId,
-            qset
-          });
+          const params = new URLSearchParams({ name, role_id: roleId, iter_id: iterId, qset });
           window.location.href = `/cognitive-tool.html?${params.toString()}`;
         };
 
         document.getElementById("btn-analyze").onclick = () => {
-          const params = new URLSearchParams({
-            name,
-            role_id: roleId,
-            iter_id: iterId,
-            qset
-          });
+          const params = new URLSearchParams({ name, role_id: roleId, iter_id: iterId, qset });
           window.location.href = `/analyze.html?${params.toString()}`;
         };
 
