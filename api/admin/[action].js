@@ -1,4 +1,6 @@
 // api/admin/[action].js
+const fs = require("fs");
+const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
 
 const supabase = createClient(
@@ -14,7 +16,6 @@ module.exports = async function handler(req, res) {
       // ==========================================================
       // 🧭 ITERATION MANAGEMENT
       // ==========================================================
-
       case "active-iteration": {
         const { data, error } = await supabase
           .from("iterations")
@@ -29,34 +30,26 @@ module.exports = async function handler(req, res) {
       }
 
       case "create-iteration": {
-        if (req.method !== "POST") {
+        if (req.method !== "POST")
           return res
             .status(405)
             .json({ success: false, message: "Method not allowed" });
-        }
 
         const { name, question_set } = req.body;
-        if (!name || !question_set) {
+        if (!name || !question_set)
           return res
             .status(400)
-            .json({
-              success: false,
-              message: "Name and question_set are required.",
-            });
-        }
+            .json({ success: false, message: "Name and question_set are required." });
 
-        const { data: active, error: activeErr } = await supabase
+        const { data: active } = await supabase
           .from("iterations")
           .select("*")
           .is("end_date", null)
           .maybeSingle();
-        if (activeErr) throw activeErr;
-        if (active) {
-          return res.status(400).json({
-            success: false,
-            message: "An active iteration already exists.",
-          });
-        }
+        if (active)
+          return res
+            .status(400)
+            .json({ success: false, message: "An active iteration already exists." });
 
         const { data: newIter, error: createErr } = await supabase
           .from("iterations")
@@ -66,22 +59,19 @@ module.exports = async function handler(req, res) {
         if (createErr) throw createErr;
 
         const newIterId = newIter.id;
-
-        const { data: prevIter, error: prevErr } = await supabase
+        const { data: prevIter } = await supabase
           .from("iterations")
           .select("*")
           .not("end_date", "is", null)
           .order("end_date", { ascending: false })
           .limit(1)
           .single();
-        if (prevErr && prevErr.code !== "PGRST116") throw prevErr;
 
         if (prevIter) {
           const { data: oldUnits } = await supabase
             .from("organization_units")
             .select("*")
             .eq("iteration_id", prevIter.id);
-
           const idMap = new Map();
           for (const u of oldUnits) {
             const { data: ins } = await supabase
@@ -91,20 +81,17 @@ module.exports = async function handler(req, res) {
               .single();
             idMap.set(u.id, ins.id);
           }
-
           for (const u of oldUnits) {
             if (u.parent_id) {
               const newParent = idMap.get(u.parent_id);
               const newId = idMap.get(u.id);
-              if (newParent && newId) {
+              if (newParent && newId)
                 await supabase
                   .from("organization_units")
                   .update({ parent_id: newParent })
                   .eq("id", newId);
-              }
             }
           }
-
           const { data: oldRoles } = await supabase
             .from("person_roles")
             .select("*")
@@ -130,11 +117,10 @@ module.exports = async function handler(req, res) {
       }
 
       case "close-iteration": {
-        if (req.method !== "POST") {
+        if (req.method !== "POST")
           return res
             .status(405)
             .json({ success: false, message: "Method not allowed" });
-        }
         const { error } = await supabase
           .from("iterations")
           .update({ end_date: new Date().toISOString() })
@@ -147,24 +133,19 @@ module.exports = async function handler(req, res) {
       // ==========================================================
       // 👤 PEOPLE / USER MANAGEMENT
       // ==========================================================
-
       case "people": {
-        if (req.method !== "POST") {
+        if (req.method !== "POST")
           return res
             .status(405)
             .json({ success: false, message: "Method not allowed" });
-        }
         const { name } = req.body;
-        if (!name || !name.trim()) {
-          return res
-            .status(400)
-            .json({ success: false, message: "Name required." });
-        }
-        if (name.trim().toLowerCase() === "admin") {
+        if (!name?.trim())
+          return res.status(400).json({ success: false, message: "Name required." });
+        if (name.trim().toLowerCase() === "admin")
           return res
             .status(400)
             .json({ success: false, message: "The name 'Admin' is reserved." });
-        }
+
         const { data, error } = await supabase
           .from("people")
           .insert([{ name }])
@@ -206,7 +187,6 @@ module.exports = async function handler(req, res) {
       // ==========================================================
       // 🧱 ORGANIZATION MANAGEMENT
       // ==========================================================
-
       case "org-data": {
         const { iteration_id } = req.query;
         if (!iteration_id)
@@ -214,14 +194,8 @@ module.exports = async function handler(req, res) {
             .status(400)
             .json({ success: false, message: "iteration_id required." });
         const [units, roles, people] = await Promise.all([
-          supabase
-            .from("organization_units")
-            .select("*")
-            .eq("iteration_id", iteration_id),
-          supabase
-            .from("person_roles")
-            .select("*")
-            .eq("iteration_id", iteration_id),
+          supabase.from("organization_units").select("*").eq("iteration_id", iteration_id),
+          supabase.from("person_roles").select("*").eq("iteration_id", iteration_id),
           supabase.from("people").select("*"),
         ]);
         res.status(200).json({
@@ -266,7 +240,6 @@ module.exports = async function handler(req, res) {
           return res
             .status(400)
             .json({ success: false, message: "Missing id" });
-
         const deleteRecursive = async (unitId) => {
           const { data: children } = await supabase
             .from("organization_units")
@@ -276,7 +249,6 @@ module.exports = async function handler(req, res) {
           await supabase.from("person_roles").delete().eq("org_unit_id", unitId);
           await supabase.from("organization_units").delete().eq("id", unitId);
         };
-
         await deleteRecursive(Number(id));
         res.status(200).json({ success: true });
         break;
@@ -286,9 +258,7 @@ module.exports = async function handler(req, res) {
         const { person_id, org_unit_id, is_manager, iteration_id } = req.body;
         const { data, error } = await supabase
           .from("person_roles")
-          .insert([
-            { person_id, org_unit_id, is_manager, iteration_id },
-          ])
+          .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
           .select()
           .single();
         if (error) throw error;
@@ -298,12 +268,84 @@ module.exports = async function handler(req, res) {
 
       case "remove-person": {
         const { role_id } = req.query;
-        const { error } = await supabase
-          .from("person_roles")
-          .delete()
-          .eq("id", role_id);
+        const { error } = await supabase.from("person_roles").delete().eq("id", role_id);
         if (error) throw error;
         res.status(200).json({ success: true });
+        break;
+      }
+
+      // ==========================================================
+      // 🧠 COGNITIVE TOOL ENDPOINTS
+      // ==========================================================
+      case "cog-list-sets": {
+        const dir = path.join(process.cwd(), "public", "data");
+        const files = fs
+          .readdirSync(dir)
+          .filter((f) => f.endsWith(".json"))
+          .map((f) => ({ name: f }));
+        res.status(200).json({ success: true, files });
+        break;
+      }
+
+      case "cog-load-set": {
+        const { filename } = req.query;
+        if (!filename)
+          return res
+            .status(400)
+            .json({ success: false, message: "filename required" });
+        const filePath = path.join(process.cwd(), "public", "data", filename);
+        if (!fs.existsSync(filePath))
+          return res
+            .status(404)
+            .json({ success: false, message: "File not found" });
+        const content = fs.readFileSync(filePath, "utf8");
+        res.status(200).json({
+          success: true,
+          filename,
+          data: JSON.parse(content),
+        });
+        break;
+      }
+
+      case "cog-save-response": {
+        if (req.method !== "POST")
+          return res
+            .status(405)
+            .json({ success: false, message: "Method not allowed" });
+        const { person_id, iteration_id, question_set, answers } = req.body;
+        if (!person_id || !iteration_id || !question_set || !answers)
+          return res
+            .status(400)
+            .json({ success: false, message: "Missing fields" });
+
+        const { data, error } = await supabase
+          .from("surveys")
+          .insert([{ person_id, iteration_id, question_set, answers }])
+          .select()
+          .single();
+        if (error) throw error;
+        res.status(200).json({ success: true, record: data });
+        break;
+      }
+
+      case "cog-get-responses": {
+        const { iteration_id, person_id } = req.query;
+        let query = supabase.from("surveys").select("*");
+        if (iteration_id) query = query.eq("iteration_id", iteration_id);
+        if (person_id) query = query.eq("person_id", person_id);
+        const { data, error } = await query;
+        if (error) throw error;
+        res.status(200).json({ success: true, rows: data });
+        break;
+      }
+
+      case "cog-summary": {
+        const { data, error } = await supabase
+          .from("surveys")
+          .select("iteration_id, count:count(*)")
+          .group("iteration_id");
+        if (error) throw error;
+        res.status(200).json({ success: true, summary: data });
         break;
       }
 
@@ -345,9 +387,7 @@ module.exports = async function handler(req, res) {
       // 🛑 DEFAULT
       // ==========================================================
       default: {
-        res
-          .status(400)
-          .json({ success: false, message: `Unknown action: ${action}` });
+        res.status(400).json({ success: false, message: `Unknown action: ${action}` });
         break;
       }
     }
