@@ -193,14 +193,39 @@ module.exports = async function handler(req, res) {
       case "cog-save-response": {
         if (req.method !== "POST")
           return res.status(405).json({ success: false, message: "Method not allowed" });
-        const { person_id, iteration_id, question_set, answers } = req.body;
-        if (!person_id || !iteration_id || !question_set || !answers)
-          return res.status(400).json({ success: false, message: "Missing fields" });
 
-        const serializedResults = typeof answers === "string" ? answers : JSON.stringify(answers);
+        let { person_role_id, org_unit_id, person_id, iteration_id, question_set, answers } = req.body;
+        if (!iteration_id || !question_set || !answers)
+          return res.status(400).json({ success: false, message: "Missing fields (iteration_id, question_set, answers required)" });
+
+        // Try to resolve role/org if missing but person_id provided
+        if ((!person_role_id || !org_unit_id) && person_id) {
+          const { data: role } = await supabase
+            .from("person_roles")
+            .select("*")
+            .eq("person_id", person_id)
+            .eq("iteration_id", iteration_id)
+            .maybeSingle();
+          if (role) {
+            person_role_id = person_role_id || role.id;
+            org_unit_id = org_unit_id || role.org_unit_id;
+          }
+        }
+
+        // Final validation (we allow person_role_id/org_unit_id to be null if your workflow permits)
+        const serializedResults = Array.isArray(answers) ? JSON.stringify(answers) :
+                                  typeof answers === "string" ? answers : JSON.stringify([]);
+
         const { data, error } = await supabase
           .from("surveys")
-          .insert([{ iteration_id, survey_type: "individual", filename: question_set, survey_results: serializedResults }])
+          .insert([{
+            person_role_id: person_role_id ?? null,
+            org_unit_id: org_unit_id ?? null,
+            iteration_id,
+            survey_type: "individual",
+            filename: question_set,
+            survey_results: serializedResults
+          }])
           .select()
           .single();
 

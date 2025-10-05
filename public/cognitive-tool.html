@@ -2,140 +2,165 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Cognitive Tool</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    .tw-caret { transition: transform 0.2s; }
-    details[open] summary .tw-caret { transform: rotate(90deg); }
-  </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
-  <div class="max-w-5xl mx-auto p-6">
+  <div class="max-w-6xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">Cognitive Tool</h1>
       <p id="context" class="text-sm text-gray-600 mt-1"></p>
     </header>
 
-    <!-- Question Set Display -->
-    <div id="question-container" class="hidden space-y-4 mb-8">
-      <h2 class="font-semibold text-lg">Loaded Question Set</h2>
-      <p id="q-info" class="text-sm text-gray-700"></p>
-      <div id="questions" class="space-y-3"></div>
+    <section class="rounded-lg border border-gray-200 bg-white p-4 mb-6">
+      <h2 class="font-semibold mb-2">Loaded Question Set</h2>
+      <p id="set-info" class="text-sm text-gray-600"></p>
+    </section>
 
-      <button id="submit-btn" class="rounded bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700">
-        Submit Responses
-      </button>
-    </div>
+    <section class="rounded-lg border border-gray-200 bg-white p-4 mb-6">
+      <h2 class="font-semibold mb-4">Survey Questions</h2>
+      <div id="questions" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+      <div class="mt-6">
+        <button id="submit-btn" class="rounded bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">Submit Responses</button>
+      </div>
+    </section>
 
-    <!-- Debug -->
-    <details class="bg-gray-900 text-gray-100 rounded-lg p-3 mt-8">
-      <summary class="cursor-pointer flex items-center gap-2">
-        <span class="tw-caret inline-block">▶</span>
-        <span class="font-semibold">Debug log (open to view)</span>
-      </summary>
+    <a id="back" class="text-sm text-blue-600 hover:underline" href="#">← Back to Portal</a>
+
+    <details class="mt-6 bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer select-none">Debug log (open to view)</summary>
       <pre id="debug" class="mt-2 whitespace-pre-wrap text-xs"></pre>
     </details>
-
-    <div class="mt-6">
-      <a href="/portal.html" class="text-sm text-blue-600 hover:underline">← Back to Portal</a>
-    </div>
   </div>
 
   <script>
     (function () {
       const qs = new URLSearchParams(window.location.search);
-      const name = qs.get("name");
-      const role_id = qs.get("role_id");
-      const iter_id = qs.get("iter_id");
-      const qset = qs.get("qset");
+      const name = qs.get('name');
+      const roleId = Number(qs.get('role_id'));
+      const iterId = Number(qs.get('iter_id'));
+      const qset = qs.get('qset');
 
-      const debugEl = document.getElementById("debug");
-      const contextEl = document.getElementById("context");
-      const qInfoEl = document.getElementById("q-info");
-      const questionContainer = document.getElementById("question-container");
-      const questionsEl = document.getElementById("questions");
-      const submitBtn = document.getElementById("submit-btn");
+      const dbg = document.getElementById('debug');
+      const ctx = document.getElementById('context');
+      const setInfo = document.getElementById('set-info');
+      const questionsEl = document.getElementById('questions');
+      const back = document.getElementById('back');
 
-      const log = (msg, obj) => {
-        const line = `[${new Date().toISOString()}] ${msg}`;
+      let personId = null;
+      let orgUnitId = null;
+      let questions = [];
+
+      function log(msg, obj) {
+        const line = `[${new Date().toISOString()}] [cog] ${msg}`;
         if (obj !== undefined) {
-          try { debugEl.textContent += `${line} ${JSON.stringify(obj)}\n`; }
-          catch { debugEl.textContent += `${line}\n`; }
-        } else debugEl.textContent += `${line}\n`;
-        if (debugEl.textContent.length > 30000)
-          debugEl.textContent = debugEl.textContent.slice(-20000);
-      };
-
-      async function loadQuestionSet(filename) {
-        try {
-          log("[cog] GET /api/admin/cog-load-set", { filename });
-          const res = await fetch(`/api/admin/cog-load-set?filename=${encodeURIComponent(filename)}`);
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.success) throw new Error(data.message || "Failed to load question set file");
-
-          const questions = data.data;
-          log("[cog] Question set loaded", { count: questions.length });
-          qInfoEl.textContent = `Loaded ${questions.length} questions from ${filename}.`;
-          questionContainer.classList.remove("hidden");
-
-          // Render first 20 (for usability)
-          questionsEl.innerHTML = "";
-          questions.slice(0, 20).forEach((q, idx) => {
-            const div = document.createElement("div");
-            div.className = "rounded border border-gray-200 bg-white p-3";
-            div.innerHTML = `
-              <p class="text-sm mb-1"><b>Q${idx + 1}.</b> ${q}</p>
-              <input type="range" min="1" max="5" value="3" step="1" id="q_${idx}" class="w-full">
-              <div class="text-xs text-gray-500">1 = Poor / 5 = Excellent</div>
-            `;
-            questionsEl.appendChild(div);
-          });
-
-          return questions;
-        } catch (err) {
-          qInfoEl.textContent = "Error: " + err.message;
-          log("[cog] load error", { message: err.message });
-          return [];
-        }
+          try { dbg.textContent += `${line} ${JSON.stringify(obj)}\n`; }
+          catch { dbg.textContent += `${line}\n`; }
+        } else dbg.textContent += `${line}\n`;
+        if (dbg.textContent.length > 40000) dbg.textContent = dbg.textContent.slice(-30000);
       }
 
-      async function submitResponses(questions) {
-        try {
-          const answers = questions.map((_, i) => {
-            const input = document.getElementById(`q_${i}`);
-            return { q: i + 1, v: Number(input?.value || 0) };
-          });
+      back.href = `/portal.html?name=${encodeURIComponent(name)}&role_id=${roleId}&iter_id=${iterId}&qset=${encodeURIComponent(qset)}`;
 
-          const payload = {
-            person_id: role_id,
-            iteration_id: iter_id,
-            question_set: qset,
-            answers,
-          };
-
-          log("[cog] POST /api/admin/cog-save-response", payload);
-          const res = await fetch("/api/admin/cog-save-response", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data.success) throw new Error(data.message || "Failed to save response");
-
-          alert("Responses saved successfully!");
-        } catch (err) {
-          alert("Error: " + err.message);
-          log("[cog] submit error", { message: err.message });
-        }
+      async function loadRoleContext() {
+        log('GET /api/admin/get-user-roles', { name });
+        const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
+        const role = (data.roles || []).find(r => Number(r.id) === roleId);
+        if (!role) throw new Error('Selected role not found');
+        personId = role.person_id;
+        orgUnitId = role.org_unit_id;
+        const iter = role.iterations || {};
+        ctx.textContent = `User: ${name} — Role ID: ${roleId} — Iteration ID: ${iterId} — Question Set: ${qset}`;
+        return true;
       }
+
+      async function loadSet() {
+        log('GET /api/admin/cog-load-set', { filename: qset });
+        const res = await fetch(`/api/admin/cog-load-set?filename=${encodeURIComponent(qset)}`);
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load question set file');
+
+        // Normalize: handle array of strings or object { questions: [...] } or CSV string list
+        let raw = data.data;
+        if (Array.isArray(raw)) {
+          questions = raw.map((t, i) => `Q${i+1} ${String(t)}`);
+        } else if (raw && Array.isArray(raw.questions)) {
+          questions = raw.questions.map((t, i) => `Q${i+1} ${String(t)}`);
+        } else if (typeof raw === 'string') {
+          // CSV-line string -> split on "," (fallback)
+          questions = raw.split(',').map((s, i) => `Q${i+1} ${s.trim().replace(/^"|"$/g,'')}`);
+        } else {
+          questions = [];
+        }
+
+        setInfo.textContent = `Loaded ${questions.length} questions from ${qset}.`;
+        log('Question set loaded', { count: questions.length });
+      }
+
+      function renderQuestions() {
+        questionsEl.innerHTML = '';
+        questions.forEach((qtext, idx) => {
+          const card = document.createElement('div');
+          card.className = 'rounded border border-gray-200 p-3';
+          const label = document.createElement('div');
+          label.className = 'text-sm font-medium mb-2';
+          label.textContent = `${idx+1}. ${qtext}`;
+          const val = document.createElement('div');
+          val.className = 'text-xs text-gray-600 mb-1';
+          val.textContent = 'Value: 4';
+          const input = document.createElement('input');
+          input.type = 'range';
+          input.min = '1';
+          input.max = '8';
+          input.value = '4';
+          input.className = 'w-full';
+          input.oninput = () => { val.textContent = `Value: ${input.value}`; };
+          card.append(label, input, val);
+          questionsEl.appendChild(card);
+        });
+      }
+
+      async function submit() {
+        const sliders = questionsEl.querySelectorAll('input[type="range"]');
+        const answers = Array.from(sliders).map((el, i) => ({ q: i+1, v: Number(el.value) }));
+
+        const payload = {
+          person_role_id: roleId,
+          org_unit_id: orgUnitId,
+          person_id: personId,          // fallback resolver on server if needed
+          iteration_id: iterId,
+          question_set: qset,
+          answers
+        };
+
+        log('POST /api/admin/cog-save-response', payload);
+        const res = await fetch('/api/admin/cog-save-response', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.message || 'Submit failed');
+        alert('Responses saved.');
+      }
+
+      document.getElementById('submit-btn').onclick = () => submit().catch(e => {
+        log('submit error', { message: e.message });
+        alert('Error: ' + e.message);
+      });
 
       // INIT
-      contextEl.textContent = `User: ${name} — Role ID: ${role_id} — Iteration ID: ${iter_id} — Question Set: ${qset}`;
-      log("[cog] page loaded");
-      loadQuestionSet(qset).then((questions) => {
-        submitBtn.onclick = () => submitResponses(questions);
-      });
+      log('page loaded');
+      loadRoleContext()
+        .then(loadSet)
+        .then(renderQuestions)
+        .catch(e => {
+          log('load error', { message: e.message });
+          setInfo.textContent = 'Error: ' + e.message;
+        });
     })();
   </script>
 </body>
