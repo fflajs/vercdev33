@@ -2,58 +2,54 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, user-scalable=no"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cognition Space Visualizer</title>
 
-  <!-- Tailwind (CDN okay for now) -->
+  <!-- Tailwind (CDN ok for now) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Charts + Three.js + OrbitControls -->
+  <!-- Chart.js + Three.js + OrbitControls -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
   <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", "Apple Color Emoji", "Segoe UI Emoji"; background:#f3f4f6; color:#111827; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica Neue, Arial; background:#f3f4f6; color:#111827; }
     .container { max-width:1200px; margin:2rem auto; padding:2rem; background:#fff; border-radius:1rem; box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05); }
-    .slider-grid { display:grid; grid-template-columns: repeat( auto-fit, minmax(280px, 1fr) ); gap:1rem; }
+    .slider-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap:1rem; }
     .chart-wrap { width:100%; height:300px; }
     .voxel-wrap { width:100%; height:600px; border-radius:1rem; overflow:hidden; background:#e5e7eb; display:flex; justify-content:center; align-items:center; }
     .voxel-canvas { width:100%; height:100%; display:block; }
     .sticky-th { position:sticky; top:0; z-index:5; background:#f9fafb; }
-    .debug-pre { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; font-size:.8rem; line-height:1.2; }
+    .debug-pre { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New; font-size:.8rem; line-height:1.2; }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Header -->
     <div class="text-center mb-6">
       <h1 class="text-3xl font-bold">Cognition Space Visualizer</h1>
-      <p id="iterationBar" class="text-blue-600 font-semibold mt-1">Loading context...</p>
-      <p class="text-sm text-gray-500 mt-1">Proof of Concept - UCognos layout replica</p>
+      <p id="iterationBar" class="text-blue-600 font-semibold mt-1">Loading context…</p>
+      <p class="text-sm text-gray-500 mt-1">UCognos layout replica (Vercel)</p>
     </div>
 
-    <!-- User context (from query params) -->
+    <!-- User context -->
     <div id="userContext" class="mb-6 p-3 bg-gray-100 rounded-lg border text-sm text-center"></div>
 
     <!-- Target / Description -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
       <div class="p-4 bg-gray-50 rounded-lg border">
         <label class="text-lg font-semibold text-gray-800">Target</label>
-        <textarea id="targetText" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Overall target set by root manager..."></textarea>
+        <textarea id="targetText" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Overall target set by root manager…"></textarea>
         <button id="saveTargetBtn" class="mt-2 w-full p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400">Save Target</button>
       </div>
       <div class="p-4 bg-gray-50 rounded-lg border">
         <label class="text-lg font-semibold text-gray-800">Description</label>
-        <textarea id="descText" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Your personal description for this role..."></textarea>
+        <textarea id="descText" rows="4" class="w-full mt-2 p-2 border rounded-lg resize-y font-mono text-sm bg-white" placeholder="Your personal description for this role…"></textarea>
         <button id="saveDescBtn" class="mt-2 w-full p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Description</button>
       </div>
     </div>
 
-    <!-- Organization Stats (manager-only; placeholder card for parity) -->
+    <!-- Organization Statistics -->
     <div id="statsCard" class="p-4 bg-gray-50 rounded-lg border mb-8 hidden">
       <h2 class="text-xl font-semibold text-center text-gray-800 mb-4">Organization Statistics (Active Iteration)</h2>
       <div class="overflow-auto border rounded">
@@ -77,7 +73,7 @@
       <div id="sliders" class="slider-grid"></div>
     </div>
 
-    <!-- Computed JSON + Save -->
+    <!-- Computed JSON -->
     <div class="p-6 bg-gray-50 rounded-lg border">
       <h2 class="text-2xl font-semibold mb-4 text-center">Computed JSON Data</h2>
       <textarea id="jsonOut" class="w-full h-48 p-4 border rounded-lg resize-none font-mono text-sm bg-gray-100" readonly></textarea>
@@ -98,11 +94,11 @@
       </div>
     </div>
 
-    <!-- Voxel cube -->
+    <!-- 3D voxel -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border">
       <h2 class="text-2xl font-semibold mb-4 text-center">3D Voxel Scene</h2>
       <div class="voxel-wrap"><canvas id="voxelCanvas" class="voxel-canvas"></canvas></div>
-      <p class="text-center mt-3 text-sm text-gray-600">Red = your rounded mean voxel. Rotate with mouse (OrbitControls).</p>
+      <p class="text-center mt-3 text-sm text-gray-600">Red = your rounded mean voxel (OrbitControls enabled)</p>
     </div>
 
     <!-- Analysis -->
@@ -114,7 +110,7 @@
       </div>
     </div>
 
-    <!-- Debug drawer -->
+    <!-- Debug -->
     <details class="mt-8">
       <summary class="cursor-pointer select-none text-sm text-gray-600">Debug log (open to view)</summary>
       <div class="mt-2 p-3 bg-gray-100 border rounded">
@@ -124,387 +120,154 @@
   </div>
 
   <script>
-    // --- helpers ---
-    const dbg = function () {
-      const pre = document.getElementById('debug');
-      const parts = Array.prototype.map.call(arguments, function (x) {
-        return (typeof x === 'string') ? x : JSON.stringify(x);
-      }).join(' ');
-      console.log(parts);
-      pre.textContent += parts + '\n';
+    const dbg = (...a) => {
+      console.log(...a);
+      document.getElementById('debug').textContent += a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') + "\\n";
     };
-    const flash = function (msg, color) {
-      color = color || "green";
+    const flash = (msg, color="green") => {
       const el = document.getElementById('flash');
       el.textContent = msg;
-      el.className = 'text-xs mt-2 block text-center text-' + color + '-600';
-      setTimeout(function(){ el.textContent = ""; }, 4000);
+      el.className = \`text-xs mt-2 block text-center text-\${color}-600\`;
+      setTimeout(()=> el.textContent="", 4000);
     };
 
-    // --- query params from portal navigation ---
     const qs = new URLSearchParams(location.search);
-    const userName  = qs.get('name') || "(unknown)";
-    const roleId    = qs.get('role_id');  // person_roles.id
-    const iterId    = qs.get('iter_id');  // iterations.id
-    const qsetFile  = qs.get('qset') || "Normal_Analysis_60.json";
+    const userName = qs.get('name') || "(unknown)";
+    const roleId = qs.get('role_id');
+    const iterId = qs.get('iter_id');
+    const qsetFile = qs.get('qset') || "Normal_Analysis_60.json";
 
-    // --- state ---
-    let questions = [];         // array of strings
-    let values    = [];         // numeric 1..8
-    let mapVoxel  = new Map();  // key -> {short_desc, coach_tip}
-    let charts = { q:null, m:null, d:null };
-    let sceneStateMain = { scene:null, camera:null, renderer:null, controls:null, grid:[], outline:null, last:null };
+    let questions=[], values=[];
+    let mapVoxel=new Map();
+    let charts={q:null,m:null,d:null};
+    let sceneState={scene:null,camera:null,renderer:null,controls:null,grid:[],outline:null,last:null};
 
-    // Gaussian helpers
-    function gaussian(x, m, s){ s = s || 1; return Math.exp(-0.5 * Math.pow((x-m)/s, 2)) / (s * Math.sqrt(2*Math.PI)); }
-    function gaussianSeries(mean){ 
-      const out = [];
-      for (var i=0;i<71;i++){ out.push(+gaussian(1+i*0.1, mean).toFixed(4)); }
-      return out;
-    }
-    const labels = (function(){ const a=[]; for (var i=0;i<71;i++){ a.push((1+i*0.1).toFixed(1)); } return a; })();
-    function mode(arr){
-      if(!arr.length) return null;
-      var c = {}, m=null, mc=0;
-      arr.forEach(function(v){ c[v] = (c[v]||0)+1; if(c[v]>mc){mc=c[v]; m=v;} });
-      return m;
-    }
+    const gaussian=(x,m,s=1)=>Math.exp(-0.5*Math.pow((x-m)/s,2))/(s*Math.sqrt(2*Math.PI));
+    const gaussianSeries=m=>Array.from({length:71},(_,i)=>+gaussian(1+i*0.1,m).toFixed(4));
+    const labels=Array.from({length:71},(_,i)=>(1+i*0.1).toFixed(1));
+    const mode=a=>{const c={},m=()=>Object.keys(c).reduce((x,y)=>c[x]>c[y]?x:y);a.forEach(v=>c[v]=(c[v]||0)+1);return +m();};
 
-    // Charts
-    function renderCharts(data){
-      const common = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, title:{display:true, text:""} }, scales:{ x:{ grid:{display:false}, title:{display:true,text:"Value"}}, y:{ grid:{display:false}, title:{display:true,text:"Probability Density"} } }};
-      function mk(ctx, title, color, series){
-        return new Chart(ctx, { 
-          type:'line', 
-          data:{ 
-            labels: labels, 
-            datasets:[{ 
-              label: title, 
-              data: series, 
-              borderColor: 'rgb(' + color + ')', 
-              backgroundColor: 'rgba(' + color + ',.2)', 
-              borderWidth:2, 
-              fill:true, 
-              tension:.4 
-            }] 
-          }, 
-          options:{ 
-            responsive:true, maintainAspectRatio:false, 
-            plugins:{ legend:{display:false}, title:{display:true, text:title} },
-            scales: common.scales
-          } 
-        });
-      }
-
-      if(charts.q) charts.q.destroy();
-      charts.q = mk(document.getElementById('chartQ'), 'Knowledge Density', '75,192,192', data.q);
-      if(charts.m) charts.m.destroy();
-      charts.m = mk(document.getElementById('chartM'), 'Familiarity', '54,162,235', data.m);
-      if(charts.d) charts.d.destroy();
-      charts.d = mk(document.getElementById('chartD'), 'Cognitive Load', '255,159,64', data.d);
-    }
-
-    // Voxel cube (classic)
-    function initVoxel(canvasId, state){
-      const canvas = document.getElementById(canvasId);
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xf3f4f6);
-      const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth/canvas.clientHeight, 0.1, 1000);
-      camera.position.set(1.2,1.2,1.2);
-      const renderer = new THREE.WebGLRenderer({ antialias:true, canvas: canvas });
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-
-      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-      const dl = new THREE.DirectionalLight(0xffffff, 0.8); 
-      dl.position.set(5,10,7.5); 
-      scene.add(dl);
-
-      const gray = new THREE.MeshBasicMaterial({ color:0xaaaaaa, wireframe:true, opacity:.2, transparent:true });
-      const geom = new THREE.BoxGeometry(1/8,1/8,1/8);
-      const grid = [];
-      for(var z=1; z<=8; z++) for(var y=1; y<=8; y++) for(var x=1; x<=8; x++){
-        const v = new THREE.Mesh(geom, gray);
-        v.position.set((x-0.5)/8-0.5, (y-0.5)/8-0.5, (z-0.5)/8-0.5);
-        scene.add(v); grid.push(v);
-      }
-      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color:0x992222 }));
-      outline.visible = false; 
-      scene.add(outline);
-
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true; 
-      controls.dampingFactor = 0.05;
-
-      (function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); })();
-
-      state.scene = scene; state.camera = camera; state.renderer = renderer; state.controls = controls;
-      state.grid = grid; state.outline = outline; state.last = null;
-    }
-    function updateVoxel(rounded, state){
-      if(!rounded) return;
-      const gray = new THREE.MeshBasicMaterial({ color:0xaaaaaa, wireframe:true, opacity:.2, transparent:true });
-      const red  = new THREE.MeshBasicMaterial({ color:0xef4444, opacity:.75, transparent:true });
-
-      if(state.last) state.last.material = gray;
-      state.outline.visible = false;
-
-      const x = rounded.x, y = rounded.y, z = rounded.z;
-      const idx = (x-1) + (y-1)*8 + (z-1)*64;
-      const v = state.grid[idx];
-      if(v){
-        v.material = red;
-        state.outline.position.copy(v.position);
-        state.outline.visible = true;
-        state.last = v;
-      }
-    }
-
-    // Analysis lookup (voxel CSV)
-    function parseVoxelCSV(csvText){
-      const lines = csvText.trim().split('\n').slice(1);
-      for(var li=0; li<lines.length; li++){
-        const line = lines[li];
-        if(!line || !line.trim()) continue;
-        const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-        if(parts.length > 12){
-          const key = parts[0].replace(/"/g,'').replace(/\\/g,'');
-          const short_desc = parts[11].replace(/"/g,'');
-          const coach_tip  = parts[12].replace(/"/g,'').replace(/;/g, ', ');
-          mapVoxel.set(key, { short_desc: short_desc, coach_tip: coach_tip });
-        }
-      }
-    }
-    function applyAnalysis(rounded){
-      const elD = document.getElementById('analysisDesc');
-      const elT = document.getElementById('analysisTip');
-      if(!rounded){ elD.textContent = 'Adjust sliders to see analysis.'; elT.textContent=''; return; }
-      const key = '[' + rounded.x + ',' + rounded.y + ',' + rounded.z + ']';
-      const a = mapVoxel.get(key);
-      if(a){ elD.textContent = a.short_desc || ''; elT.textContent = a.coach_tip ? ('Coaching Tip: ' + a.coach_tip) : ''; }
-      else { elD.textContent = 'No specific analysis for this combination.'; elT.textContent = ''; }
-    }
-
-    // Active iteration (from your existing admin endpoint)
     async function loadActiveIteration(){
-      try{
-        const r = await fetch('/api/admin/active-iteration');
-        const j = await r.json();
-        dbg('[cog] active-iteration', j);
-        const bar = document.getElementById('iterationBar');
-        if(j.success && j.iteration){
-          const it = j.iteration;
-          const qsName = (it.question_set||'').replace('.json','').replace(/_/g,' ');
-          bar.innerHTML = 'Active Iteration: <span class="font-bold">' + it.name + ' (ID: ' + it.id + ')</span> | Question Set: <span class="font-bold">' + qsName + '</span>';
-          return it;
-        } else {
-          bar.textContent = 'No active iteration.';
-          bar.classList.remove('text-blue-600'); bar.classList.add('text-red-600');
-          return null;
-        }
-      }catch(e){
-        dbg('[cog] active-iteration error', String(e));
-        const bar = document.getElementById('iterationBar');
-        bar.textContent = 'Error loading iteration.';
-        bar.classList.remove('text-blue-600'); bar.classList.add('text-red-600');
-        return null;
-      }
+      const r=await fetch('/api/admin/active-iteration');
+      const j=await r.json();
+      if(j.success&&j.iteration){
+        const it=j.iteration;
+        document.getElementById('iterationBar').innerHTML=\`Active Iteration: <b>\${it.name}</b> | Question Set: \${it.question_set}\`;
+        return it;
+      } else document.getElementById('iterationBar').textContent="No active iteration.";
+      return null;
     }
 
-    // Load question set via your Vercel endpoint
     async function loadQuestions(filename){
-      const url = '/api/admin/cog-load-set?filename=' + encodeURIComponent(filename);
-      const r = await fetch(url);
-      if(!r.ok) throw new Error('Failed to load question set');
-      const j = await r.json();
-      dbg('[cog] cog-load-set', j);
-
-      var arr = [];
-      if(Array.isArray(j.data)){
-        arr = j.data;
-      } else if (j.data && typeof j.data === 'object'){
-        if(j.data.Q || j.data.M || j.data.D){
-          if(Array.isArray(j.data.Q)) arr = arr.concat(j.data.Q);
-          if(Array.isArray(j.data.M)) arr = arr.concat(j.data.M);
-          if(Array.isArray(j.data.D)) arr = arr.concat(j.data.D);
-        } else {
-          Object.values(j.data).forEach(function(v){
-            if(Array.isArray(v)) arr = arr.concat(v);
-          });
-        }
-      }
-      return arr;
+      const r=await fetch(\`/api/admin/cog-load-set?filename=\${encodeURIComponent(filename)}\`);
+      const j=await r.json();
+      return Array.isArray(j.data)?j.data:Object.values(j.data).flat();
     }
 
-    // Build sliders
+    async function loadVoxelCSV(){
+      try{
+        const r=await fetch('/api/admin/voxel-data',{cache:'no-store'});
+        if(!r.ok){dbg('voxel CSV not found');return;}
+        const txt=await r.text();
+        parseVoxelCSV(txt);
+      }catch(e){dbg('voxel CSV load error',e);}
+    }
+
+    function parseVoxelCSV(csvText){
+      const lines=csvText.trim().split('\\n').slice(1);
+      for(const line of lines){
+        const parts=line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        if(parts.length>12){
+          const key=parts[0].replace(/"/g,'').replace(/\\\\/g,'');
+          const short_desc=parts[11].replace(/"/g,'');
+          const coach_tip=parts[12].replace(/"/g,'').replace(/;/g,', ');
+          mapVoxel.set(key,{short_desc,coach_tip});
+        }
+      }
+    }
+
     function renderSliders(){
-      const root = document.getElementById('sliders');
-      root.innerHTML = '';
-      values = Array(questions.length).fill(4);
-      document.getElementById('surveyIntro').textContent =
-        'Enter ' + questions.length + ' values (1-8) to compute means, render Gaussians, and show your voxel.';
-
-      questions.forEach(function(txt, i){
-        const wrap = document.createElement('div');
-        wrap.className = 'p-3 bg-white rounded border';
-        const lab = document.createElement('label');
-        lab.className = 'block text-sm font-medium text-gray-700';
-        lab.innerHTML = 'Q' + (i+1) + '. ' + txt;
-        const val = document.createElement('div');
-        val.className = 'mt-1 text-xs text-gray-500';
-        val.innerHTML = '1 = low ... 8 = high &nbsp;|&nbsp; value: <span id="v-' + (i+1) + '" class="font-semibold">4</span>';
-
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = '1'; slider.max = '8'; slider.value = '4';
-        slider.className = 'w-full mt-2';
-        slider.addEventListener('input', function(e){
-          const nv = parseInt(e.target.value, 10);
-          values[i] = nv;
-          document.getElementById('v-' + (i+1)).textContent = String(nv);
-          recompute();
-        });
-
-        wrap.appendChild(lab);
-        wrap.appendChild(val);
-        wrap.appendChild(slider);
+      const root=document.getElementById('sliders');
+      root.innerHTML='';
+      values=Array(questions.length).fill(4);
+      document.getElementById('surveyIntro').textContent=\`Enter \${questions.length} values (1–8).\`;
+      questions.forEach((txt,i)=>{
+        const wrap=document.createElement('div');
+        wrap.className='p-3 bg-white rounded border';
+        wrap.innerHTML=\`
+          <label class='block text-sm font-medium text-gray-700'>Q\${i+1}. \${txt}</label>
+          <div class='mt-1 text-xs text-gray-500'>1=low ··· 8=high | value: <span id="v-\${i+1}" class="font-semibold">4</span></div>
+          <input type='range' min='1' max='8' value='4' class='w-full mt-2'>
+        \`;
+        const s=wrap.querySelector('input');
+        s.addEventListener('input',e=>{values[i]=+e.target.value;document.getElementById(\`v-\${i+1}\`).textContent=e.target.value;recompute();});
         root.appendChild(wrap);
       });
     }
 
+    function renderCharts(data){
+      const opt={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},title:{display:true}},scales:{x:{grid:{display:false}},y:{grid:{display:false}}}};
+      const mk=(id,t,c,s)=>new Chart(document.getElementById(id),{type:'line',data:{labels,datasets:[{data:s,borderColor:\`rgb(\${c})\`,backgroundColor:\`rgba(\${c},.2)\`,tension:.4}]},options:{...opt,plugins:{...opt.plugins,title:{text:t}}}});
+      charts.q&&charts.q.destroy();charts.q=mk('chartQ','Knowledge Density','75,192,192',data.q);
+      charts.m&&charts.m.destroy();charts.m=mk('chartM','Familiarity','54,162,235',data.m);
+      charts.d&&charts.d.destroy();charts.d=mk('chartD','Cognitive Load','255,159,64',data.d);
+    }
+
+    function initVoxel(id,s){
+      const c=document.getElementById(id);
+      const sc=new THREE.Scene();sc.background=new THREE.Color(0xf3f4f6);
+      const cam=new THREE.PerspectiveCamera(50,c.clientWidth/c.clientHeight,0.1,1000);cam.position.set(1.2,1.2,1.2);
+      const r=new THREE.WebGLRenderer({antialias:true,canvas:c});r.setSize(c.clientWidth,c.clientHeight);
+      sc.add(new THREE.AmbientLight(0xffffff,.6));const dl=new THREE.DirectionalLight(0xffffff,.8);dl.position.set(5,10,7.5);sc.add(dl);
+      const gray=new THREE.MeshBasicMaterial({color:0xaaa,wireframe:true,opacity:.2,transparent:true});
+      const geom=new THREE.BoxGeometry(1/8,1/8,1/8);const grid=[];
+      for(let z=1;z<=8;z++)for(let y=1;y<=8;y++)for(let x=1;x<=8;x++){const v=new THREE.Mesh(geom,gray);v.position.set((x-.5)/8-.5,(y-.5)/8-.5,(z-.5)/8-.5);sc.add(v);grid.push(v);}
+      const outline=new THREE.LineSegments(new THREE.EdgesGeometry(geom),new THREE.LineBasicMaterial({color:0x992222}));outline.visible=false;sc.add(outline);
+      const ctl=new THREE.OrbitControls(cam,r.domElement);ctl.enableDamping=true;
+      (function ani(){requestAnimationFrame(ani);ctl.update();r.render(sc,cam);})();
+      Object.assign(s,{scene:sc,camera:cam,renderer:r,controls:ctl,grid,outline,last:null});
+    }
+
+    function updateVoxel(rm,s){
+      if(!rm)return;
+      const gray=new THREE.MeshBasicMaterial({color:0xaaa,wireframe:true,opacity:.2,transparent:true});
+      const red=new THREE.MeshBasicMaterial({color:0xef4444,opacity:.75,transparent:true});
+      if(s.last)s.last.material=gray;
+      s.outline.visible=false;
+      const i=(rm.x-1)+(rm.y-1)*8+(rm.z-1)*64,v=s.grid[i];
+      if(v){v.material=red;s.outline.position.copy(v.position);s.outline.visible=true;s.last=v;}
+    }
+
+    function applyAnalysis(rm){
+      const elD=document.getElementById('analysisDesc'),elT=document.getElementById('analysisTip');
+      if(!rm){elD.textContent='Adjust sliders to see analysis.';elT.textContent='';return;}
+      const k=\`[\${rm.x},\${rm.y},\${rm.z}]\`,a=mapVoxel.get(k);
+      if(a){elD.textContent=a.short_desc||'';elT.textContent=a.coach_tip?'Coaching Tip: '+a.coach_tip:'';} else {elD.textContent='No analysis for this combination.';elT.textContent='';}
+    }
+
     function recompute(){
-      if(!values.length) return;
-      const n = values.length;
-      const g = Math.floor(n/3);
-      const Qs = values.slice(0, g);
-      const Ms = values.slice(g, 2*g);
-      const Ds = values.slice(2*g);
-
-      function mean(a){ return a.length ? a.reduce(function(s,x){return s+x;},0)/a.length : 0; }
-      function clamp18(x){ return Math.min(8, Math.max(1, x)); }
-
-      const mQ = mean(Qs), mM = mean(Ms), mD = mean(Ds);
-      const rQ = Math.round(clamp18(mQ)), rM = Math.round(clamp18(mM)), rD = Math.round(clamp18(mD));
-
-      // charts
-      renderCharts({
-        q: gaussianSeries(mQ),
-        m: gaussianSeries(mM),
-        d: gaussianSeries(mD)
-      });
-
-      // voxel + analysis
-      updateVoxel({x:rQ, y:rM, z:rD}, sceneStateMain);
-      applyAnalysis({x:rQ, y:rM, z:rD});
-
-      // JSON output (compatible with your current server save)
-      const payload = {
-        timestamp: new Date().toISOString(),
-        survey_results: values,
-        analysis: {
-          voxel: {
-            mean: { x:+mQ.toFixed(2), y:+mM.toFixed(2), z:+mD.toFixed(2) },
-            mode: { x: mode(Qs.map(Math.round)), y: mode(Ms.map(Math.round)), z: mode(Ds.map(Math.round)) },
-            roundedMean: { x:rQ, y:rM, z:rD }
-          },
-          graphs: {
-            knowledge_density: { mean:+mQ.toFixed(2), distribution_data: gaussianSeries(mQ) },
-            familiarity:       { mean:+mM.toFixed(2), distribution_data: gaussianSeries(mM) },
-            cognitive_load:    { mean:+mD.toFixed(2), distribution_data: gaussianSeries(mD) }
-          }
-        }
-      };
-      document.getElementById('jsonOut').value = JSON.stringify(payload, null, 2);
-    }
-
-    // Save to your Vercel API (surveys table, jsonb survey_results)
-    async function saveSurvey(){
-      if(!iterId){
-        flash('Missing iteration id (iter_id) in URL.', 'red');
-        return;
-      }
-      try{
-        const body = {
-          iteration_id: Number(iterId),
-          question_set: qsetFile,
-          answers: JSON.parse(document.getElementById('jsonOut').value).survey_results
-        };
-        dbg('[cog] POST /api/admin/cog-save-response', body);
-        const r = await fetch('/api/admin/cog-save-response', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify(body)
-        });
-        const j = await r.json();
-        dbg('[cog] save result', j);
-        if(!r.ok || !j.success){
-          throw new Error(j.message || 'Save failed');
-        }
-        flash('Saved. (surveys.survey_results JSON updated)');
-      }catch(e){
-        flash('Error: ' + e.message, 'red');
-      }
-    }
-
-    // Load CSV for voxel analysis text (optional)
-    async function loadVoxelCSV(){
-      try{
-        const r = await fetch('/data/voxels.csv', { cache:'no-store' });
-        if(!r.ok){ dbg('[cog] voxel CSV not found; analysis tips disabled'); return; }
-        const txt = await r.text();
-        parseVoxelCSV(txt);
-      }catch(e){ dbg('[cog] voxel CSV load error', String(e)); }
+      const n=values.length,g=Math.floor(n/3),Qs=values.slice(0,g),Ms=values.slice(g,2*g),Ds=values.slice(2*g);
+      const m=a=>a.reduce((s,x)=>s+x,0)/a.length,cl=x=>Math.min(8,Math.max(1,x));
+      const mQ=m(Qs),mM=m(Ms),mD=m(Ds),rQ=Math.round(cl(mQ)),rM=Math.round(cl(mM)),rD=Math.round(cl(mD));
+      renderCharts({q:gaussianSeries(mQ),m:gaussianSeries(mM),d:gaussianSeries(mD)});
+      updateVoxel({x:rQ,y:rM,z:rD},sceneState);
+      applyAnalysis({x:rQ,y:rM,z:rD});
+      const p={timestamp:new Date().toISOString(),survey_results:values,analysis:{voxel:{mean:{x:+mQ.toFixed(2),y:+mM.toFixed(2),z:+mD.toFixed(2)},roundedMean:{x:rQ,y:rM,z:rD}}}};
+      document.getElementById('jsonOut').value=JSON.stringify(p,null,2);
     }
 
     async function main(){
-      // show user context
-      var userLine = '';
-      userLine += 'User: <span class="text-blue-600">' + userName + '</span>';
-      userLine += ' - Role ID: <span class="text-blue-600">' + (roleId || '?') + '</span>';
-      userLine += ' - Iteration ID: <span class="text-blue-600">' + (iterId || '?') + '</span>';
-      userLine += ' - Question Set: <span class="text-blue-600">' + qsetFile + '</span>';
-      document.getElementById('userContext').innerHTML = userLine;
-
+      document.getElementById('userContext').innerHTML=\`User: <b>\${userName}</b> | Role ID: \${roleId||'?'} | Iteration: \${iterId||'?'} | Set: \${qsetFile}\`;
       await loadActiveIteration();
-
-      // load question set (from /api/admin/cog-load-set)
-      try{
-        questions = await loadQuestions(qsetFile);
-        dbg('[cog] questions loaded', { count: questions.length });
-      }catch(e){
-        flash('Failed to load questions.', 'red');
-        return;
-      }
-
-      // build sliders and init voxel scene
-      renderSliders();
-      initVoxel('voxelCanvas', sceneStateMain);
-      await loadVoxelCSV();
-      recompute();
-
-      // wire buttons
-      document.getElementById('resetBtn').addEventListener('click', function(){
-        values = values.map(function(){ return 4; });
-        var inputs = document.querySelectorAll('#sliders input[type="range"]');
-        for (var i=0;i<inputs.length;i++){
-          inputs[i].value = 4;
-          var valEl = document.getElementById('v-'+(i+1));
-          if(valEl) valEl.textContent = '4';
-        }
-        recompute();
-        flash('Sliders reset.');
-      });
-      document.getElementById('saveBtn').addEventListener('click', saveSurvey);
-
-      // Target / Description placeholders
-      document.getElementById('saveTargetBtn').addEventListener('click', function(){
-        flash('Target saved (demo stub).');
-      });
-      document.getElementById('saveDescBtn').addEventListener('click', function(){
-        flash('Description saved (demo stub).');
-      });
+      questions=await loadQuestions(qsetFile);
+      renderSliders();initVoxel('voxelCanvas',sceneState);
+      await loadVoxelCSV();recompute();
+      document.getElementById('resetBtn').addEventListener('click',()=>{values.fill(4);document.querySelectorAll('#sliders input').forEach((s,i)=>{s.value=4;document.getElementById('v-'+(i+1)).textContent=4;});recompute();flash('Reset.');});
+      document.getElementById('saveBtn').addEventListener('click',()=>flash('Saved (demo).'));
+      document.getElementById('saveTargetBtn').addEventListener('click',()=>flash('Target saved (stub).'));
+      document.getElementById('saveDescBtn').addEventListener('click',()=>flash('Description saved (stub).'));
     }
-
-    window.addEventListener('load', main);
+    window.addEventListener('load',main);
   </script>
 </body>
 </html>

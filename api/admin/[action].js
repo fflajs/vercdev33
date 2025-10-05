@@ -169,7 +169,7 @@ module.exports = async function handler(req, res) {
       }
 
       // ==========================================================
-      // 🧠 COGNITIVE TOOL ENDPOINTS (UPDATED)
+      // 🧠 COGNITIVE TOOL ENDPOINTS
       // ==========================================================
       case "cog-list-sets": {
         const dir = path.join(process.cwd(), "public", "data");
@@ -187,16 +187,22 @@ module.exports = async function handler(req, res) {
         if (!fs.existsSync(filePath))
           return res.status(404).json({ success: false, message: "File not found" });
 
-        // ✅ Improved JSON loader (fix for "Invalid or unexpected token")
-        let content = fs.readFileSync(filePath, "utf8");
-        content = content.replace(/^\uFEFF/, "").trim(); // strip BOM + trim
+        let content = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "").trim();
         try {
-          const jsonData = JSON.parse(content);
-          res.status(200).json({ success: true, filename, data: jsonData });
-        } catch (parseError) {
-          console.error("JSON parse error in:", filename, parseError);
-          res.status(400).json({ success: false, message: `Invalid JSON format in ${filename}` });
+          res.status(200).json({ success: true, filename, data: JSON.parse(content) });
+        } catch (err) {
+          res.status(400).json({ success: false, message: `Invalid JSON in ${filename}` });
         }
+        break;
+      }
+
+      // ✅ NEW: serve voxel_data.csv like Ubuntu
+      case "voxel-data": {
+        const filePath = path.join(process.cwd(), "public", "data", "voxel_data.csv");
+        if (!fs.existsSync(filePath))
+          return res.status(404).json({ success: false, message: "voxel_data.csv not found" });
+        res.setHeader("Content-Type", "text/csv");
+        fs.createReadStream(filePath).pipe(res);
         break;
       }
 
@@ -206,9 +212,8 @@ module.exports = async function handler(req, res) {
 
         let { person_role_id, org_unit_id, person_id, iteration_id, question_set, answers } = req.body;
         if (!iteration_id || !question_set || !answers)
-          return res.status(400).json({ success: false, message: "Missing fields (iteration_id, question_set, answers required)" });
+          return res.status(400).json({ success: false, message: "Missing fields" });
 
-        // Try to resolve role/org if missing but person_id provided
         if ((!person_role_id || !org_unit_id) && person_id) {
           const { data: role } = await supabase
             .from("person_roles")
@@ -241,76 +246,14 @@ module.exports = async function handler(req, res) {
           .select()
           .single();
 
-        if (error) {
-          console.error("cog-save-response error:", error.message, error.details, error.hint);
-          throw error;
-        }
-
+        if (error) throw error;
         res.status(200).json({ success: true, record: data });
         break;
       }
 
-      case "cog-get-responses": {
-        const { iteration_id } = req.query;
-        let query = supabase.from("surveys").select("*");
-        if (iteration_id) query = query.eq("iteration_id", iteration_id);
-        const { data, error } = await query;
-        if (error) throw error;
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-
-      case "cog-summary": {
-        const { data, error } = await supabase
-          .from("surveys")
-          .select("iteration_id, count:count(*)")
-          .group("iteration_id");
-        if (error) throw error;
-        res.status(200).json({ success: true, summary: data });
-        break;
-      }
-
-      // ==========================================================
-      // 🧩 TABLE VIEWER ENDPOINTS
-      // ==========================================================
-      case "people-all": {
-        const { data } = await supabase.from("people").select("*");
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-      case "org-units-all": {
-        const { data } = await supabase.from("organization_units").select("*");
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-      case "roles-all": {
-        const { data } = await supabase.from("person_roles").select("*");
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-      case "iterations-all": {
-        const { data } = await supabase.from("iterations").select("*");
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-      case "app-data-all": {
-        const { data } = await supabase.from("app_data").select("*");
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-      case "surveys-all": {
-        const { data } = await supabase.from("surveys").select("*");
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-
-      // ==========================================================
-      // 🛑 DEFAULT
-      // ==========================================================
-      default: {
+      default:
         res.status(400).json({ success: false, message: `Unknown action: ${action}` });
         break;
-      }
     }
   } catch (err) {
     console.error("API error:", err);
