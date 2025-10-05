@@ -14,7 +14,6 @@
   <div class="max-w-3xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-bold">User Portal</h1>
-      <p id="context-line" class="text-sm text-gray-600 mt-1"></p>
     </header>
 
     <div id="welcome-box" class="rounded-lg border border-gray-200 bg-white p-4 mb-6">
@@ -51,7 +50,6 @@
       const roleId = qs.get("role_id");
 
       const debugEl = document.getElementById("debug");
-      const contextEl = document.getElementById("context-line");
       const welcomeTitle = document.getElementById("welcome-title");
       const welcomeDesc = document.getElementById("welcome-desc");
 
@@ -74,19 +72,14 @@
       log("page loaded");
 
       if (!name || !roleId) {
-        contextEl.textContent = "Error: Missing user context.";
+        welcomeDesc.textContent = "Error: Missing user context.";
         return;
       }
 
       try {
-        // Get user + role info
         const data = await fetchJson(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
         const activeRole = (data.roles || []).find(r => r.id == roleId);
-
-        if (!activeRole) {
-          contextEl.textContent = "Error: Role not found for this user.";
-          return;
-        }
+        if (!activeRole) throw new Error("Role not found for this user.");
 
         const roleType = activeRole.is_manager ? "Manager" : "Member";
         const orgName = activeRole.organization_units?.name || "Unknown Unit";
@@ -98,10 +91,6 @@
           ? new Date(iter.start_date).toLocaleDateString()
           : "(no start date)";
 
-        // Update backend log context
-        contextEl.textContent = `Active iteration: ${iterName} (ID: ${iterId}) — Question Set: ${qset}`;
-
-        // Welcome box
         welcomeTitle.textContent = `Welcome, ${name}`;
         welcomeDesc.textContent = `${roleType} of "${orgName}" | Iteration: ${iterName} (ID: ${iterId}) | Start: ${startDate} | Question Set: ${qset}`;
 
@@ -110,14 +99,13 @@
           const params = new URLSearchParams({ name, role_id: roleId, iter_id: iterId, qset });
           window.location.href = `/cognitive-tool.html?${params.toString()}`;
         };
-
         document.getElementById("btn-analyze").onclick = () => {
           const params = new URLSearchParams({ name, role_id: roleId, iter_id: iterId, qset });
           window.location.href = `/analyze.html?${params.toString()}`;
         };
 
       } catch (err) {
-        contextEl.textContent = `Error: ${err.message}`;
+        welcomeDesc.textContent = `Error: ${err.message}`;
         log("load error", { message: err.message });
       }
     })();
