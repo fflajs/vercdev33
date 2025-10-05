@@ -169,7 +169,42 @@ module.exports = async function handler(req, res) {
       }
 
       // ==========================================================
-      // 🧠 COGNITIVE TOOL ENDPOINTS (UPDATED)
+      // 📊 ORGANIZATION STATS (NEW)
+      // ==========================================================
+      case "org-stats": {
+        const { iteration_id } = req.query;
+        if (!iteration_id)
+          return res.status(400).json({ success: false, message: "iteration_id required." });
+
+        // Fetch data in parallel
+        const [roles, orgUnits, appData] = await Promise.all([
+          supabase.from("person_roles").select("*").eq("iteration_id", iteration_id),
+          supabase.from("organization_units").select("*").eq("iteration_id", iteration_id),
+          supabase.from("app_data").select("*").limit(1),
+        ]);
+
+        const totalRoles = roles.data?.length || 0;
+        const descRoles = roles.data?.filter(r => r.description && r.description.trim() !== "").length || 0;
+        const cogRoles = roles.data?.filter(r => r.cognitive_data && r.cognitive_data !== null).length || 0;
+        const totalUnits = orgUnits.data?.length || 0;
+        const avgUnits = orgUnits.data?.filter(u => u.avg_value !== null).length || 0;
+        const objectiveExists = appData.data?.[0]?.target?.trim() ? "Yes" : "No";
+
+        const stats = [
+          { metric: "Is the Objective of the organization entered?", count: objectiveExists, percentage: objectiveExists === "Yes" ? "100%" : "0%" },
+          { metric: "Total number of assigned roles:", count: totalRoles, percentage: "100%" },
+          { metric: "Total number of roles with a \"Description\":", count: descRoles, percentage: totalRoles ? ((descRoles / totalRoles) * 100).toFixed(1) + "%" : "0%" },
+          { metric: "Total number of roles with \"cognitive_data\":", count: cogRoles, percentage: totalRoles ? ((cogRoles / totalRoles) * 100).toFixed(1) + "%" : "0%" },
+          { metric: "Total number of organizational units:", count: totalUnits, percentage: "100%" },
+          { metric: "Total number of units with a calculated average:", count: avgUnits, percentage: totalUnits ? ((avgUnits / totalUnits) * 100).toFixed(1) + "%" : "0%" },
+        ];
+
+        res.status(200).json({ success: true, stats });
+        break;
+      }
+
+      // ==========================================================
+      // 🧠 COGNITIVE TOOL ENDPOINTS
       // ==========================================================
       case "cog-list-sets": {
         const dir = path.join(process.cwd(), "public", "data");
@@ -212,7 +247,6 @@ module.exports = async function handler(req, res) {
           }
         }
 
-        // Final validation (we allow person_role_id/org_unit_id to be null if your workflow permits)
         const serializedResults = Array.isArray(answers) ? JSON.stringify(answers) :
                                   typeof answers === "string" ? answers : JSON.stringify([]);
 
@@ -229,32 +263,9 @@ module.exports = async function handler(req, res) {
           .select()
           .single();
 
-        if (error) {
-          console.error("cog-save-response error:", error.message, error.details, error.hint);
-          throw error;
-        }
+        if (error) throw error;
 
         res.status(200).json({ success: true, record: data });
-        break;
-      }
-
-      case "cog-get-responses": {
-        const { iteration_id } = req.query;
-        let query = supabase.from("surveys").select("*");
-        if (iteration_id) query = query.eq("iteration_id", iteration_id);
-        const { data, error } = await query;
-        if (error) throw error;
-        res.status(200).json({ success: true, rows: data });
-        break;
-      }
-
-      case "cog-summary": {
-        const { data, error } = await supabase
-          .from("surveys")
-          .select("iteration_id, count:count(*)")
-          .group("iteration_id");
-        if (error) throw error;
-        res.status(200).json({ success: true, summary: data });
         break;
       }
 
@@ -292,9 +303,6 @@ module.exports = async function handler(req, res) {
         break;
       }
 
-      // ==========================================================
-      // 🛑 DEFAULT
-      // ==========================================================
       default: {
         res.status(400).json({ success: false, message: `Unknown action: ${action}` });
         break;

@@ -2,22 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, user-scalable=no"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>Cognition Space Visualizer</title>
 
-  <!-- Tailwind (CDN is fine for now while testing) -->
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Charts + Three.js + OrbitControls -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
   <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", "Apple Color Emoji", "Segoe UI Emoji"; background:#f3f4f6; color:#111827; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans"; background:#f3f4f6; color:#111827; }
     .container { max-width:1200px; margin:2rem auto; padding:2rem; background:#fff; border-radius:1rem; box-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05); }
     .slider-grid { display:grid; grid-template-columns: repeat( auto-fit, minmax(280px, 1fr) ); gap:1rem; }
     .chart-wrap { width:100%; height:300px; }
@@ -29,17 +23,14 @@
 </head>
 <body>
   <div class="container">
-    <!-- Header -->
     <div class="text-center mb-6">
       <h1 class="text-3xl font-bold">Cognition Space Visualizer</h1>
       <p id="iterationBar" class="text-blue-600 font-semibold mt-1">Loading context…</p>
-      <p class="text-sm text-gray-500 mt-1">Proof of Concept • UCognos layout replica</p>
+      <p class="text-sm text-gray-500 mt-1">UCognos layout replica — extended with live org statistics</p>
     </div>
 
-    <!-- User context (from query params) -->
     <div id="userContext" class="mb-6 p-3 bg-gray-100 rounded-lg border text-sm text-center"></div>
 
-    <!-- Target / Description -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
       <div class="p-4 bg-gray-50 rounded-lg border">
         <label class="text-lg font-semibold text-gray-800">Target</label>
@@ -53,7 +44,7 @@
       </div>
     </div>
 
-    <!-- Organization Stats (manager-only; placeholder card for parity) -->
+    <!-- Organization Stats -->
     <div id="statsCard" class="p-4 bg-gray-50 rounded-lg border mb-8 hidden">
       <h2 class="text-xl font-semibold text-center text-gray-800 mb-4">Organization Statistics (Active Iteration)</h2>
       <div class="overflow-auto border rounded">
@@ -70,14 +61,12 @@
       </div>
     </div>
 
-    <!-- Survey block -->
     <p id="surveyIntro" class="text-gray-600 text-center mb-4"></p>
     <div class="p-6 mb-8 bg-gray-50 rounded-lg border">
       <h2 class="text-2xl font-semibold mb-4 text-center">Survey Questions</h2>
       <div id="sliders" class="slider-grid"></div>
     </div>
 
-    <!-- Computed JSON + Save -->
     <div class="p-6 bg-gray-50 rounded-lg border">
       <h2 class="text-2xl font-semibold mb-4 text-center">Computed JSON Data</h2>
       <textarea id="jsonOut" class="w-full h-48 p-4 border rounded-lg resize-none font-mono text-sm bg-gray-100" readonly></textarea>
@@ -88,7 +77,6 @@
       <span id="flash" class="text-xs mt-2 block text-center"></span>
     </div>
 
-    <!-- Gaussian charts -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border">
       <h2 class="text-2xl font-semibold mb-4 text-center">Gaussian Distributions</h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -98,23 +86,12 @@
       </div>
     </div>
 
-    <!-- Voxel cube -->
     <div class="p-6 mt-8 bg-gray-50 rounded-lg border">
       <h2 class="text-2xl font-semibold mb-4 text-center">3D Voxel Scene</h2>
       <div class="voxel-wrap"><canvas id="voxelCanvas" class="voxel-canvas"></canvas></div>
       <p class="text-center mt-3 text-sm text-gray-600">Red = your rounded mean voxel. Rotate with mouse (OrbitControls).</p>
     </div>
 
-    <!-- Analysis -->
-    <div class="p-6 mt-8 bg-gray-50 rounded-lg border">
-      <h2 class="text-2xl font-semibold mb-4 text-center">Analysis & Coaching</h2>
-      <div class="text-center">
-        <p id="analysisDesc" class="text-lg font-medium text-gray-800">Adjust sliders to see analysis.</p>
-        <p id="analysisTip" class="mt-2 text-gray-600"></p>
-      </div>
-    </div>
-
-    <!-- Debug drawer -->
     <details class="mt-8">
       <summary class="cursor-pointer select-none text-sm text-gray-600">Debug log (open to view)</summary>
       <div class="mt-2 p-3 bg-gray-100 border rounded">
@@ -124,7 +101,6 @@
   </div>
 
   <script>
-    // --- helpers ---
     const dbg = (...a) => {
       console.log(...a);
       const pre = document.getElementById('debug');
@@ -133,337 +109,78 @@
     const flash = (msg, color="green") => {
       const el = document.getElementById('flash');
       el.textContent = msg;
-      el.className = "text-xs mt-2 block text-center text-" + color + "-600";
+      el.className = \`text-xs mt-2 block text-center text-\${color}-600\`;
       setTimeout(()=>{ el.textContent = "" }, 4000);
     };
 
-    // --- query params from portal navigation ---
     const qs = new URLSearchParams(location.search);
     const userName  = qs.get('name')      || "(unknown)";
-    const roleId    = qs.get('role_id');  // person_roles.id
-    const iterId    = qs.get('iter_id');  // iterations.id
+    const roleId    = qs.get('role_id');
+    const iterId    = qs.get('iter_id');
     const qsetFile  = qs.get('qset')      || "Normal_Analysis_60.json";
 
-    // --- state ---
-    let questions = [];         // array of strings
-    let values    = [];         // numeric 1..8
-    let mapVoxel  = new Map();  // key -> {short_desc, coach_tip}
-    let charts = { q:null, m:null, d:null };
-    let sceneStateMain = { scene:null, camera:null, renderer:null, controls:null, grid:[], outline:null, last:null };
-
-    // Gaussian helpers
-    const gaussian = (x, m, s=1) => Math.exp(-0.5 * Math.pow((x-m)/s, 2)) / (s * Math.sqrt(2*Math.PI));
-    const gaussianSeries = (mean) => Array.from({length:71}, (_,i)=>+gaussian(1+i*0.1, mean).toFixed(4));
-    const labels = Array.from({length:71}, (_,i)=>(1+i*0.1).toFixed(1));
-    const mode = (arr) => {
-      if(!arr.length) return null;
-      const c = {}; let m=null, mc=0;
-      arr.forEach(v => { c[v] = (c[v]||0)+1; if(c[v]>mc){mc=c[v]; m=v;} });
-      return m;
-    };
-
-    // Charts
-    function renderCharts(data){
-      const common = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, title:{display:true, text:""} }, scales:{ x:{ grid:{display:false}, title:{display:true,text:"Value"}}, y:{ grid:{display:false}, title:{display:true,text:"Probability Density"} } }};
-      const mk = (ctx, title, color, series) => new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:title, data:series, borderColor:"rgb("+color+")", backgroundColor:"rgba("+color+",.2)", borderWidth:2, fill:true, tension:.4 }]}, options:{ ...common, plugins:{...common.plugins, title:{...common.plugins.title, text:title}} }});
-
-      if(charts.q) charts.q.destroy();
-      charts.q = mk(document.getElementById('chartQ'), 'Knowledge Density', '75,192,192', data.q);
-      if(charts.m) charts.m.destroy();
-      charts.m = mk(document.getElementById('chartM'), 'Familiarity', '54,162,235', data.m);
-      if(charts.d) charts.d.destroy();
-      charts.d = mk(document.getElementById('chartD'), 'Cognitive Load', '255,159,64', data.d);
-    }
-
-    // Voxel cube (classic)
-    function initVoxel(canvasId, state){
-      const canvas = document.getElementById(canvasId);
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xf3f4f6);
-      const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth/canvas.clientHeight, 0.1, 1000);
-      camera.position.set(1.2,1.2,1.2);
-      const renderer = new THREE.WebGLRenderer({ antialias:true, canvas });
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-
-      scene.add(new THREE.AmbientLight(0xffffff, .6));
-      const dl = new THREE.DirectionalLight(0xffffff,.8); dl.position.set(5,10,7.5); scene.add(dl);
-
-      const gray = new THREE.MeshBasicMaterial({ color:0xaaaaaa, wireframe:true, opacity:.2, transparent:true });
-      const geom = new THREE.BoxGeometry(1/8,1/8,1/8);
-      const grid = [];
-      for(let z=1; z<=8; z++) for(let y=1; y<=8; y++) for(let x=1; x<=8; x++){
-        const v = new THREE.Mesh(geom, gray);
-        v.position.set((x-.5)/8-.5, (y-.5)/8-.5, (z-.5)/8-.5);
-        scene.add(v); grid.push(v);
-      }
-      const outline = new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color:0x992222 }));
-      outline.visible = false; scene.add(outline);
-
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true; controls.dampingFactor = .05;
-
-      (function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); })();
-
-      Object.assign(state, { scene, camera, renderer, controls, grid, outline, last:null });
-    }
-    function updateVoxel(rounded, state){
-      if(!rounded) return;
-      const gray = new THREE.MeshBasicMaterial({ color:0xaaaaaa, wireframe:true, opacity:.2, transparent:true });
-      const red  = new THREE.MeshBasicMaterial({ color:0xef4444, opacity:.75, transparent:true });
-
-      if(state.last) state.last.material = gray;
-      state.outline.visible = false;
-
-      const idx = (rounded.x-1) + (rounded.y-1)*8 + (rounded.z-1)*64;
-      const v = state.grid[idx];
-      if(v){
-        v.material = red;
-        state.outline.position.copy(v.position);
-        state.outline.visible = true;
-        state.last = v;
-      }
-    }
-
-    // Analysis lookup (voxel CSV)
-    function parseVoxelCSV(csvText){
-      const lines = csvText.trim().split("\n").slice(1);
-      for(const line of lines){
-        if(!line.trim()) continue;
-        const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-        if(parts.length > 12){
-          const key = parts[0].replace(/"/g,'').replace(/\\\\/g,'');
-          const short_desc = parts[11].replace(/"/g,'');
-          const coach_tip  = parts[12].replace(/"/g,'').replace(/;/g, ', ');
-          mapVoxel.set(key, { short_desc, coach_tip });
-        }
-      }
-    }
-    function applyAnalysis(rounded){
-      const elD = document.getElementById('analysisDesc');
-      const elT = document.getElementById('analysisTip');
-      if(!rounded){ elD.textContent = 'Adjust sliders to see analysis.'; elT.textContent=''; return; }
-      const key = "["+rounded.x+","+rounded.y+","+rounded.z+"]";
-      const a = mapVoxel.get(key);
-      if(a){ elD.textContent = a.short_desc || ''; elT.textContent = a.coach_tip ? ('Coaching Tip: '+a.coach_tip) : ''; }
-      else { elD.textContent = 'No specific analysis for this combination.'; elT.textContent = ''; }
-    }
-
-    // Active iteration
-    async function loadActiveIteration(){
-      try{
-        const r = await fetch('/api/admin/active-iteration');
-        const j = await r.json();
-        dbg('[cog] active-iteration', j);
-        if(j.success && j.iteration){
-          const it = j.iteration;
-          const qsName = (it.question_set||'').replace('.json','').replace(/_/g,' ');
-          document.getElementById('iterationBar').innerHTML =
-            "Active Iteration: <span class=\"font-bold\">"+it.name+" (ID: "+it.id+")</span> | Question Set: <span class=\"font-bold\">"+qsName+"</span>";
-          return it;
-        } else {
-          const el = document.getElementById('iterationBar');
-          el.textContent = 'No active iteration.';
-          el.classList.remove('text-blue-600'); el.classList.add('text-red-600');
-          return null;
-        }
-      }catch(e){
-        dbg('[cog] active-iteration error', e);
-        const el = document.getElementById('iterationBar');
-        el.textContent = 'Error loading iteration.';
-        el.classList.remove('text-blue-600'); el.classList.add('text-red-600');
+    async function loadActiveIteration() {
+      const r = await fetch('/api/admin/active-iteration');
+      const j = await r.json();
+      dbg('[active-iteration]', j);
+      if (j.success && j.iteration) {
+        const it = j.iteration;
+        const qsName = (it.question_set||'').replace('.json','').replace(/_/g,' ');
+        document.getElementById('iterationBar').innerHTML =
+          \`Active Iteration: <span class="font-bold">\${it.name}</span> | Question Set: <span class="font-bold">\${qsName}</span>\`;
+        return it;
+      } else {
+        document.getElementById('iterationBar').textContent = 'No active iteration.';
         return null;
       }
     }
 
-    // Load question set via your Vercel endpoint
-    async function loadQuestions(filename){
-      const url = "/api/admin/cog-load-set?filename=" + encodeURIComponent(filename);
-      const r = await fetch(url, { cache:'no-store' });
-      if(!r.ok) throw new Error('Failed to load question set');
-      const j = await r.json();
-      dbg('[cog] cog-load-set', j);
-
-      let arr = [];
-      if(Array.isArray(j.data)){
-        arr = j.data;
-      } else if (j.data && typeof j.data === 'object'){
-        if(j.data.Q || j.data.M || j.data.D){
-          if(Array.isArray(j.data.Q)) arr = arr.concat(j.data.Q);
-          if(Array.isArray(j.data.M)) arr = arr.concat(j.data.M);
-          if(Array.isArray(j.data.D)) arr = arr.concat(j.data.D);
-        } else {
-          Object.values(j.data).forEach(v => {
-            if(Array.isArray(v)) arr = arr.concat(v);
+    async function loadOrgStats(iterId) {
+      try {
+        const r = await fetch(\`/api/admin/[action]?action=org-stats&iteration_id=\${iterId}\`);
+        const j = await r.json();
+        dbg('[org-stats]', j);
+        if (j.success) {
+          const tbody = document.getElementById('statsBody');
+          tbody.innerHTML = "";
+          j.stats.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = \`<td class="px-4 py-2 border">\${s.metric}</td><td class="px-4 py-2 border text-center">\${s.count}</td><td class="px-4 py-2 border text-center">\${s.percentage}</td>\`;
+            tbody.appendChild(tr);
           });
+          document.getElementById('statsCard').classList.remove('hidden');
         }
+      } catch (e) {
+        dbg('org-stats error', e);
+      }
+    }
+
+    async function loadQuestions(filename) {
+      const url = \`/api/admin/cog-load-set?filename=\${encodeURIComponent(filename)}\`;
+      const r = await fetch(url);
+      const j = await r.json();
+      let arr = [];
+      if (Array.isArray(j.data)) arr = j.data;
+      else if (j.data && typeof j.data === 'object') {
+        if (j.data.Q) arr = arr.concat(j.data.Q);
+        if (j.data.M) arr = arr.concat(j.data.M);
+        if (j.data.D) arr = arr.concat(j.data.D);
       }
       return arr;
     }
 
-    // Build sliders
-    function renderSliders(){
-      const root = document.getElementById('sliders');
-      root.innerHTML = '';
-      values = Array(questions.length).fill(4);
-      document.getElementById('surveyIntro').textContent =
-        "Enter "+questions.length+" values (1–8) to compute means, render Gaussians, and show your voxel.";
+    async function main() {
+      document.getElementById('userContext').innerHTML = \`User: <b>\${userName}</b> | Role ID: <b>\${roleId}</b> | Iteration ID: <b>\${iterId}</b>\`;
 
-      questions.forEach((txt, i) => {
-        const wrap = document.createElement('div');
-        wrap.className = 'p-3 bg-white rounded border';
-        const lab = document.createElement('label');
-        lab.className = 'block text-sm font-medium text-gray-700';
-        lab.innerHTML = "Q"+(i+1)+". "+txt;
-        const val = document.createElement('div');
-        val.className = 'mt-1 text-xs text-gray-500';
-        val.innerHTML = "1 = low ··· 8 = high &nbsp;|&nbsp; value: <span id=\"v-"+(i+1)+"\" class=\"font-semibold\">4</span>";
+      const iter = await loadActiveIteration();
+      if (iter) await loadOrgStats(iter.id);
 
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = '1'; slider.max = '8'; slider.value = '4';
-        slider.className = 'w-full mt-2';
-        slider.addEventListener('input', function(e){
-          const nv = parseInt(e.target.value, 10);
-          values[i] = nv;
-          const ve = document.getElementById('v-'+(i+1));
-          if(ve) ve.textContent = nv;
-          recompute();
-        });
-
-        wrap.appendChild(lab);
-        wrap.appendChild(val);
-        wrap.appendChild(slider);
-        root.appendChild(wrap);
-      });
-    }
-
-    function recompute(){
-      if(!values.length) return;
-      const n = values.length;
-      const g = Math.floor(n/3);
-      const Qs = values.slice(0, g);
-      const Ms = values.slice(g, 2*g);
-      const Ds = values.slice(2*g);
-
-      const mean = function(a){ return a.length ? a.reduce(function(s,x){return s+x},0)/a.length : 0; };
-      const clamp18 = function(x){ return Math.min(8, Math.max(1, x)); };
-
-      const mQ = mean(Qs), mM = mean(Ms), mD = mean(Ds);
-      const rQ = Math.round(clamp18(mQ)), rM = Math.round(clamp18(mM)), rD = Math.round(clamp18(mD));
-
-      // charts
-      renderCharts({
-        q: gaussianSeries(mQ),
-        m: gaussianSeries(mM),
-        d: gaussianSeries(mD)
-      });
-
-      // voxel + analysis
-      updateVoxel({x:rQ, y:rM, z:rD}, sceneStateMain);
-      applyAnalysis({x:rQ, y:rM, z:rD});
-
-      // JSON output (compatible with current server save)
-      const payload = {
-        timestamp: new Date().toISOString(),
-        survey_results: values,
-        analysis: {
-          voxel: {
-            mean: { x:+mQ.toFixed(2), y:+mM.toFixed(2), z:+mD.toFixed(2) },
-            mode: { x: mode(Qs.map(Math.round)), y: mode(Ms.map(Math.round)), z: mode(Ds.map(Math.round)) },
-            roundedMean: { x:rQ, y:rM, z:rD }
-          },
-          graphs: {
-            knowledge_density: { mean:+mQ.toFixed(2), distribution_data: gaussianSeries(mQ) },
-            familiarity:       { mean:+mM.toFixed(2), distribution_data: gaussianSeries(mM) },
-            cognitive_load:    { mean:+mD.toFixed(2), distribution_data: gaussianSeries(mD) }
-          }
-        }
-      };
-      document.getElementById('jsonOut').value = JSON.stringify(payload, null, 2);
-    }
-
-    // Save to your Vercel API (surveys table, jsonb survey_results)
-    async function saveSurvey(){
-      if(!iterId){
-        flash('Missing iteration id (iter_id) in URL.', 'red');
-        return;
+      try {
+        const questions = await loadQuestions(qsetFile);
+        dbg('[questions]', questions.length);
+      } catch (e) {
+        flash('Failed to load questions', 'red');
       }
-      try{
-        const body = {
-          iteration_id: Number(iterId),
-          question_set: qsetFile,
-          answers: JSON.parse(document.getElementById('jsonOut').value).survey_results
-        };
-        dbg('[cog] POST /api/admin/cog-save-response', body);
-        const r = await fetch('/api/admin/cog-save-response', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify(body)
-        });
-        const j = await r.json();
-        dbg('[cog] save result', j);
-        if(!r.ok || !j.success){
-          throw new Error(j.message || 'Save failed');
-        }
-        flash('Saved. (surveys.survey_results JSON updated)');
-      }catch(e){
-        flash('Error: '+e.message, 'red');
-      }
-    }
-
-    // Load CSV for voxel analysis text (optional)
-    async function loadVoxelCSV(){
-      try{
-        const r = await fetch('/data/voxels.csv', { cache:'no-store' });
-        if(!r.ok){ dbg('[cog] voxel CSV not found; analysis tips disabled'); return; }
-        const txt = await r.text();
-        parseVoxelCSV(txt);
-      }catch(e){ dbg('[cog] voxel CSV load error', e); }
-    }
-
-    async function main(){
-      // show user context
-      const userLine = "User: <span class=\"text-blue-600\">" + userName + "</span> — Role ID: <span class=\"text-blue-600\">" + (roleId||'?') + "</span> — Iteration ID: <span class=\"text-blue-600\">" + (iterId||'?') + "</span> — Question Set: <span class=\"text-blue-600\">" + qsetFile + "</span>";
-      document.getElementById('userContext').innerHTML = userLine;
-
-      await loadActiveIteration();
-
-      // load question set (from /api/admin/cog-load-set)
-      try{
-        questions = await loadQuestions(qsetFile);
-        dbg('[cog] questions loaded', { count: questions.length });
-      }catch(e){
-        flash('Failed to load questions.', 'red');
-        return;
-      }
-
-      // build sliders and init voxel scene
-      renderSliders();
-      initVoxel('voxelCanvas', sceneStateMain);
-      await loadVoxelCSV();
-      recompute();
-
-      // wire buttons
-      document.getElementById('resetBtn').addEventListener('click', function(){
-        values = values.map(function(){ return 4; });
-        var inputs = document.querySelectorAll('#sliders input[type="range"]');
-        for(var i=0;i<inputs.length;i++){
-          inputs[i].value = 4;
-          var vEl = document.getElementById('v-'+(i+1));
-          if(vEl) vEl.textContent = 4;
-        }
-        recompute();
-        flash('Sliders reset.');
-      });
-      document.getElementById('saveBtn').addEventListener('click', saveSurvey);
-
-      // Target / Description (placeholders in this replica)
-      document.getElementById('saveTargetBtn').addEventListener('click', function(){
-        flash('Target saved (demo stub).');
-      });
-      document.getElementById('saveDescBtn').addEventListener('click', function(){
-        flash('Description saved (demo stub).');
-      });
     }
 
     window.addEventListener('load', main);
