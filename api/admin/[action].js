@@ -31,9 +31,7 @@ module.exports = async function handler(req, res) {
 
       case "create-iteration": {
         if (req.method !== "POST")
-          return res
-            .status(405)
-            .json({ success: false, message: "Method not allowed" });
+          return res.status(405).json({ success: false, message: "Method not allowed" });
 
         const { name, question_set } = req.body;
         if (!name || !question_set)
@@ -118,9 +116,7 @@ module.exports = async function handler(req, res) {
 
       case "close-iteration": {
         if (req.method !== "POST")
-          return res
-            .status(405)
-            .json({ success: false, message: "Method not allowed" });
+          return res.status(405).json({ success: false, message: "Method not allowed" });
         const { error } = await supabase
           .from("iterations")
           .update({ end_date: new Date().toISOString() })
@@ -135,9 +131,7 @@ module.exports = async function handler(req, res) {
       // ==========================================================
       case "people": {
         if (req.method !== "POST")
-          return res
-            .status(405)
-            .json({ success: false, message: "Method not allowed" });
+          return res.status(405).json({ success: false, message: "Method not allowed" });
         const { name } = req.body;
         if (!name?.trim())
           return res.status(400).json({ success: false, message: "Name required." });
@@ -159,9 +153,7 @@ module.exports = async function handler(req, res) {
       case "get-user-roles": {
         const { name } = req.query;
         if (!name)
-          return res
-            .status(400)
-            .json({ success: false, message: "Name is required." });
+          return res.status(400).json({ success: false, message: "Name is required." });
 
         const { data: person } = await supabase
           .from("people")
@@ -169,9 +161,7 @@ module.exports = async function handler(req, res) {
           .ilike("name", name)
           .maybeSingle();
         if (!person)
-          return res
-            .status(404)
-            .json({ success: false, message: "User not found." });
+          return res.status(404).json({ success: false, message: "User not found." });
 
         const { data: roles } = await supabase
           .from("person_roles")
@@ -210,9 +200,7 @@ module.exports = async function handler(req, res) {
       case "create-org-unit": {
         const { name, parent_id, iteration_id } = req.body;
         if (!name || !iteration_id)
-          return res
-            .status(400)
-            .json({ success: false, message: "Missing fields." });
+          return res.status(400).json({ success: false, message: "Missing fields." });
         const { data, error } = await supabase
           .from("organization_units")
           .insert([{ name, parent_id: parent_id || null, iteration_id }])
@@ -237,9 +225,7 @@ module.exports = async function handler(req, res) {
       case "delete-org-unit": {
         const { id } = req.query;
         if (!id)
-          return res
-            .status(400)
-            .json({ success: false, message: "Missing id" });
+          return res.status(400).json({ success: false, message: "Missing id" });
         const deleteRecursive = async (unitId) => {
           const { data: children } = await supabase
             .from("organization_units")
@@ -279,10 +265,7 @@ module.exports = async function handler(req, res) {
       // ==========================================================
       case "cog-list-sets": {
         const dir = path.join(process.cwd(), "public", "data");
-        const files = fs
-          .readdirSync(dir)
-          .filter((f) => f.endsWith(".json"))
-          .map((f) => ({ name: f }));
+        const files = fs.readdirSync(dir).filter(f => f.endsWith(".json")).map(f => ({ name: f }));
         res.status(200).json({ success: true, files });
         break;
       }
@@ -290,61 +273,63 @@ module.exports = async function handler(req, res) {
       case "cog-load-set": {
         const { filename } = req.query;
         if (!filename)
-          return res
-            .status(400)
-            .json({ success: false, message: "filename required" });
+          return res.status(400).json({ success: false, message: "filename required" });
         const filePath = path.join(process.cwd(), "public", "data", filename);
         if (!fs.existsSync(filePath))
-          return res
-            .status(404)
-            .json({ success: false, message: "File not found" });
+          return res.status(404).json({ success: false, message: "File not found" });
         const content = fs.readFileSync(filePath, "utf8");
-        res.status(200).json({
-          success: true,
-          filename,
-          data: JSON.parse(content),
-        });
+        res.status(200).json({ success: true, filename, data: JSON.parse(content) });
         break;
       }
 
       case "cog-save-response": {
         if (req.method !== "POST")
-          return res
-            .status(405)
-            .json({ success: false, message: "Method not allowed" });
+          return res.status(405).json({ success: false, message: "Method not allowed" });
         const { person_id, iteration_id, question_set, answers } = req.body;
         if (!person_id || !iteration_id || !question_set || !answers)
-          return res
-            .status(400)
-            .json({ success: false, message: "Missing fields" });
+          return res.status(400).json({ success: false, message: "Missing fields" });
+
+        // Ensure answers are valid JSON
+        const serializedAnswers = typeof answers === "string" ? answers : JSON.stringify(answers);
 
         const { data, error } = await supabase
-          .from("surveys")
-          .insert([{ person_id, iteration_id, question_set, answers }])
+          .from("survey_results")
+          .insert([{ person_id, iteration_id, question_set, answers: serializedAnswers }])
           .select()
           .single();
-        if (error) throw error;
+
+        if (error) {
+          console.error("cog-save-response error:", error.message, error.details, error.hint);
+          throw error;
+        }
+
         res.status(200).json({ success: true, record: data });
         break;
       }
 
       case "cog-get-responses": {
         const { iteration_id, person_id } = req.query;
-        let query = supabase.from("surveys").select("*");
+        let query = supabase.from("survey_results").select("*");
         if (iteration_id) query = query.eq("iteration_id", iteration_id);
         if (person_id) query = query.eq("person_id", person_id);
         const { data, error } = await query;
-        if (error) throw error;
+        if (error) {
+          console.error("cog-get-responses error:", error.message, error.details, error.hint);
+          throw error;
+        }
         res.status(200).json({ success: true, rows: data });
         break;
       }
 
       case "cog-summary": {
         const { data, error } = await supabase
-          .from("surveys")
+          .from("survey_results")
           .select("iteration_id, count:count(*)")
           .group("iteration_id");
-        if (error) throw error;
+        if (error) {
+          console.error("cog-summary error:", error.message, error.details, error.hint);
+          throw error;
+        }
         res.status(200).json({ success: true, summary: data });
         break;
       }
@@ -378,7 +363,7 @@ module.exports = async function handler(req, res) {
         break;
       }
       case "surveys-all": {
-        const { data } = await supabase.from("surveys").select("*");
+        const { data } = await supabase.from("survey_results").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }
@@ -393,7 +378,7 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     console.error("API error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message, details: err.details || null });
   }
 };
 
