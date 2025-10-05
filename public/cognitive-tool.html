@@ -1,588 +1,488 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Cognition Space Visualizer</title>
-  <!-- Tailwind (kept to mimic the old look quickly) -->
+  <title>Cognitive Space Visualization</title>
+
+  <!-- UCognos-style dependencies -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js for Gaussian charts -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <!-- Three.js for voxel cube -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Keep older Three.js like Ubuntu version -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
 
   <style>
-    /* Small tweaks to match the “old” cardy look */
-    .card { @apply bg-white rounded-xl shadow-sm border border-gray-200; }
-    .card h2 { @apply text-lg font-semibold text-gray-800; }
-    .subtle { @apply text-sm text-gray-500; }
-    .mono  { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    .section-title { @apply text-sm font-semibold uppercase tracking-wide text-gray-600; }
-    .kpi-label { @apply text-xs text-gray-500; }
-    .kpi-value { @apply text-xl font-semibold text-gray-800; }
-    .btn { @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium; }
-    .btn-ghost { @apply border border-gray-300 bg-white text-gray-700 hover:bg-gray-50; }
-    .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700; }
-    .btn-danger  { @apply bg-red-600 text-white hover:bg-red-700; }
-    .btn-purple  { @apply bg-purple-600 text-white hover:bg-purple-700; }
-    .badge { @apply inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700; }
-    .grid-sliders { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-    @media (max-width: 1280px) { .grid-sliders { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-    @media (max-width: 1024px) { .grid-sliders { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 640px)  { .grid-sliders { grid-template-columns: repeat(1, minmax(0, 1fr)); } }
+    /* --- UCognos look & feel: darker cards, compact spacing, strong sectioning --- */
+    :root {
+      --card-bg: #ffffff;
+      --card-border: #e6e6e6;
+      --card-shadow: 0 4px 14px rgba(0,0,0,0.08);
+      --headline: #111827;
+      --subtle: #6b7280;
+      --accent: #2563eb;
+      --panel-header: #0f172a;
+    }
 
-    /* Slider look (compact like your old page) */
-    input[type="range"] { width: 100%; }
-    .slider-wrap { @apply rounded-lg border border-gray-200 p-3; }
-    .slider-label { @apply text-sm font-medium text-gray-800; }
-    .slider-meta { @apply text-[11px] text-gray-500; }
+    body {
+      background: #f5f6f8;
+      color: #111;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
 
-    /* Fixed height for charts to match original spirit */
+    .page-wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .page-title { font-size: 1.75rem; font-weight: 800; color: var(--headline); }
+    .page-sub { font-size: 0.925rem; color: var(--subtle); margin-top: 4px; }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      box-shadow: var(--card-shadow);
+    }
+    .card-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+      color: #e5e7eb;
+      border-radius: 14px 14px 0 0;
+    }
+    .card-title { font-weight: 700; letter-spacing: 0.2px; }
+    .card-body { padding: 16px; }
+
+    /* Compact slider grid – 4 per row desktop, responsive down to 1 */
+    .slider-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px 16px;
+    }
+    @media (max-width: 1200px) {
+      .slider-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
+    @media (max-width: 900px) {
+      .slider-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 640px) {
+      .slider-grid { grid-template-columns: 1fr; }
+    }
+
+    .slider-card {
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    .slider-label {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: #111827;
+      line-height: 1.2;
+      margin-bottom: 6px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .slider-row { display: flex; align-items: center; gap: 10px; }
+    .slider-row input[type="range"] { flex: 1; }
+    .slider-value {
+      width: 36px; text-align: center; font-variant-numeric: tabular-nums;
+      font-size: 0.9rem; color: #111827;
+    }
+    .slider-help { font-size: 0.75rem; color: var(--subtle); margin-top: 4px; }
+
+    .section-caption { font-size: 0.85rem; color: var(--subtle); }
+
+    /* Charts / voxel panels keep height constraints like old */
+    .chart-grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;
+    }
+    @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+
     .chart-box { height: 240px; }
-    .chart-canvas { width: 100% !important; height: 100% !important; }
+    .voxel-box { height: 380px; }
 
-    /* Voxel canvas area */
-    #voxel-canvas { width: 100%; height: 320px; }
+    /* Code block */
+    .codebox {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      background: #0b1020;
+      color: #d1d5db;
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid #1f2937;
+    }
 
-    /* Textareas */
-    textarea { @apply w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring focus:ring-blue-200; }
+    /* Buttons mimic Ubuntu feel but Tailwind-powered */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      border-radius: 10px; font-weight: 600; padding: 10px 14px;
+      border: 1px solid #1e40af; color: #fff; background: #1d4ed8;
+    }
+    .btn:hover { background: #1e40af; }
+    .btn-outline {
+      border: 1px solid #334155; background: #0f172a; color: #e5e7eb;
+    }
+    .btn-outline:hover { background: #111827; }
+    .muted { color: var(--subtle); }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-900">
-  <div class="max-w-7xl mx-auto p-6">
+<body>
+  <div class="page-wrap">
     <!-- Header -->
-    <header class="mb-6">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-bold">Cognition Space Visualizer</h1>
-          <p id="subtitle" class="subtle mt-1">
-            <!-- Filled at runtime: User | Role | Unit | Iteration | Q-Set -->
-          </p>
-          <p id="subtitle2" class="subtle">
-            Proof of Concept — identical layout to classic Ubuntu version.
-          </p>
-        </div>
-        <div class="flex items-center gap-2">
-          <a id="backLink" href="/portal.html" class="btn btn-ghost">← Back to Portal</a>
-          <a href="/index.html" class="btn btn-ghost">Logout</a>
-        </div>
-      </div>
+    <header class="mb-5">
+      <div class="page-title">Cognitive Space Visualization</div>
+      <div id="context" class="page-sub"></div>
     </header>
 
-    <!-- Target & Description -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-      <div class="card p-4">
-        <div class="flex items-center justify-between mb-2">
-          <h2>Target (Cilj)</h2>
-          <button id="btnSaveTarget" class="btn btn-ghost">Save Target</button>
-        </div>
-        <textarea id="txtTarget" rows="6" placeholder="Describe the target state…"></textarea>
+    <!-- Survey Panel -->
+    <section class="card mb-5">
+      <div class="card-header">
+        <div class="card-title">Survey Questions</div>
+        <div class="section-caption" id="qsMeta">Loading question set…</div>
       </div>
-      <div class="card p-4">
-        <div class="flex items-center justify-between mb-2">
-          <h2>Description (Opis)</h2>
-          <button id="btnSaveDesc" class="btn btn-ghost">Save Description</button>
-        </div>
-        <textarea id="txtDesc" rows="6" placeholder="Describe the current context…"></textarea>
-      </div>
-    </section>
+      <div class="card-body">
+        <!-- Group tabs indicator -->
+        <div class="mb-3 text-sm muted">Groups: <span class="font-semibold">Q</span> (Quality Thinking), <span class="font-semibold">M</span> (Management), <span class="font-semibold">D</span> (Delivery)</div>
 
-    <!-- Organization Statistics (static placeholders to mirror old look) -->
-    <section class="card p-4 mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <h2>Organization Statistics</h2>
-        <span class="badge">Iteration KPI</span>
-      </div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="rounded-lg border border-gray-200 p-3">
-          <div class="kpi-label">Respondents</div>
-          <div id="kpiRespondents" class="kpi-value">0</div>
+        <!-- Q group -->
+        <div class="mb-4">
+          <h3 class="font-semibold text-gray-800 mb-2">Q — Quality Thinking</h3>
+          <div id="gridQ" class="slider-grid"></div>
         </div>
-        <div class="rounded-lg border border-gray-200 p-3">
-          <div class="kpi-label">Avg Score</div>
-          <div id="kpiAvgScore" class="kpi-value">—</div>
+        <!-- M group -->
+        <div class="mb-4">
+          <h3 class="font-semibold text-gray-800 mb-2">M — Management</h3>
+          <div id="gridM" class="slider-grid"></div>
         </div>
-        <div class="rounded-lg border border-gray-200 p-3">
-          <div class="kpi-label">Question Set</div>
-          <div id="kpiQset" class="kpi-value">—</div>
-        </div>
-        <div class="rounded-lg border border-gray-200 p-3">
-          <div class="kpi-label">Iteration</div>
-          <div id="kpiIter" class="kpi-value">—</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Survey Questions -->
-    <section class="card p-4 mb-6">
-      <div class="flex items-center justify-between mb-4">
+        <!-- D group -->
         <div>
-          <h2>Survey Questions</h2>
-          <p class="subtle">Sliders: 1 = Poor … 8 = Excellent (default 4)</p>
+          <h3 class="font-semibold text-gray-800 mb-2">D — Delivery</h3>
+          <div id="gridD" class="slider-grid"></div>
         </div>
-        <div class="flex items-center gap-2">
-          <button id="btnReset" class="btn btn-ghost">Reset</button>
-          <button id="btnSave" class="btn btn-primary">Save to Server</button>
-        </div>
-      </div>
 
-      <!-- Q/M/D Groups -->
-      <div id="questionGroups" class="space-y-6">
-        <!-- injected: group blocks with sliders, 4 per row -->
-      </div>
-    </section>
-
-    <!-- Computed JSON Data -->
-    <section class="card p-4 mb-6">
-      <div class="flex items-center justify-between mb-2">
-        <h2>Computed JSON Data</h2>
-        <div class="flex items-center gap-2">
-          <button id="btnCopyJSON" class="btn btn-ghost">Copy</button>
-          <button id="btnClearJSON" class="btn btn-danger">Clear</button>
-        </div>
-      </div>
-      <textarea id="jsonOut" rows="8" class="mono" placeholder="Computed answers JSON will appear here…"></textarea>
-    </section>
-
-    <!-- Gaussian Distributions -->
-    <section class="card p-4 mb-6">
-      <h2 class="mb-4">Gaussian Distributions</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="rounded-lg border border-gray-200 p-3 chart-box">
-          <div class="section-title mb-2">Knowledge Density</div>
-          <canvas id="chartDensity" class="chart-canvas"></canvas>
-        </div>
-        <div class="rounded-lg border border-gray-200 p-3 chart-box">
-          <div class="section-title mb-2">Familiarity</div>
-          <canvas id="chartFamiliarity" class="chart-canvas"></canvas>
-        </div>
-        <div class="rounded-lg border border-gray-200 p-3 chart-box">
-          <div class="section-title mb-2">Cognitive Load</div>
-          <canvas id="chartLoad" class="chart-canvas"></canvas>
+        <!-- Submit -->
+        <div class="mt-5 flex items-center gap-3">
+          <button id="btnSubmit" class="btn">Submit Responses</button>
+          <button id="btnReset" class="btn btn-outline">Reset</button>
+          <span id="submitMsg" class="text-sm muted"></span>
         </div>
       </div>
     </section>
 
-    <!-- 3D Voxel Scene -->
-    <section class="card p-4 mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <h2>3D Voxel Scene</h2>
-        <span class="badge">Classic Cube</span>
+    <!-- Gaussian Graphs -->
+    <section class="card mb-5">
+      <div class="card-header">
+        <div class="card-title">Gaussian Graphs</div>
+        <div class="section-caption">Live distributions for Q, M, D (μ from sliders)</div>
       </div>
-      <div id="voxel-canvas" class="rounded-lg border border-gray-200"></div>
-    </section>
-
-    <!-- Analysis & Coaching -->
-    <section class="card p-4 mb-6">
-      <h2 class="mb-2">Analysis & Coaching (Preview)</h2>
-      <div id="analysisText" class="text-sm text-gray-700">
-        Adjust sliders to see Gaussian curves evolve. After saving, this section will
-        reflect aggregated observations and coaching tips (just like the classic page).
-      </div>
-    </section>
-
-    <!-- Averages / Unit Calculations -->
-    <section class="card p-4 mb-10">
-      <div class="flex items-center justify-between">
-        <h2>Average Calculation (Unit)</h2>
-        <button id="btnCalcAvg" class="btn btn-purple">Calculate Unit Average</button>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        <div class="rounded-lg border border-gray-200 p-3 chart-box">
-          <div class="section-title mb-2">Average Gaussian</div>
-          <canvas id="chartAvg" class="chart-canvas"></canvas>
-        </div>
-        <div class="rounded-lg border border-gray-200 p-3">
-          <div class="section-title mb-2">Average 3D Voxel Scene</div>
-          <div id="avg-voxel" class="h-[240px] rounded border border-gray-200 flex items-center justify-center text-gray-500 text-sm">
-            (Average voxel visualization placeholder)
-          </div>
-        </div>
-      </div>
-      <div class="mt-4">
-        <div class="section-title mb-1">Average Analysis</div>
-        <div id="avgAnalysisText" class="text-sm text-gray-700">
-          Averages will appear here after you compute unit data.
+      <div class="card-body">
+        <div class="chart-grid">
+          <div class="chart-box card p-3"><canvas id="chartQ"></canvas></div>
+          <div class="chart-box card p-3"><canvas id="chartM"></canvas></div>
+          <div class="chart-box card p-3"><canvas id="chartD"></canvas></div>
         </div>
       </div>
     </section>
 
-    <!-- Debug -->
-    <details class="w-full bg-gray-900 text-gray-100 rounded-lg p-3">
-      <summary class="cursor-pointer select-none flex items-center gap-2">
-        <span class="inline-block">▶</span>
-        <span class="font-semibold">Debug log (open to view)</span>
-      </summary>
-      <pre id="debug" class="mt-2 whitespace-pre-wrap text-xs"></pre>
+    <!-- 3D Voxel Cube -->
+    <section class="card mb-5">
+      <div class="card-header">
+        <div class="card-title">3D Voxel Scene</div>
+        <div class="section-caption">Interactive cube (Three.js + OrbitControls)</div>
+      </div>
+      <div class="card-body">
+        <div id="voxelWrap" class="voxel-box card relative overflow-hidden"></div>
+      </div>
+    </section>
+
+    <!-- JSON Output / Debug -->
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title">JSON Output (Preview)</div>
+        <div class="section-caption">Compact view of answers payload</div>
+      </div>
+      <div class="card-body">
+        <pre id="jsonOut" class="codebox">{}</pre>
+      </div>
+    </section>
+
+    <!-- Debug log -->
+    <details class="mt-6">
+      <summary class="cursor-pointer text-sm text-gray-600">Debug log (open to view)</summary>
+      <pre id="debug" class="mt-2 codebox"></pre>
     </details>
   </div>
 
   <script>
-    // ===== Utilities =====
-    const log = (msg, obj) => {
-      const el = document.getElementById('debug');
-      const line = \`[\${new Date().toISOString()}] [cog] \${msg}\`;
-      if (obj !== undefined) {
-        try { el.textContent += line + " " + JSON.stringify(obj) + "\\n"; }
-        catch { el.textContent += line + "\\n"; }
-      } else {
-        el.textContent += line + "\\n";
-      }
-      if (el.textContent.length > 50000) el.textContent = el.textContent.slice(-35000);
+    // --- Helpers ---
+    const $ = (sel) => document.querySelector(sel);
+    const logEl = $('#debug');
+    const log = (m, o) => {
+      const line = \`[\${new Date().toISOString()}] \${m}\`;
+      logEl.textContent += o ? line + ' ' + JSON.stringify(o) + "\\n" : line + "\\n";
+      if (logEl.textContent.length > 45000) logEl.textContent = logEl.textContent.slice(-35000);
     };
 
-    const qs = new URLSearchParams(window.location.search);
-    const userName = qs.get('name') || '(unknown)';
-    const roleId   = qs.get('role_id');   // person_roles.id
-    const iterId   = qs.get('iter_id');
-    const qset     = qs.get('qset');
+    const qs = new URLSearchParams(location.search);
+    const personName = qs.get('name') || '';
+    const roleId = parseInt(qs.get('role_id') || '0', 10);
+    const iterationId = parseInt(qs.get('iter_id') || '0', 10);
+    const questionFile = qs.get('qset') || 'Normal_Analysis_60.json';
 
-    // UI refs
-    const subtitleEl = document.getElementById('subtitle');
-    const kpiRespondents = document.getElementById('kpiRespondents');
-    const kpiAvgScore = document.getElementById('kpiAvgScore');
-    const kpiQset = document.getElementById('kpiQset');
-    const kpiIter = document.getElementById('kpiIter');
+    let personId = null;
+    let orgUnitId = null;
 
-    const groupsWrap = document.getElementById('questionGroups');
-    const jsonOut = document.getElementById('jsonOut');
-    const btnReset = document.getElementById('btnReset');
-    const btnSave = document.getElementById('btnSave');
-    const btnCopyJSON = document.getElementById('btnCopyJSON');
-    const btnClearJSON = document.getElementById('btnClearJSON');
-    const btnSaveTarget = document.getElementById('btnSaveTarget');
-    const btnSaveDesc = document.getElementById('btnSaveDesc');
-    const btnCalcAvg = document.getElementById('btnCalcAvg');
-    const txtTarget = document.getElementById('txtTarget');
-    const txtDesc = document.getElementById('txtDesc');
+    const grids = { Q: $('#gridQ'), M: $('#gridM'), D: $('#gridD') };
+    const jsonOut = $('#jsonOut');
+    const qsMeta = $('#qsMeta');
+    const ctxLine = $('#context');
 
-    // Loaded role/context cache
-    let roleRecord = null; // from get-user-roles (match by role_id)
-    let orgUnit = null;    // derived (organization_units)
-    let iterationCtx = null;
+    // --- Charts ---
+    let chartQ, chartM, chartD;
 
-    // Questions state
-    let questions = []; // [{id,label,group}]
-    let values = {};    // id -> slider value (1..8)
-
-    // Charts
-    let chartDensity, chartFamiliarity, chartLoad, chartAvg;
-
-    function normalPDF(x, mu, sigma) {
-      const a = 1 / (sigma * Math.sqrt(2 * Math.PI));
-      const b = -((x - mu) ** 2) / (2 * sigma ** 2);
-      return a * Math.exp(b);
+    function gaussian(x, mu = 4, sigma = 1.25) {
+      const s2 = sigma * sigma;
+      return (1 / Math.sqrt(2 * Math.PI * s2)) * Math.exp(-(Math.pow(x - mu, 2)) / (2 * s2));
     }
-
-    function buildGaussianData(avgVal) {
-      // Map slider scale 1..8 to curve center [0..1]
-      const mu = (avgVal - 1) / 7; // 0..1
-      const sigma = 0.15; // fixed for demo; your old code could vary this
-
-      const xs = [];
-      const ys = [];
-      for (let i = 0; i <= 100; i++) {
-        const x = i / 100;
-        xs.push(x);
-        ys.push(normalPDF(x, mu, sigma));
-      }
-      return { xs, ys };
+    function buildDatasetFromValues(values) {
+      const xs = Array.from({length: 71}, (_, i) => 1 + i * (7 / 70));
+      const mu = values.length ? values.reduce((a,b)=>a+b,0) / values.length : 4;
+      const ys = xs.map(x => gaussian(x, mu, 1.25));
+      return { xs, ys, mu: parseFloat(mu.toFixed(2)) };
     }
-
-    function renderCharts() {
-      const allVals = Object.values(values);
-      const avg = allVals.length ? (allVals.reduce((a,b)=>a+b,0) / allVals.length) : 4;
-
-      const d1 = buildGaussianData(avg);
-      const cfg = (label, data) => ({
+    function ensureCharts() {
+      const cfg = (label) => ({
         type: 'line',
-        data: {
-          labels: data.xs,
-          datasets: [{ label, data: data.ys, fill: false, tension: 0.2 }]
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false }},
-          scales: {
-            x: { display: false },
-            y: { display: false }
-          }
-        }
+        data: { labels: [], datasets: [{ label, data: [], borderWidth: 2, pointRadius: 0, tension: 0.25 }]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+          scales: { x: { display: false }, y: { display: false } } }
       });
+      if (!chartQ) chartQ = new Chart($('#chartQ'), cfg('Q'));
+      if (!chartM) chartM = new Chart($('#chartM'), cfg('M'));
+      if (!chartD) chartD = new Chart($('#chartD'), cfg('D'));
+    }
+    function updateCharts() {
+      ensureCharts();
+      const valuesQ = collectValues('Q');
+      const valuesM = collectValues('M');
+      const valuesD = collectValues('D');
 
-      const ensure = (ctx, chart, label) => {
-        if (chart) chart.destroy();
-        return new Chart(ctx, cfg(label, d1));
+      const dQ = buildDatasetFromValues(valuesQ);
+      const dM = buildDatasetFromValues(valuesM);
+      const dD = buildDatasetFromValues(valuesD);
+
+      const apply = (chart, ds) => {
+        chart.data.labels = ds.xs;
+        chart.data.datasets[0].data = ds.ys;
+        chart.update();
       };
-
-      chartDensity = ensure(document.getElementById('chartDensity'), chartDensity, 'Knowledge Density');
-      chartFamiliarity = ensure(document.getElementById('chartFamiliarity'), chartFamiliarity, 'Familiarity');
-      chartLoad = ensure(document.getElementById('chartLoad'), chartLoad, 'Cognitive Load');
-
-      // KPI avg
-      kpiAvgScore.textContent = avg.toFixed(2);
+      apply(chartQ, dQ); apply(chartM, dM); apply(chartD, dD);
     }
 
-    function updateJSON() {
-      const arr = questions.map(q => ({ id: q.id, v: values[q.id] || 4 }));
-      jsonOut.value = JSON.stringify(arr, null, 2);
+    // --- Three.js voxel cube (minimal, like old) ---
+    let renderer, scene, camera, controls, cube;
+    function initVoxel() {
+      const container = document.getElementById('voxelWrap');
+      const w = container.clientWidth, h = container.clientHeight;
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+      camera.position.set(3, 3, 5);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+      dir.position.set(3, 5, 4);
+      scene.add(ambient, dir);
+
+      const geom = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x4f46e5, metalness: 0.2, roughness: 0.5 });
+      cube = new THREE.Mesh(geom, mat);
+      scene.add(cube);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      function onResize() {
+        const w2 = container.clientWidth, h2 = container.clientHeight;
+        camera.aspect = w2 / h2; camera.updateProjectionMatrix();
+        renderer.setSize(w2, h2);
+      }
+      window.addEventListener('resize', onResize);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        cube.rotation.y += 0.004;
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
     }
 
-    function buildSlider(q) {
+    // --- Question building ---
+    function makeSliderCard(id, label) {
       const wrap = document.createElement('div');
-      wrap.className = 'slider-wrap';
-
-      const label = document.createElement('div');
-      label.className = 'slider-label';
-      label.textContent = q.label;
-      wrap.appendChild(label);
-
-      const meta = document.createElement('div');
-      meta.className = 'slider-meta mb-2';
-      meta.textContent = '1 = Poor / 8 = Excellent';
-      wrap.appendChild(meta);
-
-      const valRow = document.createElement('div');
-      valRow.className = 'flex items-center justify-between mb-1 text-[12px] text-gray-600';
-      const left = document.createElement('span'); left.textContent = 'Value';
-      const right = document.createElement('span'); right.id = `val-${q.id}`; right.textContent = '4';
-      valRow.append(left, right); wrap.appendChild(valRow);
-
-      const input = document.createElement('input');
-      input.type = 'range';
-      input.min = '1';
-      input.max = '8';
-      input.step = '1';
-      input.value = values[q.id] || 4;
-      input.oninput = () => {
-        values[q.id] = Number(input.value);
-        document.getElementById(`val-${q.id}`).textContent = String(values[q.id]);
-        updateJSON();
-        renderCharts();
-      };
-      wrap.appendChild(input);
-
+      wrap.className = 'slider-card';
+      wrap.innerHTML = `
+        <div class="slider-label">${label}</div>
+        <div class="slider-row">
+          <input type="range" min="1" max="8" step="1" value="4" id="${id}" />
+          <div class="slider-value" id="${id}-val">4</div>
+        </div>
+        <div class="slider-help">1 = Low ··· 8 = High</div>`;
+      // events
+      const input = wrap.querySelector('input');
+      const valEl = wrap.querySelector('.slider-value');
+      input.addEventListener('input', () => {
+        valEl.textContent = input.value;
+        updateOutputs();
+      });
       return wrap;
     }
 
-    function renderGroups() {
-      groupsWrap.innerHTML = '';
-      // group by q.group (Q/M/D)
-      const groups = { Q: [], M: [], D: [] };
-      questions.forEach(q => { if (groups[q.group]) groups[q.group].push(q); });
-
-      for (const key of ['Q','M','D']) {
-        if (!groups[key].length) continue;
-        const block = document.createElement('div');
-
-        const head = document.createElement('div');
-        head.className = 'flex items-center justify-between';
-        head.innerHTML = \`<div class="section-title mb-2">Group \${key}</div>\`;
-        block.appendChild(head);
-
-        const grid = document.createElement('div');
-        grid.className = 'grid-sliders';
-        groups[key].forEach(q => grid.appendChild(buildSlider(q)));
-        block.appendChild(grid);
-
-        groupsWrap.appendChild(block);
-      }
+    function inferGroupAndIndex(text) {
+      // Expect prefixes like "Q1", "M14", "D7". Fallback to Q if missing.
+      const m = text.trim().match(/^([QMD])\s*\.?\s*(\d+)/i);
+      if (m) return { group: m[1].toUpperCase(), index: parseInt(m[2], 10) };
+      const m2 = text.trim().match(/^([QMD])\s*(\d+)/i);
+      if (m2) return { group: m2[1].toUpperCase(), index: parseInt(m2[2], 10) };
+      return { group: 'Q', index: 0 };
     }
 
-    async function loadRoleContext() {
-      // We need user → get-user-roles → find matching roleId to resolve org_unit_id + iteration
-      if (!userName) return;
-      log('GET /api/admin/get-user-roles', { name: userName });
-      const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(userName)}`);
-      const data = await res.json().catch(()=>({}));
-      log('get-user-roles result', data);
-      if (!data.success) return;
-
-      // Find the role record by roleId
-      const roles = data.roles || [];
-      roleRecord = roles.find(r => String(r.id) === String(roleId)) || roles[0] || null;
-      if (roleRecord) {
-        orgUnit = { id: roleRecord.org_unit_id, name: (roleRecord.organization_units||{}).name || '(unit)' };
-        iterationCtx = roleRecord.iterations || null;
-        const itName = iterationCtx ? iterationCtx.name : '(?)';
-        const itId = iterationCtx ? iterationCtx.id : iterId || '(?)';
-        const itStart = iterationCtx && iterationCtx.start_date ? new Date(iterationCtx.start_date).toISOString().slice(0,10) : '(no start date)';
-        subtitleEl.textContent = \`User: \${userName} | Role: \${roleRecord.is_manager ? 'Manager' : 'Member'} | Unit: \${orgUnit.name} | Iteration: \${itName} (ID: \${itId}) | Start: \${itStart} | Question Set: \${qset || '(none)'}\`;
-        kpiQset.textContent = qset || '(none)';
-        kpiIter.textContent = \`\${itName} (#\${itId})\`;
-      } else {
-        subtitleEl.textContent = \`User: \${userName} | Role: (not found) | Iteration: \${iterId || '(?)'} | Question Set: \${qset || '(none)'}\`;
-      }
-    }
-
-    async function loadQuestionSet() {
-      if (!qset) {
-        log('No qset provided');
-        return;
-      }
-      log('GET /api/admin/cog-load-set', { filename: qset });
-      const res = await fetch(`/api/admin/cog-load-set?filename=${encodeURIComponent(qset)}`);
-      const data = await res.json().catch(()=>({}));
-      if (!res.ok || !data.success) {
-        log('load error', { message: data.message || 'Failed to load question set file' });
-        alert('Error: Failed to load question set file');
-        return;
-      }
-
-      // Expecting data.data to be an array of strings (as in your current JSON)
-      const arr = Array.isArray(data.data) ? data.data : [];
-      // Infer grouping by total length (old convention)
-      // 120 => 40/40/40, 60 => 20/20/20, 12 => 4/4/4
-      let slice = 0;
-      let part = 0;
-      if (arr.length === 120) { part = 40; }
-      else if (arr.length === 60) { part = 20; }
-      else if (arr.length === 12) { part = 4; }
-      else {
-        // fallback: split evenly into 3 groups
-        part = Math.floor(arr.length / 3);
-      }
-
-      questions = arr.map((label, i) => {
-        let group = 'Q';
-        if (i >= part && i < 2*part) group = 'M';
-        else if (i >= 2*part) group = 'D';
-        return { id: i+1, label: `${group}${(i%part)+1}. ${label}`, group };
+    function buildSurveyUI(questions) {
+      // Clear
+      grids.Q.innerHTML = grids.M.innerHTML = grids.D.innerHTML = '';
+      // Group questions by prefix
+      const grouped = { Q: [], M: [], D: [] };
+      questions.forEach((q, i) => {
+        const text = typeof q === 'string' ? q : (q.text || q.question || String(q));
+        const { group, index } = inferGroupAndIndex(text);
+        grouped[group].push({ id: \`\${group}\${index || (grouped[group].length + 1)}\`, label: text });
       });
-
-      // init values to default 4
-      values = {};
-      questions.forEach(q => { values[q.id] = 4; });
-
-      // KPI
-      kpiRespondents.textContent = '1'; // local session placeholder
-      renderGroups();
-      updateJSON();
-      renderCharts();
-      log('Question set loaded', { count: questions.length });
+      // Sort inside groups by numeric part
+      ['Q','M','D'].forEach(g => grouped[g].sort((a,b) => {
+        const ai = parseInt(a.id.replace(/[^\d]/g,''))||0;
+        const bi = parseInt(b.id.replace(/[^\d]/g,''))||0;
+        return ai - bi;
+      }));
+      // Build cards
+      Object.entries(grouped).forEach(([g, arr]) => {
+        const grid = grids[g];
+        arr.forEach(item => grid.appendChild(makeSliderCard(item.id, item.label)));
+      });
+      updateOutputs();
     }
 
-    async function saveResults() {
-      // Send answers as array of {q: n, v: value} to mirror your previous shape
-      const answers = questions.map(q => ({ q: q.id, v: values[q.id] || 4 }));
+    function collectValues(group) {
+      const grid = grids[group];
+      const inputs = grid.querySelectorAll('input[type="range"]');
+      return Array.from(inputs).map(inp => Number(inp.value || 0));
+    }
 
-      // Try to include role+unit in payload if available (forward compatible with upsert logic)
+    function collectAllAnswers() {
+      const packs = [];
+      [['Q', grids.Q], ['M', grids.M], ['D', grids.D]].forEach(([g, grid]) => {
+        grid.querySelectorAll('.slider-card').forEach(card => {
+          const label = card.querySelector('.slider-label').textContent.trim();
+          const input = card.querySelector('input[type="range"]');
+          const id = input.id;
+          packs.push({ id, group: g, label, value: Number(input.value) });
+        });
+      });
+      return packs;
+    }
+
+    function updateOutputs() {
+      // JSON preview
+      const answers = collectAllAnswers();
+      jsonOut.textContent = JSON.stringify({ person_name: personName, person_id: personId, role_id: roleId, iteration_id: iterationId, question_set: questionFile, answers }, null, 2);
+      // Charts
+      updateCharts();
+    }
+
+    // --- API calls ---
+    async function fetchUserContext() {
+      // resolve person_id, org_unit for given role_id
+      const u = new URL('/api/admin/get-user-roles', location.origin);
+      u.searchParams.set('name', personName);
+      log('[cog] GET /api/admin/get-user-roles', { name: personName });
+      const res = await fetch(u);
+      const data = await res.json();
+      log('[cog] roles result', data);
+      if (!data.success) throw new Error(data.message || 'Failed roles');
+      personId = data.user?.id || null;
+      const match = (data.roles || []).find(r => r.id === roleId);
+      orgUnitId = match?.org_unit_id || null;
+
+      // context line
+      const iter = match?.iterations;
+      const unitName = match?.organization_units?.name || '(unit)';
+      const roleType = match?.is_manager ? 'Manager' : 'Member';
+      const start = iter?.start_date ? new Date(iter.start_date).toLocaleString() : '(no start date)';
+      ctxLine.textContent = `User: ${personName} — Role: ${roleType} — Unit: ${unitName} — Iteration: ${iter?.name || '(unknown)'} (ID: ${iter?.id ?? iterationId}) — Start: ${start} — Question Set: ${questionFile}`;
+    }
+
+    async function loadQuestions() {
+      log('[cog] GET /api/admin/cog-load-set', { filename: questionFile });
+      const u = new URL('/api/admin/cog-load-set', location.origin);
+      u.searchParams.set('filename', questionFile);
+      const res = await fetch(u);
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load question set');
+      const list = Array.isArray(data.data) ? data.data : (data.data?.questions || data.data?.items || []);
+      if (!Array.isArray(list) || list.length === 0) throw new Error('Question file has no items');
+      qsMeta.textContent = `Loaded ${list.length} questions from ${questionFile}.`;
+      buildSurveyUI(list);
+    }
+
+    async function submitAnswers() {
       const payload = {
-        person_id: roleId,                // we pass the roleId into person_id for legacy tolerance
-        person_role_id: roleId || null,   // actual role id
-        org_unit_id: orgUnit ? orgUnit.id : null,
-        iteration_id: (iterationCtx && iterationCtx.id) || iterId,
-        question_set: qset,
-        answers
+        person_id: personId,                // required by current API validation
+        iteration_id: iterationId,
+        question_set: questionFile,
+        answers: collectAllAnswers(),       // array of {id,group,label,value}
+        // (optional future fields if backend supports upsert)
+        person_role_id: roleId,
+        org_unit_id: orgUnitId
       };
-
-      log('POST /api/admin/cog-save-response', payload);
+      log('[cog] POST /api/admin/cog-save-response', payload);
       const res = await fetch('/api/admin/cog-save-response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json().catch(()=>({}));
-      if (!res.ok || !data.success) {
-        log('submit error', { message: data.message || 'Failed to save' });
-        alert(`Error: ${data.message || 'Failed to save'}`);
-        return;
-      }
-      alert('Responses saved.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.message || 'Submit failed');
+      $('#submitMsg').textContent = 'Saved ✔';
+      setTimeout(() => $('#submitMsg').textContent = '', 2000);
     }
 
-    function initVoxel() {
-      const container = document.getElementById('voxel-canvas');
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xffffff);
-
-      const camera = new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
-      camera.position.set(3.5, 3.5, 3.5);
-
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(w, h);
-      container.appendChild(renderer.domElement);
-
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-
-      // Wireframe cube
-      const cubeGeom = new THREE.BoxGeometry(2, 2, 2);
-      const wireMat = new THREE.MeshBasicMaterial({ color: 0x444444, wireframe: true });
-      const wireCube = new THREE.Mesh(cubeGeom, wireMat);
-      scene.add(wireCube);
-
-      // Red inner voxel (small cube)
-      const voxelGeom = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-      const voxelMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
-      const voxel = new THREE.Mesh(voxelGeom, voxelMat);
-      scene.add(voxel);
-
-      // Light (optional subtle)
-      const light = new THREE.AmbientLight(0xffffff, 0.8);
-      scene.add(light);
-
-      function animate() {
-        requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
-      }
-      animate();
-
-      // Handle resize
-      window.addEventListener('resize', () => {
-        const w2 = container.clientWidth;
-        const h2 = container.clientHeight;
-        camera.aspect = w2 / h2;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w2, h2);
-      });
+    function resetAll() {
+      document.querySelectorAll('input[type="range"]').forEach(inp => inp.value = 4);
+      updateOutputs();
     }
 
-    function wireButtons() {
-      btnReset.onclick = () => {
-        questions.forEach(q => { values[q.id] = 4; });
-        renderGroups(); // rebuilds sliders + labels
-        updateJSON();
-        renderCharts();
-      };
-      btnSave.onclick = () => saveResults();
-      btnCopyJSON.onclick = async () => {
-        try { await navigator.clipboard.writeText(jsonOut.value); alert('Copied.'); }
-        catch { alert('Copy failed.'); }
-      };
-      btnClearJSON.onclick = () => { jsonOut.value = ''; };
-
-      btnSaveTarget.onclick = () => { alert('Target saved (placeholder).'); };
-      btnSaveDesc.onclick = () => { alert('Description saved (placeholder).'); };
-
-      btnCalcAvg.onclick = () => {
-        // Placeholder average chart based on current answers
-        const avg = Object.values(values).reduce((a,b)=>a+b,0) / Object.keys(values).length;
-        const d = buildGaussianData(avg);
-        if (chartAvg) chartAvg.destroy();
-        chartAvg = new Chart(document.getElementById('chartAvg'), {
-          type: 'line',
-          data: { labels: d.xs, datasets: [{ data: d.ys, fill: false, tension: 0.2 }] },
-          options: { responsive: true, plugins: { legend: { display: false } }, scales: { x:{display:false}, y:{display:false} } }
+    // --- Init ---
+    (async function init() {
+      try {
+        $('#btnSubmit').addEventListener('click', async () => {
+          try { await submitAnswers(); } catch (e) { $('#submitMsg').textContent = 'Error: ' + e.message; log('[cog] submit error', { message: e.message }); }
         });
-        document.getElementById('avgAnalysisText').textContent =
-          `Average based on current inputs is ${avg.toFixed(2)} (demo placeholder).`;
-      };
-    }
+        $('#btnReset').addEventListener('click', resetAll);
 
-    async function init() {
-      log('page loaded');
-      await loadRoleContext();
-      await loadQuestionSet();
-      wireButtons();
-      initVoxel();
-    }
-    init();
+        await fetchUserContext();
+        await loadQuestions();
+        initVoxel();
+        updateCharts();
+        log('[cog] page ready');
+      } catch (e) {
+        log('[cog] init error', { message: e.message });
+        qsMeta.textContent = 'Error: ' + e.message;
+      }
+    })();
   </script>
 </body>
 </html>
