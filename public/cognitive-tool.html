@@ -8,7 +8,7 @@
   />
   <title>Cognition Space Visualizer</title>
 
-  <!-- Tailwind (CDN is fine for now; you already use it elsewhere) -->
+  <!-- Tailwind (CDN is fine for now while testing) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Charts + Three.js + OrbitControls -->
@@ -133,7 +133,7 @@
     const flash = (msg, color="green") => {
       const el = document.getElementById('flash');
       el.textContent = msg;
-      el.className = \`text-xs mt-2 block text-center text-\${color}-600\`;
+      el.className = "text-xs mt-2 block text-center text-" + color + "-600";
       setTimeout(()=>{ el.textContent = "" }, 4000);
     };
 
@@ -165,7 +165,7 @@
     // Charts
     function renderCharts(data){
       const common = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, title:{display:true, text:""} }, scales:{ x:{ grid:{display:false}, title:{display:true,text:"Value"}}, y:{ grid:{display:false}, title:{display:true,text:"Probability Density"} } }};
-      const mk = (ctx, title, color, series) => new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:title, data:series, borderColor:\`rgb(\${color})\`, backgroundColor:\`rgba(\${color},.2)\`, borderWidth:2, fill:true, tension:.4 }]}, options:{ ...common, plugins:{...common.plugins, title:{...common.plugins.title, text:title}} });
+      const mk = (ctx, title, color, series) => new Chart(ctx, { type:'line', data:{ labels, datasets:[{ label:title, data:series, borderColor:"rgb("+color+")", backgroundColor:"rgba("+color+",.2)", borderWidth:2, fill:true, tension:.4 }]}, options:{ ...common, plugins:{...common.plugins, title:{...common.plugins.title, text:title}} }});
 
       if(charts.q) charts.q.destroy();
       charts.q = mk(document.getElementById('chartQ'), 'Knowledge Density', '75,192,192', data.q);
@@ -214,8 +214,7 @@
       if(state.last) state.last.material = gray;
       state.outline.visible = false;
 
-      const {x,y,z} = rounded;
-      const idx = (x-1) + (y-1)*8 + (z-1)*64;
+      const idx = (rounded.x-1) + (rounded.y-1)*8 + (rounded.z-1)*64;
       const v = state.grid[idx];
       if(v){
         v.material = red;
@@ -227,8 +226,7 @@
 
     // Analysis lookup (voxel CSV)
     function parseVoxelCSV(csvText){
-      // expect header; robust split for CSV
-      const lines = csvText.trim().split('\\n').slice(1);
+      const lines = csvText.trim().split("\n").slice(1);
       for(const line of lines){
         if(!line.trim()) continue;
         const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
@@ -244,13 +242,13 @@
       const elD = document.getElementById('analysisDesc');
       const elT = document.getElementById('analysisTip');
       if(!rounded){ elD.textContent = 'Adjust sliders to see analysis.'; elT.textContent=''; return; }
-      const key = \`[\${rounded.x},\${rounded.y},\${rounded.z}]\`;
+      const key = "["+rounded.x+","+rounded.y+","+rounded.z+"]";
       const a = mapVoxel.get(key);
       if(a){ elD.textContent = a.short_desc || ''; elT.textContent = a.coach_tip ? ('Coaching Tip: '+a.coach_tip) : ''; }
       else { elD.textContent = 'No specific analysis for this combination.'; elT.textContent = ''; }
     }
 
-    // Active iteration (from your existing admin endpoint)
+    // Active iteration
     async function loadActiveIteration(){
       try{
         const r = await fetch('/api/admin/active-iteration');
@@ -260,40 +258,40 @@
           const it = j.iteration;
           const qsName = (it.question_set||'').replace('.json','').replace(/_/g,' ');
           document.getElementById('iterationBar').innerHTML =
-            \`Active Iteration: <span class="font-bold">\${it.name} (ID: \${it.id})</span> | Question Set: <span class="font-bold">\${qsName}</span>\`;
+            "Active Iteration: <span class=\"font-bold\">"+it.name+" (ID: "+it.id+")</span> | Question Set: <span class=\"font-bold\">"+qsName+"</span>";
           return it;
         } else {
-          document.getElementById('iterationBar').textContent = 'No active iteration.';
-          document.getElementById('iterationBar').classList.replace('text-blue-600','text-red-600');
+          const el = document.getElementById('iterationBar');
+          el.textContent = 'No active iteration.';
+          el.classList.remove('text-blue-600'); el.classList.add('text-red-600');
           return null;
         }
       }catch(e){
         dbg('[cog] active-iteration error', e);
-        document.getElementById('iterationBar').textContent = 'Error loading iteration.';
-        document.getElementById('iterationBar').classList.replace('text-blue-600','text-red-600');
+        const el = document.getElementById('iterationBar');
+        el.textContent = 'Error loading iteration.';
+        el.classList.remove('text-blue-600'); el.classList.add('text-red-600');
         return null;
       }
     }
 
     // Load question set via your Vercel endpoint
     async function loadQuestions(filename){
-      const url = \`/api/admin/cog-load-set?filename=\${encodeURIComponent(filename)}\`;
-      const r = await fetch(url);
+      const url = "/api/admin/cog-load-set?filename=" + encodeURIComponent(filename);
+      const r = await fetch(url, { cache:'no-store' });
       if(!r.ok) throw new Error('Failed to load question set');
       const j = await r.json();
       dbg('[cog] cog-load-set', j);
-      // support either array or grouped object; flatten preserving order Q/M/D groups if present
+
       let arr = [];
       if(Array.isArray(j.data)){
         arr = j.data;
       } else if (j.data && typeof j.data === 'object'){
-        // keep Q, M, D ordering if present
         if(j.data.Q || j.data.M || j.data.D){
           if(Array.isArray(j.data.Q)) arr = arr.concat(j.data.Q);
           if(Array.isArray(j.data.M)) arr = arr.concat(j.data.M);
           if(Array.isArray(j.data.D)) arr = arr.concat(j.data.D);
         } else {
-          // fallback: any values
           Object.values(j.data).forEach(v => {
             if(Array.isArray(v)) arr = arr.concat(v);
           });
@@ -308,26 +306,27 @@
       root.innerHTML = '';
       values = Array(questions.length).fill(4);
       document.getElementById('surveyIntro').textContent =
-        \`Enter \${questions.length} values (1–8) to compute means, render Gaussians, and show your voxel.\`;
+        "Enter "+questions.length+" values (1–8) to compute means, render Gaussians, and show your voxel.";
 
       questions.forEach((txt, i) => {
         const wrap = document.createElement('div');
         wrap.className = 'p-3 bg-white rounded border';
         const lab = document.createElement('label');
         lab.className = 'block text-sm font-medium text-gray-700';
-        lab.innerHTML = \`Q\${i+1}. \${txt}\`;
+        lab.innerHTML = "Q"+(i+1)+". "+txt;
         const val = document.createElement('div');
         val.className = 'mt-1 text-xs text-gray-500';
-        val.innerHTML = \`1 = low ··· 8 = high &nbsp;|&nbsp; value: <span id="v-\${i+1}" class="font-semibold">4</span>\`;
+        val.innerHTML = "1 = low ··· 8 = high &nbsp;|&nbsp; value: <span id=\"v-"+(i+1)+"\" class=\"font-semibold\">4</span>";
 
         const slider = document.createElement('input');
         slider.type = 'range';
         slider.min = '1'; slider.max = '8'; slider.value = '4';
         slider.className = 'w-full mt-2';
-        slider.addEventListener('input', e => {
+        slider.addEventListener('input', function(e){
           const nv = parseInt(e.target.value, 10);
           values[i] = nv;
-          document.getElementById(\`v-\${i+1}\`).textContent = nv;
+          const ve = document.getElementById('v-'+(i+1));
+          if(ve) ve.textContent = nv;
           recompute();
         });
 
@@ -340,15 +339,14 @@
 
     function recompute(){
       if(!values.length) return;
-      // group by thirds (Q/M/D) respecting 60 or 120 layouts
       const n = values.length;
       const g = Math.floor(n/3);
       const Qs = values.slice(0, g);
       const Ms = values.slice(g, 2*g);
       const Ds = values.slice(2*g);
 
-      const mean = a => a.length ? a.reduce((s,x)=>s+x,0)/a.length : 0;
-      const clamp18 = x => Math.min(8, Math.max(1, x));
+      const mean = function(a){ return a.length ? a.reduce(function(s,x){return s+x},0)/a.length : 0; };
+      const clamp18 = function(x){ return Math.min(8, Math.max(1, x)); };
 
       const mQ = mean(Qs), mM = mean(Ms), mD = mean(Ds);
       const rQ = Math.round(clamp18(mQ)), rM = Math.round(clamp18(mM)), rD = Math.round(clamp18(mD));
@@ -364,7 +362,7 @@
       updateVoxel({x:rQ, y:rM, z:rD}, sceneStateMain);
       applyAnalysis({x:rQ, y:rM, z:rD});
 
-      // JSON output (compatible with your current server save)
+      // JSON output (compatible with current server save)
       const payload = {
         timestamp: new Date().toISOString(),
         survey_results: values,
@@ -392,7 +390,6 @@
       }
       try{
         const body = {
-          // your backend currently reads these names:
           iteration_id: Number(iterId),
           question_set: qsetFile,
           answers: JSON.parse(document.getElementById('jsonOut').value).survey_results
@@ -414,10 +411,8 @@
       }
     }
 
-    // Load CSV for voxel analysis text (you can swap to your file path)
+    // Load CSV for voxel analysis text (optional)
     async function loadVoxelCSV(){
-      // If you have it in /public/data/voxels.csv for example:
-      // Provide a small, cached CSV OR guard if missing.
       try{
         const r = await fetch('/data/voxels.csv', { cache:'no-store' });
         if(!r.ok){ dbg('[cog] voxel CSV not found; analysis tips disabled'); return; }
@@ -428,10 +423,10 @@
 
     async function main(){
       // show user context
-      const userLine = \`User: <span class="text-blue-600">\${userName}</span> — Role ID: <span class="text-blue-600">\${roleId||'?'}</span> — Iteration ID: <span class="text-blue-600">\${iterId||'?'}</span> — Question Set: <span class="text-blue-600">\${qsetFile}</span>\`;
+      const userLine = "User: <span class=\"text-blue-600\">" + userName + "</span> — Role ID: <span class=\"text-blue-600\">" + (roleId||'?') + "</span> — Iteration ID: <span class=\"text-blue-600\">" + (iterId||'?') + "</span> — Question Set: <span class=\"text-blue-600\">" + qsetFile + "</span>";
       document.getElementById('userContext').innerHTML = userLine;
 
-      const active = await loadActiveIteration();
+      await loadActiveIteration();
 
       // load question set (from /api/admin/cog-load-set)
       try{
@@ -449,24 +444,24 @@
       recompute();
 
       // wire buttons
-      document.getElementById('resetBtn').addEventListener('click', () => {
-        values = values.map(()=>4);
-        // reset inputs
-        [...document.querySelectorAll('#sliders input[type="range"]')].forEach((sl,i)=>{
-          sl.value = 4;
-          const valEl = document.getElementById('v-'+(i+1));
-          if(valEl) valEl.textContent = 4;
-        });
+      document.getElementById('resetBtn').addEventListener('click', function(){
+        values = values.map(function(){ return 4; });
+        var inputs = document.querySelectorAll('#sliders input[type="range"]');
+        for(var i=0;i<inputs.length;i++){
+          inputs[i].value = 4;
+          var vEl = document.getElementById('v-'+(i+1));
+          if(vEl) vEl.textContent = 4;
+        }
         recompute();
         flash('Sliders reset.');
       });
       document.getElementById('saveBtn').addEventListener('click', saveSurvey);
 
-      // Target / Description (placeholders; wire to your endpoints later if needed)
-      document.getElementById('saveTargetBtn').addEventListener('click', () => {
+      // Target / Description (placeholders in this replica)
+      document.getElementById('saveTargetBtn').addEventListener('click', function(){
         flash('Target saved (demo stub).');
       });
-      document.getElementById('saveDescBtn').addEventListener('click', () => {
+      document.getElementById('saveDescBtn').addEventListener('click', function(){
         flash('Description saved (demo stub).');
       });
     }
