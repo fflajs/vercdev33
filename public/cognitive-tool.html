@@ -3,165 +3,586 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Cognitive Tool</title>
+  <title>Cognition Space Visualizer</title>
+  <!-- Tailwind (kept to mimic the old look quickly) -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for Gaussian charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Three.js for voxel cube -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    /* Small tweaks to match the “old” cardy look */
+    .card { @apply bg-white rounded-xl shadow-sm border border-gray-200; }
+    .card h2 { @apply text-lg font-semibold text-gray-800; }
+    .subtle { @apply text-sm text-gray-500; }
+    .mono  { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .section-title { @apply text-sm font-semibold uppercase tracking-wide text-gray-600; }
+    .kpi-label { @apply text-xs text-gray-500; }
+    .kpi-value { @apply text-xl font-semibold text-gray-800; }
+    .btn { @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium; }
+    .btn-ghost { @apply border border-gray-300 bg-white text-gray-700 hover:bg-gray-50; }
+    .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700; }
+    .btn-danger  { @apply bg-red-600 text-white hover:bg-red-700; }
+    .btn-purple  { @apply bg-purple-600 text-white hover:bg-purple-700; }
+    .badge { @apply inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700; }
+    .grid-sliders { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    @media (max-width: 1280px) { .grid-sliders { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 1024px) { .grid-sliders { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px)  { .grid-sliders { grid-template-columns: repeat(1, minmax(0, 1fr)); } }
+
+    /* Slider look (compact like your old page) */
+    input[type="range"] { width: 100%; }
+    .slider-wrap { @apply rounded-lg border border-gray-200 p-3; }
+    .slider-label { @apply text-sm font-medium text-gray-800; }
+    .slider-meta { @apply text-[11px] text-gray-500; }
+
+    /* Fixed height for charts to match original spirit */
+    .chart-box { height: 240px; }
+    .chart-canvas { width: 100% !important; height: 100% !important; }
+
+    /* Voxel canvas area */
+    #voxel-canvas { width: 100%; height: 320px; }
+
+    /* Textareas */
+    textarea { @apply w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring focus:ring-blue-200; }
+  </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
-  <div class="max-w-6xl mx-auto p-6">
+  <div class="max-w-7xl mx-auto p-6">
+    <!-- Header -->
     <header class="mb-6">
-      <h1 class="text-2xl font-bold">Cognitive Tool</h1>
-      <p id="context" class="text-sm text-gray-600 mt-1"></p>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold">Cognition Space Visualizer</h1>
+          <p id="subtitle" class="subtle mt-1">
+            <!-- Filled at runtime: User | Role | Unit | Iteration | Q-Set -->
+          </p>
+          <p id="subtitle2" class="subtle">
+            Proof of Concept — identical layout to classic Ubuntu version.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <a id="backLink" href="/portal.html" class="btn btn-ghost">← Back to Portal</a>
+          <a href="/index.html" class="btn btn-ghost">Logout</a>
+        </div>
+      </div>
     </header>
 
-    <section class="rounded-lg border border-gray-200 bg-white p-4 mb-6">
-      <h2 class="font-semibold mb-2">Loaded Question Set</h2>
-      <p id="set-info" class="text-sm text-gray-600"></p>
-    </section>
-
-    <section class="rounded-lg border border-gray-200 bg-white p-4 mb-6">
-      <h2 class="font-semibold mb-4">Survey Questions</h2>
-      <div id="questions" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
-      <div class="mt-6">
-        <button id="submit-btn" class="rounded bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700">Submit Responses</button>
+    <!-- Target & Description -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2>Target (Cilj)</h2>
+          <button id="btnSaveTarget" class="btn btn-ghost">Save Target</button>
+        </div>
+        <textarea id="txtTarget" rows="6" placeholder="Describe the target state…"></textarea>
+      </div>
+      <div class="card p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2>Description (Opis)</h2>
+          <button id="btnSaveDesc" class="btn btn-ghost">Save Description</button>
+        </div>
+        <textarea id="txtDesc" rows="6" placeholder="Describe the current context…"></textarea>
       </div>
     </section>
 
-    <a id="back" class="text-sm text-blue-600 hover:underline" href="#">← Back to Portal</a>
+    <!-- Organization Statistics (static placeholders to mirror old look) -->
+    <section class="card p-4 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2>Organization Statistics</h2>
+        <span class="badge">Iteration KPI</span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="rounded-lg border border-gray-200 p-3">
+          <div class="kpi-label">Respondents</div>
+          <div id="kpiRespondents" class="kpi-value">0</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-3">
+          <div class="kpi-label">Avg Score</div>
+          <div id="kpiAvgScore" class="kpi-value">—</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-3">
+          <div class="kpi-label">Question Set</div>
+          <div id="kpiQset" class="kpi-value">—</div>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-3">
+          <div class="kpi-label">Iteration</div>
+          <div id="kpiIter" class="kpi-value">—</div>
+        </div>
+      </div>
+    </section>
 
-    <details class="mt-6 bg-gray-900 text-gray-100 rounded-lg p-3">
-      <summary class="cursor-pointer select-none">Debug log (open to view)</summary>
+    <!-- Survey Questions -->
+    <section class="card p-4 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2>Survey Questions</h2>
+          <p class="subtle">Sliders: 1 = Poor … 8 = Excellent (default 4)</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btnReset" class="btn btn-ghost">Reset</button>
+          <button id="btnSave" class="btn btn-primary">Save to Server</button>
+        </div>
+      </div>
+
+      <!-- Q/M/D Groups -->
+      <div id="questionGroups" class="space-y-6">
+        <!-- injected: group blocks with sliders, 4 per row -->
+      </div>
+    </section>
+
+    <!-- Computed JSON Data -->
+    <section class="card p-4 mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <h2>Computed JSON Data</h2>
+        <div class="flex items-center gap-2">
+          <button id="btnCopyJSON" class="btn btn-ghost">Copy</button>
+          <button id="btnClearJSON" class="btn btn-danger">Clear</button>
+        </div>
+      </div>
+      <textarea id="jsonOut" rows="8" class="mono" placeholder="Computed answers JSON will appear here…"></textarea>
+    </section>
+
+    <!-- Gaussian Distributions -->
+    <section class="card p-4 mb-6">
+      <h2 class="mb-4">Gaussian Distributions</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="rounded-lg border border-gray-200 p-3 chart-box">
+          <div class="section-title mb-2">Knowledge Density</div>
+          <canvas id="chartDensity" class="chart-canvas"></canvas>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-3 chart-box">
+          <div class="section-title mb-2">Familiarity</div>
+          <canvas id="chartFamiliarity" class="chart-canvas"></canvas>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-3 chart-box">
+          <div class="section-title mb-2">Cognitive Load</div>
+          <canvas id="chartLoad" class="chart-canvas"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3D Voxel Scene -->
+    <section class="card p-4 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2>3D Voxel Scene</h2>
+        <span class="badge">Classic Cube</span>
+      </div>
+      <div id="voxel-canvas" class="rounded-lg border border-gray-200"></div>
+    </section>
+
+    <!-- Analysis & Coaching -->
+    <section class="card p-4 mb-6">
+      <h2 class="mb-2">Analysis & Coaching (Preview)</h2>
+      <div id="analysisText" class="text-sm text-gray-700">
+        Adjust sliders to see Gaussian curves evolve. After saving, this section will
+        reflect aggregated observations and coaching tips (just like the classic page).
+      </div>
+    </section>
+
+    <!-- Averages / Unit Calculations -->
+    <section class="card p-4 mb-10">
+      <div class="flex items-center justify-between">
+        <h2>Average Calculation (Unit)</h2>
+        <button id="btnCalcAvg" class="btn btn-purple">Calculate Unit Average</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div class="rounded-lg border border-gray-200 p-3 chart-box">
+          <div class="section-title mb-2">Average Gaussian</div>
+          <canvas id="chartAvg" class="chart-canvas"></canvas>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-3">
+          <div class="section-title mb-2">Average 3D Voxel Scene</div>
+          <div id="avg-voxel" class="h-[240px] rounded border border-gray-200 flex items-center justify-center text-gray-500 text-sm">
+            (Average voxel visualization placeholder)
+          </div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <div class="section-title mb-1">Average Analysis</div>
+        <div id="avgAnalysisText" class="text-sm text-gray-700">
+          Averages will appear here after you compute unit data.
+        </div>
+      </div>
+    </section>
+
+    <!-- Debug -->
+    <details class="w-full bg-gray-900 text-gray-100 rounded-lg p-3">
+      <summary class="cursor-pointer select-none flex items-center gap-2">
+        <span class="inline-block">▶</span>
+        <span class="font-semibold">Debug log (open to view)</span>
+      </summary>
       <pre id="debug" class="mt-2 whitespace-pre-wrap text-xs"></pre>
     </details>
   </div>
 
   <script>
-    (function () {
-      const qs = new URLSearchParams(window.location.search);
-      const name = qs.get('name');
-      const roleId = Number(qs.get('role_id'));
-      const iterId = Number(qs.get('iter_id'));
-      const qset = qs.get('qset');
-
-      const dbg = document.getElementById('debug');
-      const ctx = document.getElementById('context');
-      const setInfo = document.getElementById('set-info');
-      const questionsEl = document.getElementById('questions');
-      const back = document.getElementById('back');
-
-      let personId = null;
-      let orgUnitId = null;
-      let questions = [];
-
-      function log(msg, obj) {
-        const line = `[${new Date().toISOString()}] [cog] ${msg}`;
-        if (obj !== undefined) {
-          try { dbg.textContent += `${line} ${JSON.stringify(obj)}\n`; }
-          catch { dbg.textContent += `${line}\n`; }
-        } else dbg.textContent += `${line}\n`;
-        if (dbg.textContent.length > 40000) dbg.textContent = dbg.textContent.slice(-30000);
+    // ===== Utilities =====
+    const log = (msg, obj) => {
+      const el = document.getElementById('debug');
+      const line = \`[\${new Date().toISOString()}] [cog] \${msg}\`;
+      if (obj !== undefined) {
+        try { el.textContent += line + " " + JSON.stringify(obj) + "\\n"; }
+        catch { el.textContent += line + "\\n"; }
+      } else {
+        el.textContent += line + "\\n";
       }
+      if (el.textContent.length > 50000) el.textContent = el.textContent.slice(-35000);
+    };
 
-      back.href = `/portal.html?name=${encodeURIComponent(name)}&role_id=${roleId}&iter_id=${iterId}&qset=${encodeURIComponent(qset)}`;
+    const qs = new URLSearchParams(window.location.search);
+    const userName = qs.get('name') || '(unknown)';
+    const roleId   = qs.get('role_id');   // person_roles.id
+    const iterId   = qs.get('iter_id');
+    const qset     = qs.get('qset');
 
-      async function loadRoleContext() {
-        log('GET /api/admin/get-user-roles', { name });
-        const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(name)}`);
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load user roles');
-        const role = (data.roles || []).find(r => Number(r.id) === roleId);
-        if (!role) throw new Error('Selected role not found');
-        personId = role.person_id;
-        orgUnitId = role.org_unit_id;
-        const iter = role.iterations || {};
-        ctx.textContent = `User: ${name} — Role ID: ${roleId} — Iteration ID: ${iterId} — Question Set: ${qset}`;
-        return true;
+    // UI refs
+    const subtitleEl = document.getElementById('subtitle');
+    const kpiRespondents = document.getElementById('kpiRespondents');
+    const kpiAvgScore = document.getElementById('kpiAvgScore');
+    const kpiQset = document.getElementById('kpiQset');
+    const kpiIter = document.getElementById('kpiIter');
+
+    const groupsWrap = document.getElementById('questionGroups');
+    const jsonOut = document.getElementById('jsonOut');
+    const btnReset = document.getElementById('btnReset');
+    const btnSave = document.getElementById('btnSave');
+    const btnCopyJSON = document.getElementById('btnCopyJSON');
+    const btnClearJSON = document.getElementById('btnClearJSON');
+    const btnSaveTarget = document.getElementById('btnSaveTarget');
+    const btnSaveDesc = document.getElementById('btnSaveDesc');
+    const btnCalcAvg = document.getElementById('btnCalcAvg');
+    const txtTarget = document.getElementById('txtTarget');
+    const txtDesc = document.getElementById('txtDesc');
+
+    // Loaded role/context cache
+    let roleRecord = null; // from get-user-roles (match by role_id)
+    let orgUnit = null;    // derived (organization_units)
+    let iterationCtx = null;
+
+    // Questions state
+    let questions = []; // [{id,label,group}]
+    let values = {};    // id -> slider value (1..8)
+
+    // Charts
+    let chartDensity, chartFamiliarity, chartLoad, chartAvg;
+
+    function normalPDF(x, mu, sigma) {
+      const a = 1 / (sigma * Math.sqrt(2 * Math.PI));
+      const b = -((x - mu) ** 2) / (2 * sigma ** 2);
+      return a * Math.exp(b);
+    }
+
+    function buildGaussianData(avgVal) {
+      // Map slider scale 1..8 to curve center [0..1]
+      const mu = (avgVal - 1) / 7; // 0..1
+      const sigma = 0.15; // fixed for demo; your old code could vary this
+
+      const xs = [];
+      const ys = [];
+      for (let i = 0; i <= 100; i++) {
+        const x = i / 100;
+        xs.push(x);
+        ys.push(normalPDF(x, mu, sigma));
       }
+      return { xs, ys };
+    }
 
-      async function loadSet() {
-        log('GET /api/admin/cog-load-set', { filename: qset });
-        const res = await fetch(`/api/admin/cog-load-set?filename=${encodeURIComponent(qset)}`);
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load question set file');
+    function renderCharts() {
+      const allVals = Object.values(values);
+      const avg = allVals.length ? (allVals.reduce((a,b)=>a+b,0) / allVals.length) : 4;
 
-        // Normalize: handle array of strings or object { questions: [...] } or CSV string list
-        let raw = data.data;
-        if (Array.isArray(raw)) {
-          questions = raw.map((t, i) => `Q${i+1} ${String(t)}`);
-        } else if (raw && Array.isArray(raw.questions)) {
-          questions = raw.questions.map((t, i) => `Q${i+1} ${String(t)}`);
-        } else if (typeof raw === 'string') {
-          // CSV-line string -> split on "," (fallback)
-          questions = raw.split(',').map((s, i) => `Q${i+1} ${s.trim().replace(/^"|"$/g,'')}`);
-        } else {
-          questions = [];
+      const d1 = buildGaussianData(avg);
+      const cfg = (label, data) => ({
+        type: 'line',
+        data: {
+          labels: data.xs,
+          datasets: [{ label, data: data.ys, fill: false, tension: 0.2 }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }},
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          }
         }
-
-        setInfo.textContent = `Loaded ${questions.length} questions from ${qset}.`;
-        log('Question set loaded', { count: questions.length });
-      }
-
-      function renderQuestions() {
-        questionsEl.innerHTML = '';
-        questions.forEach((qtext, idx) => {
-          const card = document.createElement('div');
-          card.className = 'rounded border border-gray-200 p-3';
-          const label = document.createElement('div');
-          label.className = 'text-sm font-medium mb-2';
-          label.textContent = `${idx+1}. ${qtext}`;
-          const val = document.createElement('div');
-          val.className = 'text-xs text-gray-600 mb-1';
-          val.textContent = 'Value: 4';
-          const input = document.createElement('input');
-          input.type = 'range';
-          input.min = '1';
-          input.max = '8';
-          input.value = '4';
-          input.className = 'w-full';
-          input.oninput = () => { val.textContent = `Value: ${input.value}`; };
-          card.append(label, input, val);
-          questionsEl.appendChild(card);
-        });
-      }
-
-      async function submit() {
-        const sliders = questionsEl.querySelectorAll('input[type="range"]');
-        const answers = Array.from(sliders).map((el, i) => ({ q: i+1, v: Number(el.value) }));
-
-        const payload = {
-          person_role_id: roleId,
-          org_unit_id: orgUnitId,
-          person_id: personId,          // fallback resolver on server if needed
-          iteration_id: iterId,
-          question_set: qset,
-          answers
-        };
-
-        log('POST /api/admin/cog-save-response', payload);
-        const res = await fetch('/api/admin/cog-save-response', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) throw new Error(data.message || 'Submit failed');
-        alert('Responses saved.');
-      }
-
-      document.getElementById('submit-btn').onclick = () => submit().catch(e => {
-        log('submit error', { message: e.message });
-        alert('Error: ' + e.message);
       });
 
-      // INIT
-      log('page loaded');
-      loadRoleContext()
-        .then(loadSet)
-        .then(renderQuestions)
-        .catch(e => {
-          log('load error', { message: e.message });
-          setInfo.textContent = 'Error: ' + e.message;
+      const ensure = (ctx, chart, label) => {
+        if (chart) chart.destroy();
+        return new Chart(ctx, cfg(label, d1));
+      };
+
+      chartDensity = ensure(document.getElementById('chartDensity'), chartDensity, 'Knowledge Density');
+      chartFamiliarity = ensure(document.getElementById('chartFamiliarity'), chartFamiliarity, 'Familiarity');
+      chartLoad = ensure(document.getElementById('chartLoad'), chartLoad, 'Cognitive Load');
+
+      // KPI avg
+      kpiAvgScore.textContent = avg.toFixed(2);
+    }
+
+    function updateJSON() {
+      const arr = questions.map(q => ({ id: q.id, v: values[q.id] || 4 }));
+      jsonOut.value = JSON.stringify(arr, null, 2);
+    }
+
+    function buildSlider(q) {
+      const wrap = document.createElement('div');
+      wrap.className = 'slider-wrap';
+
+      const label = document.createElement('div');
+      label.className = 'slider-label';
+      label.textContent = q.label;
+      wrap.appendChild(label);
+
+      const meta = document.createElement('div');
+      meta.className = 'slider-meta mb-2';
+      meta.textContent = '1 = Poor / 8 = Excellent';
+      wrap.appendChild(meta);
+
+      const valRow = document.createElement('div');
+      valRow.className = 'flex items-center justify-between mb-1 text-[12px] text-gray-600';
+      const left = document.createElement('span'); left.textContent = 'Value';
+      const right = document.createElement('span'); right.id = `val-${q.id}`; right.textContent = '4';
+      valRow.append(left, right); wrap.appendChild(valRow);
+
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '1';
+      input.max = '8';
+      input.step = '1';
+      input.value = values[q.id] || 4;
+      input.oninput = () => {
+        values[q.id] = Number(input.value);
+        document.getElementById(`val-${q.id}`).textContent = String(values[q.id]);
+        updateJSON();
+        renderCharts();
+      };
+      wrap.appendChild(input);
+
+      return wrap;
+    }
+
+    function renderGroups() {
+      groupsWrap.innerHTML = '';
+      // group by q.group (Q/M/D)
+      const groups = { Q: [], M: [], D: [] };
+      questions.forEach(q => { if (groups[q.group]) groups[q.group].push(q); });
+
+      for (const key of ['Q','M','D']) {
+        if (!groups[key].length) continue;
+        const block = document.createElement('div');
+
+        const head = document.createElement('div');
+        head.className = 'flex items-center justify-between';
+        head.innerHTML = \`<div class="section-title mb-2">Group \${key}</div>\`;
+        block.appendChild(head);
+
+        const grid = document.createElement('div');
+        grid.className = 'grid-sliders';
+        groups[key].forEach(q => grid.appendChild(buildSlider(q)));
+        block.appendChild(grid);
+
+        groupsWrap.appendChild(block);
+      }
+    }
+
+    async function loadRoleContext() {
+      // We need user → get-user-roles → find matching roleId to resolve org_unit_id + iteration
+      if (!userName) return;
+      log('GET /api/admin/get-user-roles', { name: userName });
+      const res = await fetch(`/api/admin/get-user-roles?name=${encodeURIComponent(userName)}`);
+      const data = await res.json().catch(()=>({}));
+      log('get-user-roles result', data);
+      if (!data.success) return;
+
+      // Find the role record by roleId
+      const roles = data.roles || [];
+      roleRecord = roles.find(r => String(r.id) === String(roleId)) || roles[0] || null;
+      if (roleRecord) {
+        orgUnit = { id: roleRecord.org_unit_id, name: (roleRecord.organization_units||{}).name || '(unit)' };
+        iterationCtx = roleRecord.iterations || null;
+        const itName = iterationCtx ? iterationCtx.name : '(?)';
+        const itId = iterationCtx ? iterationCtx.id : iterId || '(?)';
+        const itStart = iterationCtx && iterationCtx.start_date ? new Date(iterationCtx.start_date).toISOString().slice(0,10) : '(no start date)';
+        subtitleEl.textContent = \`User: \${userName} | Role: \${roleRecord.is_manager ? 'Manager' : 'Member'} | Unit: \${orgUnit.name} | Iteration: \${itName} (ID: \${itId}) | Start: \${itStart} | Question Set: \${qset || '(none)'}\`;
+        kpiQset.textContent = qset || '(none)';
+        kpiIter.textContent = \`\${itName} (#\${itId})\`;
+      } else {
+        subtitleEl.textContent = \`User: \${userName} | Role: (not found) | Iteration: \${iterId || '(?)'} | Question Set: \${qset || '(none)'}\`;
+      }
+    }
+
+    async function loadQuestionSet() {
+      if (!qset) {
+        log('No qset provided');
+        return;
+      }
+      log('GET /api/admin/cog-load-set', { filename: qset });
+      const res = await fetch(`/api/admin/cog-load-set?filename=${encodeURIComponent(qset)}`);
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok || !data.success) {
+        log('load error', { message: data.message || 'Failed to load question set file' });
+        alert('Error: Failed to load question set file');
+        return;
+      }
+
+      // Expecting data.data to be an array of strings (as in your current JSON)
+      const arr = Array.isArray(data.data) ? data.data : [];
+      // Infer grouping by total length (old convention)
+      // 120 => 40/40/40, 60 => 20/20/20, 12 => 4/4/4
+      let slice = 0;
+      let part = 0;
+      if (arr.length === 120) { part = 40; }
+      else if (arr.length === 60) { part = 20; }
+      else if (arr.length === 12) { part = 4; }
+      else {
+        // fallback: split evenly into 3 groups
+        part = Math.floor(arr.length / 3);
+      }
+
+      questions = arr.map((label, i) => {
+        let group = 'Q';
+        if (i >= part && i < 2*part) group = 'M';
+        else if (i >= 2*part) group = 'D';
+        return { id: i+1, label: `${group}${(i%part)+1}. ${label}`, group };
+      });
+
+      // init values to default 4
+      values = {};
+      questions.forEach(q => { values[q.id] = 4; });
+
+      // KPI
+      kpiRespondents.textContent = '1'; // local session placeholder
+      renderGroups();
+      updateJSON();
+      renderCharts();
+      log('Question set loaded', { count: questions.length });
+    }
+
+    async function saveResults() {
+      // Send answers as array of {q: n, v: value} to mirror your previous shape
+      const answers = questions.map(q => ({ q: q.id, v: values[q.id] || 4 }));
+
+      // Try to include role+unit in payload if available (forward compatible with upsert logic)
+      const payload = {
+        person_id: roleId,                // we pass the roleId into person_id for legacy tolerance
+        person_role_id: roleId || null,   // actual role id
+        org_unit_id: orgUnit ? orgUnit.id : null,
+        iteration_id: (iterationCtx && iterationCtx.id) || iterId,
+        question_set: qset,
+        answers
+      };
+
+      log('POST /api/admin/cog-save-response', payload);
+      const res = await fetch('/api/admin/cog-save-response', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok || !data.success) {
+        log('submit error', { message: data.message || 'Failed to save' });
+        alert(`Error: ${data.message || 'Failed to save'}`);
+        return;
+      }
+      alert('Responses saved.');
+    }
+
+    function initVoxel() {
+      const container = document.getElementById('voxel-canvas');
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xffffff);
+
+      const camera = new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
+      camera.position.set(3.5, 3.5, 3.5);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(w, h);
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      // Wireframe cube
+      const cubeGeom = new THREE.BoxGeometry(2, 2, 2);
+      const wireMat = new THREE.MeshBasicMaterial({ color: 0x444444, wireframe: true });
+      const wireCube = new THREE.Mesh(cubeGeom, wireMat);
+      scene.add(wireCube);
+
+      // Red inner voxel (small cube)
+      const voxelGeom = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+      const voxelMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+      const voxel = new THREE.Mesh(voxelGeom, voxelMat);
+      scene.add(voxel);
+
+      // Light (optional subtle)
+      const light = new THREE.AmbientLight(0xffffff, 0.8);
+      scene.add(light);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Handle resize
+      window.addEventListener('resize', () => {
+        const w2 = container.clientWidth;
+        const h2 = container.clientHeight;
+        camera.aspect = w2 / h2;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w2, h2);
+      });
+    }
+
+    function wireButtons() {
+      btnReset.onclick = () => {
+        questions.forEach(q => { values[q.id] = 4; });
+        renderGroups(); // rebuilds sliders + labels
+        updateJSON();
+        renderCharts();
+      };
+      btnSave.onclick = () => saveResults();
+      btnCopyJSON.onclick = async () => {
+        try { await navigator.clipboard.writeText(jsonOut.value); alert('Copied.'); }
+        catch { alert('Copy failed.'); }
+      };
+      btnClearJSON.onclick = () => { jsonOut.value = ''; };
+
+      btnSaveTarget.onclick = () => { alert('Target saved (placeholder).'); };
+      btnSaveDesc.onclick = () => { alert('Description saved (placeholder).'); };
+
+      btnCalcAvg.onclick = () => {
+        // Placeholder average chart based on current answers
+        const avg = Object.values(values).reduce((a,b)=>a+b,0) / Object.keys(values).length;
+        const d = buildGaussianData(avg);
+        if (chartAvg) chartAvg.destroy();
+        chartAvg = new Chart(document.getElementById('chartAvg'), {
+          type: 'line',
+          data: { labels: d.xs, datasets: [{ data: d.ys, fill: false, tension: 0.2 }] },
+          options: { responsive: true, plugins: { legend: { display: false } }, scales: { x:{display:false}, y:{display:false} } }
         });
-    })();
+        document.getElementById('avgAnalysisText').textContent =
+          `Average based on current inputs is ${avg.toFixed(2)} (demo placeholder).`;
+      };
+    }
+
+    async function init() {
+      log('page loaded');
+      await loadRoleContext();
+      await loadQuestionSet();
+      wireButtons();
+      initVoxel();
+    }
+    init();
   </script>
 </body>
 </html>
