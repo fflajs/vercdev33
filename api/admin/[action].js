@@ -35,9 +35,7 @@ module.exports = async function handler(req, res) {
 
         const { name, question_set } = req.body;
         if (!name || !question_set)
-          return res
-            .status(400)
-            .json({ success: false, message: "Name and question_set are required." });
+          return res.status(400).json({ success: false, message: "Name and question_set are required." });
 
         const { data: active } = await supabase
           .from("iterations")
@@ -45,9 +43,7 @@ module.exports = async function handler(req, res) {
           .is("end_date", null)
           .maybeSingle();
         if (active)
-          return res
-            .status(400)
-            .json({ success: false, message: "An active iteration already exists." });
+          return res.status(400).json({ success: false, message: "An active iteration already exists." });
 
         const { data: newIter, error: createErr } = await supabase
           .from("iterations")
@@ -84,10 +80,7 @@ module.exports = async function handler(req, res) {
               const newParent = idMap.get(u.parent_id);
               const newId = idMap.get(u.id);
               if (newParent && newId)
-                await supabase
-                  .from("organization_units")
-                  .update({ parent_id: newParent })
-                  .eq("id", newId);
+                await supabase.from("organization_units").update({ parent_id: newParent }).eq("id", newId);
             }
           }
           const { data: oldRoles } = await supabase
@@ -99,14 +92,7 @@ module.exports = async function handler(req, res) {
             if (!newOrgId) continue;
             await supabase
               .from("person_roles")
-              .insert([
-                {
-                  person_id: r.person_id,
-                  org_unit_id: newOrgId,
-                  is_manager: r.is_manager,
-                  iteration_id: newIterId,
-                },
-              ]);
+              .insert([{ person_id: r.person_id, org_unit_id: newOrgId, is_manager: r.is_manager, iteration_id: newIterId }]);
           }
         }
 
@@ -136,9 +122,7 @@ module.exports = async function handler(req, res) {
         if (!name?.trim())
           return res.status(400).json({ success: false, message: "Name required." });
         if (name.trim().toLowerCase() === "admin")
-          return res
-            .status(400)
-            .json({ success: false, message: "The name 'Admin' is reserved." });
+          return res.status(400).json({ success: false, message: "The name 'Admin' is reserved." });
 
         const { data, error } = await supabase
           .from("people")
@@ -155,19 +139,13 @@ module.exports = async function handler(req, res) {
         if (!name)
           return res.status(400).json({ success: false, message: "Name is required." });
 
-        const { data: person } = await supabase
-          .from("people")
-          .select("*")
-          .ilike("name", name)
-          .maybeSingle();
+        const { data: person } = await supabase.from("people").select("*").ilike("name", name).maybeSingle();
         if (!person)
           return res.status(404).json({ success: false, message: "User not found." });
 
         const { data: roles } = await supabase
           .from("person_roles")
-          .select(
-            "*, organization_units(name), iterations(name, id, start_date, question_set)"
-          )
+          .select("*, organization_units(name), iterations(name, id, start_date, question_set)")
           .eq("person_id", person.id);
 
         res.status(200).json({ success: true, user: person, roles });
@@ -180,83 +158,13 @@ module.exports = async function handler(req, res) {
       case "org-data": {
         const { iteration_id } = req.query;
         if (!iteration_id)
-          return res
-            .status(400)
-            .json({ success: false, message: "iteration_id required." });
+          return res.status(400).json({ success: false, message: "iteration_id required." });
         const [units, roles, people] = await Promise.all([
           supabase.from("organization_units").select("*").eq("iteration_id", iteration_id),
           supabase.from("person_roles").select("*").eq("iteration_id", iteration_id),
           supabase.from("people").select("*"),
         ]);
-        res.status(200).json({
-          success: true,
-          units: units.data,
-          roles: roles.data,
-          people: people.data,
-        });
-        break;
-      }
-
-      case "create-org-unit": {
-        const { name, parent_id, iteration_id } = req.body;
-        if (!name || !iteration_id)
-          return res.status(400).json({ success: false, message: "Missing fields." });
-        const { data, error } = await supabase
-          .from("organization_units")
-          .insert([{ name, parent_id: parent_id || null, iteration_id }])
-          .select()
-          .single();
-        if (error) throw error;
-        res.status(200).json({ success: true, unit: data });
-        break;
-      }
-
-      case "update-org-unit": {
-        const { id, name } = req.body;
-        const { error } = await supabase
-          .from("organization_units")
-          .update({ name })
-          .eq("id", id);
-        if (error) throw error;
-        res.status(200).json({ success: true });
-        break;
-      }
-
-      case "delete-org-unit": {
-        const { id } = req.query;
-        if (!id)
-          return res.status(400).json({ success: false, message: "Missing id" });
-        const deleteRecursive = async (unitId) => {
-          const { data: children } = await supabase
-            .from("organization_units")
-            .select("id")
-            .eq("parent_id", unitId);
-          for (const child of children) await deleteRecursive(child.id);
-          await supabase.from("person_roles").delete().eq("org_unit_id", unitId);
-          await supabase.from("organization_units").delete().eq("id", unitId);
-        };
-        await deleteRecursive(Number(id));
-        res.status(200).json({ success: true });
-        break;
-      }
-
-      case "assign-person": {
-        const { person_id, org_unit_id, is_manager, iteration_id } = req.body;
-        const { data, error } = await supabase
-          .from("person_roles")
-          .insert([{ person_id, org_unit_id, is_manager, iteration_id }])
-          .select()
-          .single();
-        if (error) throw error;
-        res.status(200).json({ success: true, role: data });
-        break;
-      }
-
-      case "remove-person": {
-        const { role_id } = req.query;
-        const { error } = await supabase.from("person_roles").delete().eq("id", role_id);
-        if (error) throw error;
-        res.status(200).json({ success: true });
+        res.status(200).json({ success: true, units: units.data, roles: roles.data, people: people.data });
         break;
       }
 
@@ -289,11 +197,9 @@ module.exports = async function handler(req, res) {
         if (!person_id || !iteration_id || !question_set || !answers)
           return res.status(400).json({ success: false, message: "Missing fields" });
 
-        // Ensure answers are valid JSON
         const serializedAnswers = typeof answers === "string" ? answers : JSON.stringify(answers);
-
         const { data, error } = await supabase
-          .from("survey_results")
+          .from("surveys")
           .insert([{ person_id, iteration_id, question_set, answers: serializedAnswers }])
           .select()
           .single();
@@ -309,27 +215,21 @@ module.exports = async function handler(req, res) {
 
       case "cog-get-responses": {
         const { iteration_id, person_id } = req.query;
-        let query = supabase.from("survey_results").select("*");
+        let query = supabase.from("surveys").select("*");
         if (iteration_id) query = query.eq("iteration_id", iteration_id);
         if (person_id) query = query.eq("person_id", person_id);
         const { data, error } = await query;
-        if (error) {
-          console.error("cog-get-responses error:", error.message, error.details, error.hint);
-          throw error;
-        }
+        if (error) throw error;
         res.status(200).json({ success: true, rows: data });
         break;
       }
 
       case "cog-summary": {
         const { data, error } = await supabase
-          .from("survey_results")
+          .from("surveys")
           .select("iteration_id, count:count(*)")
           .group("iteration_id");
-        if (error) {
-          console.error("cog-summary error:", error.message, error.details, error.hint);
-          throw error;
-        }
+        if (error) throw error;
         res.status(200).json({ success: true, summary: data });
         break;
       }
@@ -363,7 +263,7 @@ module.exports = async function handler(req, res) {
         break;
       }
       case "surveys-all": {
-        const { data } = await supabase.from("survey_results").select("*");
+        const { data } = await supabase.from("surveys").select("*");
         res.status(200).json({ success: true, rows: data });
         break;
       }
